@@ -853,7 +853,7 @@ class _ModernDropdown<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<T>(
-      initialValue: value,
+      value: value,
       items: items,
       onChanged: onChanged,
       decoration: InputDecoration(
