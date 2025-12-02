@@ -17,6 +17,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// App Router Configuration
 ///
 /// Defines all routes and navigation logic for the app
+/// Uses StatefulShellRoute for smooth bottom navigation
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
 
@@ -44,71 +45,95 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'login',
         builder: (context, state) => const LoginScreen(),
       ),
-      GoRoute(
-        path: '/dashboard',
-        name: 'dashboard',
-        builder: (context, state) =>
-            MainLayout(currentIndex: 0, child: const DashboardScreen()),
-      ),
-      GoRoute(
-        path: '/orders',
-        name: 'orders',
-        builder: (context, state) =>
-            MainLayout(currentIndex: 1, child: const OrdersListScreen()),
-      ),
-      GoRoute(
-        path: '/orders/new',
-        name: 'create-order',
-        builder: (context, state) => const CreateOrderScreen(),
-      ),
-      GoRoute(
-        path: '/orders/:id',
-        name: 'order-detail',
-        builder: (context, state) {
-          final orderId = state.pathParameters['id']!;
-          return OrderDetailScreen(orderId: orderId);
+      // Main navigation shell with bottom nav bar
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return MainLayout(navigationShell: navigationShell);
         },
-      ),
-      GoRoute(
-        path: '/orders/:id/edit',
-        name: 'edit-order',
-        builder: (context, state) {
-          final orderId = state.pathParameters['id']!;
-          return EditOrderScreen(orderId: orderId);
-        },
-      ),
-      GoRoute(
-        path: '/customers',
-        name: 'customers',
-        builder: (context, state) =>
-            MainLayout(currentIndex: 2, child: const CustomersListScreen()),
-      ),
-      GoRoute(
-        path: '/customers/new',
-        name: 'create-customer',
-        builder: (context, state) => const CreateCustomerScreen(),
-      ),
-      GoRoute(
-        path: '/customers/:id',
-        name: 'customer-detail',
-        builder: (context, state) {
-          final customerId = state.pathParameters['id']!;
-          return CustomerDetailScreen(customerId: customerId);
-        },
-      ),
-      GoRoute(
-        path: '/customers/:id/edit',
-        name: 'edit-customer',
-        builder: (context, state) {
-          final customerId = state.pathParameters['id']!;
-          return EditCustomerScreen(customerId: customerId);
-        },
-      ),
-      GoRoute(
-        path: '/profile',
-        name: 'profile',
-        builder: (context, state) =>
-            MainLayout(currentIndex: 3, child: const ProfileScreen()),
+        branches: [
+          // Dashboard branch
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/dashboard',
+                name: 'dashboard',
+                builder: (context, state) => const DashboardScreen(),
+              ),
+            ],
+          ),
+          // Orders branch
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/orders',
+                name: 'orders',
+                builder: (context, state) => const OrdersListScreen(),
+              ),
+              GoRoute(
+                path: '/orders/new',
+                name: 'create-order',
+                builder: (context, state) => const CreateOrderScreen(),
+              ),
+              GoRoute(
+                path: '/orders/:id',
+                name: 'order-detail',
+                builder: (context, state) {
+                  final orderId = state.pathParameters['id']!;
+                  return OrderDetailScreen(orderId: orderId);
+                },
+              ),
+              GoRoute(
+                path: '/orders/:id/edit',
+                name: 'edit-order',
+                builder: (context, state) {
+                  final orderId = state.pathParameters['id']!;
+                  return EditOrderScreen(orderId: orderId);
+                },
+              ),
+            ],
+          ),
+          // Customers branch
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/customers',
+                name: 'customers',
+                builder: (context, state) => const CustomersListScreen(),
+              ),
+              GoRoute(
+                path: '/customers/new',
+                name: 'create-customer',
+                builder: (context, state) => const CreateCustomerScreen(),
+              ),
+              GoRoute(
+                path: '/customers/:id',
+                name: 'customer-detail',
+                builder: (context, state) {
+                  final customerId = state.pathParameters['id']!;
+                  return CustomerDetailScreen(customerId: customerId);
+                },
+              ),
+              GoRoute(
+                path: '/customers/:id/edit',
+                name: 'edit-customer',
+                builder: (context, state) {
+                  final customerId = state.pathParameters['id']!;
+                  return EditCustomerScreen(customerId: customerId);
+                },
+              ),
+            ],
+          ),
+          // Profile branch
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/profile',
+                name: 'profile',
+                builder: (context, state) => const ProfileScreen(),
+              ),
+            ],
+          ),
+        ],
       ),
     ],
   );

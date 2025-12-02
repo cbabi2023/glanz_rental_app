@@ -2,39 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 /// Main Layout with Bottom Navigation Bar
-/// 
+///
 /// Wraps main screens (Dashboard, Orders, Customers, Profile) with bottom navigation
+/// Uses StatefulShellBranch to maintain state and provide smooth navigation
 class MainLayout extends StatelessWidget {
-  final Widget child;
-  final int currentIndex;
+  final StatefulNavigationShell navigationShell;
 
-  const MainLayout({
-    super.key,
-    required this.child,
-    required this.currentIndex,
-  });
+  const MainLayout({super.key, required this.navigationShell});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: child,
+      body: navigationShell,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: currentIndex,
+        selectedIndex: navigationShell.currentIndex,
         onDestinationSelected: (index) {
-          switch (index) {
-            case 0:
-              context.go('/dashboard');
-              break;
-            case 1:
-              context.go('/orders');
-              break;
-            case 2:
-              context.go('/customers');
-              break;
-            case 3:
-              context.go('/profile');
-              break;
-          }
+          navigationShell.goBranch(
+            index,
+            // If the branch is already active, prevent navigation
+            initialLocation: index == navigationShell.currentIndex,
+          );
         },
         destinations: const [
           NavigationDestination(
@@ -62,4 +49,3 @@ class MainLayout extends StatelessWidget {
     );
   }
 }
-

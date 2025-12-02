@@ -35,30 +35,30 @@ class CustomersService {
         .map((json) => Customer.fromJson(json as Map<String, dynamic>))
         .toList();
 
-    // Calculate dues for customers
+    // Calculate dues for customers - optimized to fetch all orders at once
     if (customers.isNotEmpty) {
       final customerIds = customers.map((c) => c.id).toSet().toList();
       final duesMap = <String, double>{};
 
-      // For each customer, query their pending orders individually
-      // This is more reliable than trying to use inFilter which may not be available
-      for (final customerId in customerIds) {
-        try {
-          // Query orders for this customer with pending status
-          final response = await _supabase
-              .from('orders')
-              .select('customer_id, total_amount, status')
-              .eq('customer_id', customerId)
-              .or('status.eq.active,status.eq.pending_return');
+      try {
+        // Fetch all pending orders for all customers in a single query
+        // This is much faster than querying individually
+        final ordersResponse = await _supabase
+            .from('orders')
+            .select('customer_id, total_amount, status')
+            .or('status.eq.active,status.eq.pending_return');
 
-          for (final order in response) {
+        // Process all orders and calculate dues
+        for (final order in ordersResponse) {
+          final customerId = order['customer_id']?.toString();
+          if (customerId != null && customerIds.contains(customerId)) {
             final amount = (order['total_amount'] as num?)?.toDouble() ?? 0.0;
             duesMap[customerId] = (duesMap[customerId] ?? 0.0) + amount;
           }
-        } catch (e) {
-          // If individual query fails, skip this customer
-          print('Error fetching orders for customer $customerId: $e');
         }
+      } catch (e) {
+        // If query fails, skip dues calculation - customers will show 0 dues
+        print('Error fetching orders for dues calculation: $e');
       }
 
       // Add due amounts to customers

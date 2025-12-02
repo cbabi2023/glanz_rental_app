@@ -7,6 +7,12 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../providers/customers_provider.dart';
 import '../../models/customer.dart';
 
+/// Customer Filter Type
+enum _CustomerFilter {
+  all,
+  dues,
+}
+
 /// Customers List Screen
 /// 
 /// Modern, attractive customers list with search and stats
@@ -21,11 +27,195 @@ class CustomersListScreen extends ConsumerStatefulWidget {
 class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
   final _searchController = TextEditingController();
   String? _searchQuery;
+  _CustomerFilter _selectedFilter = _CustomerFilter.all;
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  List<Customer> _filterCustomers(List<Customer> customers) {
+    if (_selectedFilter == _CustomerFilter.dues) {
+      return customers.where((customer) {
+        return customer.dueAmount != null && customer.dueAmount! > 0;
+      }).toList();
+    }
+    return customers;
+  }
+
+  Widget _buildCustomerListBody(List<Customer> allCustomers, bool isLoading, bool showOverlay) {
+    // Apply filter to customers
+    final customers = _filterCustomers(allCustomers);
+    if (customers.isEmpty && _searchQuery == null) {
+      return _EmptyCustomersState(
+        onNewCustomer: () => context.push('/customers/new'),
+        hasSearchQuery: false,
+      );
+    }
+
+    if (customers.isEmpty && (_searchQuery != null && _searchQuery!.isNotEmpty || _selectedFilter == _CustomerFilter.dues)) {
+      return Column(
+        children: [
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: _CustomersSearchBar(
+              controller: _searchController,
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value.isEmpty ? null : value;
+                });
+              },
+            ),
+          ),
+          Divider(height: 1, color: Colors.grey.shade200),
+          // Filter Chips
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                _CustomerFilterChip(
+                  label: 'All',
+                  icon: Icons.people_outline,
+                  selected: _selectedFilter == _CustomerFilter.all,
+                  onTap: () {
+                    setState(() {
+                      _selectedFilter = _CustomerFilter.all;
+                    });
+                  },
+                ),
+                const SizedBox(width: 8),
+                _CustomerFilterChip(
+                  label: 'Dues',
+                  icon: Icons.account_balance_wallet_outlined,
+                  selected: _selectedFilter == _CustomerFilter.dues,
+                  onTap: () {
+                    setState(() {
+                      _selectedFilter = _CustomerFilter.dues;
+                    });
+                  },
+                  isWarning: true,
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: Colors.grey.shade200),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: _NoResultsState(),
+            ),
+          ),
+        ],
+      );
+    }
+
+    final stats = _calculateStats(customers);
+
+    return Stack(
+      children: [
+        Column(
+          children: [
+            // Fixed Search Bar
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: _CustomersSearchBar(
+                controller: _searchController,
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value.isEmpty ? null : value;
+                  });
+                },
+              ),
+            ),
+            Divider(height: 1, color: Colors.grey.shade200),
+            
+            // Filter Chips
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  _CustomerFilterChip(
+                    label: 'All',
+                    icon: Icons.people_outline,
+                    selected: _selectedFilter == _CustomerFilter.all,
+                    onTap: () {
+                      setState(() {
+                        _selectedFilter = _CustomerFilter.all;
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _CustomerFilterChip(
+                    label: 'Dues',
+                    icon: Icons.account_balance_wallet_outlined,
+                    selected: _selectedFilter == _CustomerFilter.dues,
+                    onTap: () {
+                      setState(() {
+                        _selectedFilter = _CustomerFilter.dues;
+                      });
+                    },
+                    isWarning: true,
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: Colors.grey.shade200),
+            
+            // Scrollable Content (Stats, Customers)
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(
+                    customersProvider(
+                      CustomersParams(searchQuery: _searchQuery),
+                    ),
+                  );
+                },
+                child: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                        child: _CustomersStatsRow(stats: stats),
+                      ),
+                    ),
+                    SliverList.builder(
+                      itemCount: customers.length,
+                      itemBuilder: (context, index) {
+                        final customer = customers[index];
+                        return Opacity(
+                          opacity: isLoading ? 0.6 : 1.0,
+                          child: _CustomerCardItem(customer: customer),
+                        );
+                      },
+                    ),
+                    const SliverToBoxAdapter(
+                      child: SizedBox(height: 24),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (showOverlay && isLoading)
+          Positioned.fill(
+            child: Container(
+              color: Colors.white.withOpacity(0.7),
+              child: const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0B63FF)),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   @override
@@ -49,102 +239,58 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
             color: Color(0xFF0F1724),
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline, color: Color(0xFF0B63FF)),
-            onPressed: () => context.push('/customers/new'),
-            tooltip: 'New Customer',
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push('/customers/new'),
+        backgroundColor: const Color(0xFF0B63FF),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text(
+          'Add Customer',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
           ),
-        ],
+        ),
       ),
       body: customersAsync.when(
         data: (data) {
           final customers = (data['data'] as List).cast<Customer>();
-          
-          if (customers.isEmpty) {
-            return _EmptyCustomersState(
-              onNewCustomer: () => context.push('/customers/new'),
-              hasSearchQuery: _searchQuery != null && _searchQuery!.isNotEmpty,
-            );
+          return _buildCustomerListBody(customers, false, false);
+        },
+        loading: () {
+          // Show previous data if available while loading
+          final previousData = customersAsync.valueOrNull;
+          if (previousData != null) {
+            final customers = (previousData['data'] as List).cast<Customer>();
+            return _buildCustomerListBody(customers, true, true);
           }
-
-          final stats = _calculateStats(customers);
-
-          return Column(
-            children: [
-              // Fixed Search Bar
-              Container(
-                color: Colors.white,
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                child: _CustomersSearchBar(
-                  controller: _searchController,
-                  onChanged: (value) {
-                    setState(() {
-                      _searchQuery = value.isEmpty ? null : value;
-                    });
-                  },
-                ),
-              ),
-              Divider(height: 1, color: Colors.grey.shade200),
-              
-              // Scrollable Content (Stats, Customers)
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () async {
-                    ref.invalidate(
-                      customersProvider(
-                        CustomersParams(searchQuery: _searchQuery),
-                      ),
-                    );
-                  },
-                  child: CustomScrollView(
-                    slivers: [
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                          child: _CustomersStatsRow(stats: stats),
-                        ),
-                      ),
-                      if (customers.isEmpty && _searchQuery != null)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: _NoResultsState(),
-                          ),
-                        )
-                      else
-                        SliverList.builder(
-                          itemCount: customers.length,
-                          itemBuilder: (context, index) {
-                            final customer = customers[index];
-                            return _CustomerCardItem(customer: customer);
-                          },
-                        ),
-                      const SliverToBoxAdapter(
-                        child: SizedBox(height: 24),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          // If no previous data, show loading spinner
+          return const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0B63FF)),
+            ),
           );
         },
-        loading: () => const Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0B63FF)),
-          ),
-        ),
-        error: (error, stack) => _ErrorState(
-          message: 'Error loading customers: $error',
-          onRetry: () {
-            ref.invalidate(
-              customersProvider(
-                CustomersParams(searchQuery: _searchQuery),
-              ),
-            );
-          },
-        ),
+        error: (error, stack) {
+          // Show previous data if available on error
+          final previousData = customersAsync.valueOrNull;
+          if (previousData != null) {
+            final customers = (previousData['data'] as List).cast<Customer>();
+            return _buildCustomerListBody(customers, false, false);
+          }
+          // If no previous data, show error
+          return _ErrorState(
+            message: 'Error loading customers: $error',
+            onRetry: () {
+              ref.invalidate(
+                customersProvider(
+                  CustomersParams(searchQuery: _searchQuery),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -179,6 +325,64 @@ class _CustomersStats {
     required this.withDues,
     required this.totalDues,
   });
+}
+
+class _CustomerFilterChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool isWarning;
+
+  const _CustomerFilterChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+    this.isWarning = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final warningColor = Colors.orange.shade600;
+    return ChoiceChip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: selected
+                ? Colors.white
+                : (isWarning ? warningColor : Colors.grey.shade700),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
+              color: selected
+                  ? Colors.white
+                  : (isWarning ? warningColor : Colors.grey.shade700),
+            ),
+          ),
+        ],
+      ),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      selectedColor: isWarning ? warningColor : const Color(0xFF0B63FF),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: selected
+              ? (isWarning ? warningColor : const Color(0xFF0B63FF))
+              : (isWarning ? warningColor.withOpacity(0.5) : Colors.grey.shade300),
+        ),
+      ),
+    );
+  }
 }
 
 class _CustomersSearchBar extends StatelessWidget {

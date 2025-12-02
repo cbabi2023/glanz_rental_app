@@ -71,7 +71,7 @@ class OrdersService {
           .select(
             '*, '
             'customer:customers(*), '
-            'staff:profiles(id, full_name), '
+            'staff:profiles(id, full_name, upi_id), '
             'branch:branches(*), '
             'items:order_items(*)',
           )
@@ -256,7 +256,7 @@ class OrdersService {
   Future<List<Order>> getCustomerOrders(String customerId) async {
     final response = await _supabase
         .from('orders')
-        .select('*, branch:branches(*), staff:profiles(id, full_name)')
+        .select('*, branch:branches(*), staff:profiles(id, full_name, upi_id)')
         .eq('customer_id', customerId)
         .order('created_at', ascending: false);
 

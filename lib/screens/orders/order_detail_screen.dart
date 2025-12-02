@@ -2,21 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../providers/orders_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/order.dart';
 import '../../models/order_item.dart';
+import '../../services/invoice_service.dart';
 
 /// Order Detail Screen
-/// 
+///
 /// Displays detailed information about a specific order with modern design
 class OrderDetailScreen extends ConsumerStatefulWidget {
   final String orderId;
 
-  const OrderDetailScreen({
-    super.key,
-    required this.orderId,
-  });
+  const OrderDetailScreen({super.key, required this.orderId});
 
   @override
   ConsumerState<OrderDetailScreen> createState() => _OrderDetailScreenState();
@@ -24,32 +23,173 @@ class OrderDetailScreen extends ConsumerStatefulWidget {
 
 class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   bool _isUpdating = false;
+  bool _isViewingInvoice = false;
+  bool _isSharingInvoice = false;
+  bool _isDownloadingInvoice = false;
+
+  Future<void> _handleInvoiceAction(String action, Order order) async {
+    // Set loading state for specific action
+    switch (action) {
+      case 'view':
+        setState(() {
+          _isViewingInvoice = true;
+        });
+        break;
+      case 'share':
+        setState(() {
+          _isSharingInvoice = true;
+        });
+        break;
+      case 'download':
+        setState(() {
+          _isDownloadingInvoice = true;
+        });
+        break;
+    }
+
+    try {
+      switch (action) {
+        case 'view':
+          await InvoiceService.viewInvoice(order);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Invoice opened'),
+                backgroundColor: Colors.green.shade600,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            );
+          }
+          break;
+
+        case 'share':
+          await InvoiceService.shareOnWhatsApp(order);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Share Invoice on WhatsApp',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Select WhatsApp from the share dialog and choose the customer contact',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+                backgroundColor: Colors.green.shade600,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+          break;
+
+        case 'download':
+          await InvoiceService.downloadInvoice(order);
+          if (mounted) {
+            // Show message after a short delay to allow dialog to appear first
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Save Invoice to Downloads',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'In the share dialog, select "Save to Downloads" or "Save to Files"',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Look for "Downloads" folder option in the dialog to save the file',
+                          style: TextStyle(fontSize: 11, color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                    backgroundColor: Colors.blue.shade700,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    duration: const Duration(seconds: 6),
+                    margin: const EdgeInsets.all(16),
+                  ),
+                );
+              }
+            });
+          }
+          break;
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          switch (action) {
+            case 'view':
+              _isViewingInvoice = false;
+              break;
+            case 'share':
+              _isSharingInvoice = false;
+              break;
+            case 'download':
+              _isDownloadingInvoice = false;
+              break;
+          }
+        });
+      }
+    }
+  }
 
   void _showLateFeeDialog() {
     final lateFeeController = TextEditingController(text: '0');
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'Late Fee',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               'This order is late. Please enter any late fee (if applicable).',
-              style: TextStyle(
-                color: Colors.grey.shade700,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -104,7 +244,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     try {
       final endDate = DateTime.parse(endDateStr);
       final isLate = DateTime.now().isAfter(endDate);
-      
+
       if (isLate) {
         _showLateFeeDialog();
       } else {
@@ -205,13 +345,22 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       return _OrderCategory.returned;
     }
 
+    // Compare by date only, not time - so orders starting today are ongoing
     final now = DateTime.now();
-    DateTime? startDate;
-    DateTime? endDate;
+    final today = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ); // Start of today (no time)
+    DateTime startDate;
+    DateTime endDate;
+    DateTime startDateOnly;
+    DateTime endDateOnly;
 
     try {
       final startStr = order.startDatetime ?? order.startDate;
       startDate = DateTime.parse(startStr);
+      startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
     } catch (e) {
       return _OrderCategory.ongoing;
     }
@@ -219,16 +368,19 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     try {
       final endStr = order.endDatetime ?? order.endDate;
       endDate = DateTime.parse(endStr);
+      endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
     } catch (e) {
       return _OrderCategory.ongoing;
     }
 
-    if (startDate.isAfter(now)) {
+    // Scheduled: start date is in the future (tomorrow or later)
+    if (startDateOnly.isAfter(today)) {
       return _OrderCategory.scheduled;
     }
 
-    if (endDate.isBefore(now) && 
-        order.status != OrderStatus.completed && 
+    // Late: end date has passed and order is not completed
+    if (endDateOnly.isBefore(today) &&
+        order.status != OrderStatus.completed &&
         order.status != OrderStatus.cancelled) {
       return _OrderCategory.late;
     }
@@ -290,11 +442,73 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         actions: [
           orderAsync.when(
             data: (order) {
-              if (order != null && order.canEdit) {
-                return IconButton(
-                  icon: const Icon(Icons.edit_outlined, color: Color(0xFF0B63FF)),
-                  onPressed: () => context.push('/orders/${order.id}/edit'),
-                  tooltip: 'Edit Order',
+              if (order != null) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // if (order.canEdit)
+                    //   IconButton(
+                    //     icon: const Icon(
+                    //       Icons.edit_outlined,
+                    //       color: Color(0xFF0B63FF),
+                    //     ),
+                    //     onPressed: () =>
+                    //         context.push('/orders/${order.id}/edit'),
+                    //     tooltip: 'Edit Order',
+                    //   ),
+                    // Invoice Actions Menu
+                    PopupMenuButton<String>(
+                      icon: const Icon(
+                        Icons.more_vert,
+                        color: Color(0xFF0F1724),
+                      ),
+                      onSelected: (value) => _handleInvoiceAction(value, order),
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'view',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.visibility_outlined,
+                                size: 20,
+                                color: Color(0xFF0F1724),
+                              ),
+                              SizedBox(width: 12),
+                              Text('View Invoice'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'share',
+                          child: Row(
+                            children: [
+                              FaIcon(
+                                FontAwesomeIcons.whatsapp,
+                                size: 18,
+                                color: Colors.green,
+                              ),
+                              SizedBox(width: 12),
+                              Text('Share on WhatsApp'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'download',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.download_outlined,
+                                size: 20,
+                                color: Color(0xFF0F1724),
+                              ),
+                              SizedBox(width: 12),
+                              Text('Download PDF'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 );
               }
               return const SizedBox.shrink();
@@ -311,14 +525,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.grey.shade400),
+                  Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Colors.grey.shade400,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Order not found',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey.shade700,
-                    ),
+                    style: TextStyle(fontSize: 18, color: Colors.grey.shade700),
                   ),
                 ],
               ),
@@ -345,8 +560,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                         side: BorderSide(
-                          color: category == _OrderCategory.late 
-                              ? Colors.red.shade200 
+                          color: category == _OrderCategory.late
+                              ? Colors.red.shade200
                               : Colors.grey.shade200,
                           width: category == _OrderCategory.late ? 1.5 : 1,
                         ),
@@ -361,7 +576,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Container(
                                         padding: const EdgeInsets.symmetric(
@@ -369,10 +585,16 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                           vertical: 6,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: categoryColor.withOpacity(0.12),
-                                          borderRadius: BorderRadius.circular(8),
+                                          color: categoryColor.withOpacity(
+                                            0.12,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                           border: Border.all(
-                                            color: categoryColor.withOpacity(0.3),
+                                            color: categoryColor.withOpacity(
+                                              0.3,
+                                            ),
                                           ),
                                         ),
                                         child: Row(
@@ -445,6 +667,196 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     ),
                     const SizedBox(height: 16),
 
+                    // Invoice Actions Card
+                    Card(
+                      elevation: 0,
+                      color: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: Colors.grey.shade200),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.receipt_long_outlined,
+                                  size: 20,
+                                  color: Colors.teal.shade600,
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Invoice Actions',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F1724),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 48,
+                                    child: OutlinedButton.icon(
+                                      onPressed:
+                                          (_isViewingInvoice ||
+                                              _isSharingInvoice ||
+                                              _isDownloadingInvoice)
+                                          ? null
+                                          : () => _handleInvoiceAction(
+                                              'view',
+                                              order,
+                                            ),
+                                      icon: _isViewingInvoice
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.visibility_outlined,
+                                              size: 18,
+                                            ),
+                                      label: const Text(
+                                        'View Invoice',
+                                        style: TextStyle(fontSize: 13),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(
+                                          0xFF0F1724,
+                                        ),
+                                        side: BorderSide(
+                                          color: Colors.grey.shade300,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 12,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 48,
+                                    child: OutlinedButton.icon(
+                                      onPressed:
+                                          (_isViewingInvoice ||
+                                              _isSharingInvoice ||
+                                              _isDownloadingInvoice)
+                                          ? null
+                                          : () => _handleInvoiceAction(
+                                              'share',
+                                              order,
+                                            ),
+                                      icon: _isSharingInvoice
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const FaIcon(
+                                              FontAwesomeIcons.whatsapp,
+                                              size: 18,
+                                              color: Colors.green,
+                                            ),
+                                      label: const Text(
+                                        'WhatsApp',
+                                        style: TextStyle(fontSize: 13),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Colors.green.shade700,
+                                        side: BorderSide(
+                                          color: Colors.green.shade300,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 12,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 48,
+                                    child: OutlinedButton.icon(
+                                      onPressed:
+                                          (_isViewingInvoice ||
+                                              _isSharingInvoice ||
+                                              _isDownloadingInvoice)
+                                          ? null
+                                          : () => _handleInvoiceAction(
+                                              'download',
+                                              order,
+                                            ),
+                                      icon: _isDownloadingInvoice
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.download_outlined,
+                                              size: 18,
+                                            ),
+                                      label: const Text(
+                                        'Download',
+                                        style: TextStyle(fontSize: 13),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(
+                                          0xFF0F1724,
+                                        ),
+                                        side: BorderSide(
+                                          color: Colors.grey.shade300,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 12,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
                     // Rental Period Card
                     if (!dateInfo.containsKey('error')) ...[
                       Card(
@@ -489,7 +901,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   Container(
                                     width: 1,
                                     height: 60,
-                                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                                    margin: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                    ),
                                     color: Colors.grey.shade300,
                                   ),
                                   Expanded(
@@ -544,7 +958,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       child: InkWell(
                         borderRadius: BorderRadius.circular(16),
                         onTap: order.customer != null
-                            ? () => context.push('/customers/${order.customer!.id}')
+                            ? () => context.push(
+                                '/customers/${order.customer!.id}',
+                              )
                             : null,
                         child: Padding(
                           padding: const EdgeInsets.all(20),
@@ -584,7 +1000,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   const SizedBox(width: 16),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           order.customer?.name ?? 'Unknown',
@@ -631,7 +1048,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                                     fontSize: 14,
                                                     color: Colors.grey.shade700,
                                                   ),
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
                                               ),
                                             ],
@@ -761,7 +1179,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               ),
                               const SizedBox(height: 12),
                             ],
-                            if (order.gstAmount != null && order.gstAmount! > 0) ...[
+                            if (order.gstAmount != null &&
+                                order.gstAmount! > 0) ...[
                               _PricingRow(
                                 label: 'GST',
                                 amount: order.gstAmount!,
@@ -769,7 +1188,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               ),
                               const SizedBox(height: 12),
                             ],
-                            if (order.lateFee != null && order.lateFee! > 0) ...[
+                            if (order.lateFee != null &&
+                                order.lateFee! > 0) ...[
                               _PricingRow(
                                 label: 'Late Fee',
                                 amount: order.lateFee!,
@@ -822,10 +1242,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   height: 20,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
                                   ),
                                 )
-                              : const Icon(Icons.check_circle_outline, size: 20),
+                              : const Icon(
+                                  Icons.check_circle_outline,
+                                  size: 20,
+                                ),
                           label: Text(
                             _isUpdating ? 'Processing...' : 'Mark as Returned',
                             style: const TextStyle(
@@ -874,10 +1299,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                 const SizedBox(height: 8),
                 Text(
                   error.toString(),
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.red.shade400,
-                  ),
+                  style: TextStyle(fontSize: 13, color: Colors.red.shade400),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
@@ -901,22 +1323,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   }
 }
 
-enum _OrderCategory {
-  scheduled,
-  ongoing,
-  late,
-  returned,
-  cancelled,
-}
+enum _OrderCategory { scheduled, ongoing, late, returned, cancelled }
 
 class _DateInfoWidget extends StatelessWidget {
   final String label;
   final DateTime date;
 
-  const _DateInfoWidget({
-    required this.label,
-    required this.date,
-  });
+  const _DateInfoWidget({required this.label, required this.date});
 
   @override
   Widget build(BuildContext context) {
@@ -943,10 +1356,7 @@ class _DateInfoWidget extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           DateFormat('hh:mm a').format(date),
-          style: TextStyle(
-            fontSize: 13,
-            color: Colors.grey.shade700,
-          ),
+          style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
         ),
       ],
     );
@@ -964,7 +1374,11 @@ class _OrderItemCard extends StatelessWidget {
     required this.isLast,
   });
 
-  void _showImagePreview(BuildContext context, String imageUrl, String? productName) {
+  void _showImagePreview(
+    BuildContext context,
+    String imageUrl,
+    String? productName,
+  ) {
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -981,13 +1395,16 @@ class _OrderItemCard extends StatelessWidget {
         return FadeTransition(
           opacity: animation,
           child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.1),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            )),
+            position:
+                Tween<Offset>(
+                  begin: const Offset(0, 0.1),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
             child: child,
           ),
         );
@@ -1005,7 +1422,11 @@ class _OrderItemCard extends StatelessWidget {
             // Item Image
             InkWell(
               onTap: item.photoUrl.isNotEmpty
-                  ? () => _showImagePreview(context, item.photoUrl, item.productName)
+                  ? () => _showImagePreview(
+                      context,
+                      item.photoUrl,
+                      item.productName,
+                    )
                   : null,
               borderRadius: BorderRadius.circular(12),
               child: Container(
@@ -1104,10 +1525,7 @@ class _OrderItemCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     '₹${item.pricePerDay.toStringAsFixed(2)}/day',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   ),
                 ],
               ),
@@ -1170,11 +1588,11 @@ class _PricingRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: isTotal ? 16 : 14,
                 fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
-                color: isLateFee 
-                    ? Colors.red.shade700 
-                    : isTotal 
-                        ? const Color(0xFF0F1724)
-                        : Colors.grey.shade700,
+                color: isLateFee
+                    ? Colors.red.shade700
+                    : isTotal
+                    ? const Color(0xFF0F1724)
+                    : Colors.grey.shade700,
               ),
             ),
           ],
@@ -1184,11 +1602,11 @@ class _PricingRow extends StatelessWidget {
           style: TextStyle(
             fontSize: isTotal ? 18 : 14,
             fontWeight: FontWeight.bold,
-            color: isLateFee 
-                ? Colors.red.shade600 
-                : isTotal 
-                    ? Colors.green.shade600
-                    : const Color(0xFF0F1724),
+            color: isLateFee
+                ? Colors.red.shade600
+                : isTotal
+                ? Colors.green.shade600
+                : const Color(0xFF0F1724),
           ),
         ),
       ],
@@ -1200,10 +1618,7 @@ class _ImagePreviewModal extends StatefulWidget {
   final String imageUrl;
   final String productName;
 
-  const _ImagePreviewModal({
-    required this.imageUrl,
-    required this.productName,
-  });
+  const _ImagePreviewModal({required this.imageUrl, required this.productName});
 
   @override
   State<_ImagePreviewModal> createState() => _ImagePreviewModalState();
@@ -1224,7 +1639,8 @@ class _ImagePreviewModalState extends State<_ImagePreviewModal> {
   void initState() {
     super.initState();
     _transformationController.addListener(() {
-      final isZoomed = _transformationController.value.getMaxScaleOnAxis() > 1.0;
+      final isZoomed =
+          _transformationController.value.getMaxScaleOnAxis() > 1.0;
       if (_isZoomed != isZoomed) {
         setState(() {
           _isZoomed = isZoomed;
@@ -1332,7 +1748,9 @@ class _ImagePreviewModalState extends State<_ImagePreviewModal> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  _isZoomed ? 'Pinch to zoom' : 'Pinch to zoom in',
+                                  _isZoomed
+                                      ? 'Pinch to zoom'
+                                      : 'Pinch to zoom in',
                                   style: TextStyle(
                                     color: Colors.grey.shade400,
                                     fontSize: 12,
@@ -1401,13 +1819,19 @@ class _ImagePreviewModalState extends State<_ImagePreviewModal> {
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       CircularProgressIndicator(
-                                        value: loadingProgress.expectedTotalBytes != null
-                                            ? loadingProgress.cumulativeBytesLoaded /
-                                                loadingProgress.expectedTotalBytes!
+                                        value:
+                                            loadingProgress
+                                                    .expectedTotalBytes !=
+                                                null
+                                            ? loadingProgress
+                                                      .cumulativeBytesLoaded /
+                                                  loadingProgress
+                                                      .expectedTotalBytes!
                                             : null,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          Colors.blue.shade400,
-                                        ),
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.blue.shade400,
+                                            ),
                                         strokeWidth: 3,
                                       ),
                                       const SizedBox(height: 16),
@@ -1492,7 +1916,8 @@ class _ImagePreviewModalState extends State<_ImagePreviewModal> {
                         label: 'Reset View',
                         onPressed: () {
                           setState(() {
-                            _transformationController.value = Matrix4.identity();
+                            _transformationController.value =
+                                Matrix4.identity();
                           });
                         },
                         isActive: _isZoomed,
@@ -1546,10 +1971,7 @@ class _ModernActionButton extends StatelessWidget {
           decoration: BoxDecoration(
             gradient: isActive
                 ? LinearGradient(
-                    colors: [
-                      Colors.blue.shade400,
-                      Colors.blue.shade600,
-                    ],
+                    colors: [Colors.blue.shade400, Colors.blue.shade600],
                   )
                 : null,
             color: isActive ? null : Colors.white.withOpacity(0.1),
@@ -1573,11 +1995,7 @@ class _ModernActionButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                color: Colors.white,
-                size: 18,
-              ),
+              Icon(icon, color: Colors.white, size: 18),
               const SizedBox(width: 8),
               Text(
                 label,
@@ -1625,14 +2043,15 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
   void initState() {
     super.initState();
     _transformationController.addListener(() {
-      final isZoomed = _transformationController.value.getMaxScaleOnAxis() > 1.0;
+      final isZoomed =
+          _transformationController.value.getMaxScaleOnAxis() > 1.0;
       if (_isZoomed != isZoomed) {
         setState(() {
           _isZoomed = isZoomed;
         });
       }
     });
-    
+
     // Hide controls after 3 seconds
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted && !_isZoomed) {
@@ -1677,7 +2096,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                           CircularProgressIndicator(
                             value: loadingProgress.expectedTotalBytes != null
                                 ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
+                                      loadingProgress.expectedTotalBytes!
                                 : null,
                             valueColor: const AlwaysStoppedAnimation<Color>(
                               Colors.white,
@@ -1721,7 +2140,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                 ),
               ),
             ),
-            
+
             // Top Controls
             AnimatedOpacity(
               opacity: _showControls ? 1.0 : 0.0,
@@ -1731,10 +2150,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withOpacity(0.7),
-                      Colors.transparent,
-                    ],
+                    colors: [Colors.black.withOpacity(0.7), Colors.transparent],
                   ),
                 ),
                 child: SafeArea(
@@ -1798,7 +2214,9 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                           ),
                           child: IconButton(
                             icon: Icon(
-                              _isZoomed ? Icons.refresh_rounded : Icons.close_rounded,
+                              _isZoomed
+                                  ? Icons.refresh_rounded
+                                  : Icons.close_rounded,
                               color: Colors.white,
                               size: 20,
                             ),
@@ -1818,7 +2236,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                 ),
               ),
             ),
-            
+
             // Bottom Controls
             AnimatedPositioned(
               duration: const Duration(milliseconds: 300),
@@ -1836,10 +2254,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                   gradient: LinearGradient(
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
-                    colors: [
-                      Colors.black.withOpacity(0.7),
-                      Colors.transparent,
-                    ],
+                    colors: [Colors.black.withOpacity(0.7), Colors.transparent],
                   ),
                 ),
                 child: Row(

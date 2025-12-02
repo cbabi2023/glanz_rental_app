@@ -4,7 +4,7 @@ import '../providers/auth_provider.dart';
 import 'package:go_router/go_router.dart';
 
 /// Login Screen
-/// 
+///
 /// Handles user authentication
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -82,10 +82,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 24),
                   const Text(
                     'Glanz Rental',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 48),
@@ -152,23 +149,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             width: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           )
-                        : const Text(
-                            'Login',
-                            style: TextStyle(fontSize: 16),
-                          ),
+                        : const Text('Login', style: TextStyle(fontSize: 16)),
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    '⚠️ Make sure to configure your Supabase credentials\nin lib/core/config.dart',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+                  // Text(
+                  //   '⚠️ Make sure to configure your Supabase credentials\nin lib/core/config.dart',
+                  //   style: TextStyle(
+                  //     fontSize: 12,
+                  //     color: Colors.grey.shade600,
+                  //   ),
+                  //   textAlign: TextAlign.center,
+                  // ),
                 ],
               ),
             ),
@@ -178,4 +174,3 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 }
-

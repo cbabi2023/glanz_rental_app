@@ -6,7 +6,7 @@ import '../models/user_profile.dart';
 
 /// Profile Screen
 /// 
-/// Displays user profile information, GST settings, and password change
+/// Modern, attractive profile screen displaying user information, GST settings, and password change
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
@@ -40,7 +40,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   void _initializeFields(UserProfile profile) {
-    // Always initialize from profile data (like useEffect in web app)
     _gstNumberController.text = profile.gstNumber ?? '';
     _gstEnabled = profile.gstEnabled ?? false;
     _gstRateController.text = profile.gstRate?.toString() ?? '5.00';
@@ -108,7 +107,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _handleSaveGst() async {
-    // Validate GST rate
     if (_gstEnabled) {
       final gstRateNum = double.tryParse(_gstRateController.text);
       if (gstRateNum == null || gstRateNum < 0 || gstRateNum > 100) {
@@ -136,10 +134,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         upiId: _upiIdController.text,
       );
 
-      // Invalidate user profile to refresh
       ref.invalidate(userProfileProvider);
-      
-      // Reset initialization flag so fields get updated on next build
       _fieldsInitialized = false;
 
       if (mounted) {
@@ -155,7 +150,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         final errorMessage = e.toString();
         String displayMessage = 'Failed to save GST settings';
         
-        // Check if it's a database column error (similar to web app)
         if (errorMessage.contains('column') || errorMessage.contains('does not exist')) {
           displayMessage = 'Database migration not run. Please run supabase-gst-migration.sql in Supabase SQL editor';
         } else {
@@ -166,7 +160,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           SnackBar(
             content: Text(displayMessage),
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5), // Longer duration for migration error
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -180,21 +174,55 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _handleLogout() async {
-    final authService = ref.read(authServiceProvider);
-    await authService.signOut();
-    if (mounted) {
-      context.go('/login');
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout == true) {
+      final authService = ref.read(authServiceProvider);
+      await authService.signOut();
+      if (mounted) {
+        context.go('/login');
+      }
     }
   }
 
   String _formatRole(UserRole role) {
     switch (role) {
       case UserRole.superAdmin:
-        return 'SUPER ADMIN';
+        return 'Super Admin';
       case UserRole.branchAdmin:
-        return 'BRANCH ADMIN';
+        return 'Branch Admin';
       case UserRole.staff:
-        return 'STAFF';
+        return 'Staff';
+    }
+  }
+
+  Color _getRoleColor(UserRole role) {
+    switch (role) {
+      case UserRole.superAdmin:
+        return const Color(0xFFFF6B6B);
+      case UserRole.branchAdmin:
+        return const Color(0xFF4ECDC4);
+      case UserRole.staff:
+        return const Color(0xFF95E1D3);
     }
   }
 
@@ -203,341 +231,444 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final userProfile = ref.watch(userProfileProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-        automaticallyImplyLeading: false, // Remove back button since it's in bottom nav
-      ),
+      backgroundColor: const Color(0xFFF7F9FB),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(userProfileProvider);
-          _fieldsInitialized = false; // Reset so fields re-initialize after refresh
+          _fieldsInitialized = false;
         },
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80), // Extra bottom padding for bottom nav
-          child: userProfile.when(
-            data: (profile) {
-              if (profile == null) {
-                return const Center(
-                  child: Text('User profile not found'),
-                );
-              }
+        child: userProfile.when(
+          data: (profile) {
+            if (profile == null) {
+              return const Center(
+                child: Text('User profile not found'),
+              );
+            }
 
-              // Initialize fields from profile (similar to useEffect in web app)
-              // This ensures fields are always synced with profile data
-              if (!_fieldsInitialized || 
-                  _gstNumberController.text != (profile.gstNumber ?? '') ||
-                  _gstEnabled != (profile.gstEnabled ?? false) ||
-                  _gstRateController.text != (profile.gstRate?.toString() ?? '5.00') ||
-                  _gstIncluded != (profile.gstIncluded ?? false) ||
-                  _upiIdController.text != (profile.upiId ?? '')) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) {
-                    setState(() {
-                      _initializeFields(profile);
-                    });
-                  }
-                });
-              }
+            if (!_fieldsInitialized || 
+                _gstNumberController.text != (profile.gstNumber ?? '') ||
+                _gstEnabled != (profile.gstEnabled ?? false) ||
+                _gstRateController.text != (profile.gstRate?.toString() ?? '5.00') ||
+                _gstIncluded != (profile.gstIncluded ?? false) ||
+                _upiIdController.text != (profile.upiId ?? '')) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _initializeFields(profile);
+                  });
+                }
+              });
+            }
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // User Information Card
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'User Information',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+            return CustomScrollView(
+              slivers: [
+                // Modern Gradient Header
+                SliverAppBar(
+                  expandedHeight: 200,
+                  floating: false,
+                  pinned: true,
+                  elevation: 0,
+                  backgroundColor: Colors.white,
+                  automaticallyImplyLeading: false,
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            const Color(0xFF0B63FF),
+                            const Color(0xFF0052D4),
+                          ],
+                        ),
+                      ),
+                      child: SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  // User Avatar
+                                  Container(
+                                    width: 80,
+                                    height: 80,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 4,
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        profile.fullName
+                                            .split(' ')
+                                            .map((n) => n.isNotEmpty ? n[0] : '')
+                                            .take(2)
+                                            .join()
+                                            .toUpperCase(),
+                                        style: const TextStyle(
+                                          color: Color(0xFF0B63FF),
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          profile.fullName,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withOpacity(0.3),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            _formatRole(profile.role),
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 16),
-                          _buildInfoRow('Full Name', profile.fullName),
-                          const SizedBox(height: 12),
-                          _buildInfoRow('Username', profile.username),
-                          const SizedBox(height: 12),
-                          _buildInfoRow('Phone', profile.phone),
-                          const SizedBox(height: 12),
-                          _buildInfoRow('Role', _formatRole(profile.role)),
-                        ],
+                        ),
                       ),
                     ),
                   ),
+                ),
 
-                  const SizedBox(height: 24),
-
-                  // GST Settings Card
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'GST Settings',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // GST Number
-                          TextField(
-                            controller: _gstNumberController,
-                            decoration: const InputDecoration(
-                              labelText: 'GST Number (Optional)',
-                              hintText: 'Enter GST number (e.g., 27AAAAA0000A1Z5)',
-                              border: OutlineInputBorder(),
-                            ),
-                            maxLength: 15,
-                          ),
-                          const SizedBox(height: 16),
-
-                          // UPI ID
-                          TextField(
-                            controller: _upiIdController,
-                            decoration: const InputDecoration(
-                              labelText: 'UPI ID (Optional)',
-                              hintText: 'yourname@paytm or yourname@upi',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Enter your UPI ID for payment QR codes',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Enable GST Toggle
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                // Content
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // User Information Card
+                        _SectionCard(
+                          icon: Icons.person_outline,
+                          title: 'User Information',
+                          child: Column(
                             children: [
-                              const Text('Enable GST'),
-                              Switch(
+                              _InfoRow(
+                                icon: Icons.person,
+                                label: 'Full Name',
+                                value: profile.fullName,
+                              ),
+                              const Divider(height: 32),
+                              _InfoRow(
+                                icon: Icons.alternate_email,
+                                label: 'Username',
+                                value: profile.username,
+                              ),
+                              const Divider(height: 32),
+                              _InfoRow(
+                                icon: Icons.phone,
+                                label: 'Phone',
+                                value: profile.phone,
+                              ),
+                              const Divider(height: 32),
+                              _InfoRow(
+                                icon: Icons.badge,
+                                label: 'Role',
+                                value: _formatRole(profile.role),
+                                valueColor: _getRoleColor(profile.role),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // GST Settings Card
+                        _SectionCard(
+                          icon: Icons.receipt_long,
+                          title: 'GST Settings',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _ModernTextField(
+                                controller: _gstNumberController,
+                                label: 'GST Number',
+                                hint: 'Enter GST number (e.g., 27AAAAA0000A1Z5)',
+                                icon: Icons.numbers,
+                                maxLength: 15,
+                              ),
+                              const SizedBox(height: 16),
+                              _ModernTextField(
+                                controller: _upiIdController,
+                                label: 'UPI ID',
+                                hint: 'yourname@paytm or yourname@upi',
+                                icon: Icons.qr_code,
+                                helperText: 'Enter your UPI ID for payment QR codes',
+                              ),
+                              const SizedBox(height: 24),
+                              _ModernSwitch(
                                 value: _gstEnabled,
                                 onChanged: (value) {
                                   setState(() {
                                     _gstEnabled = value;
                                   });
                                 },
+                                title: 'Enable GST',
+                                subtitle: _gstEnabled
+                                    ? 'GST will be applied to all orders'
+                                    : 'GST will not be applied to orders',
+                                icon: Icons.toggle_on,
+                              ),
+                              if (_gstEnabled) ...[
+                                const SizedBox(height: 24),
+                                _ModernTextField(
+                                  controller: _gstRateController,
+                                  label: 'GST Rate (%)',
+                                  hint: '5.00',
+                                  icon: Icons.percent,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  helperText: 'Enter the GST percentage rate (e.g., 5.00 for 5%, 18.00 for 18%)',
+                                ),
+                                const SizedBox(height: 24),
+                                const Text(
+                                  'GST Calculation Method',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF0F1724),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                _ModernRadioOption(
+                                  value: false,
+                                  groupValue: _gstIncluded,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _gstIncluded = false;
+                                    });
+                                  },
+                                  title: 'GST Excluded',
+                                  subtitle: 'GST (${_gstRateController.text}%) will be added on top of the order total',
+                                  icon: Icons.add_circle_outline,
+                                ),
+                                const SizedBox(height: 12),
+                                _ModernRadioOption(
+                                  value: true,
+                                  groupValue: _gstIncluded,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _gstIncluded = true;
+                                    });
+                                  },
+                                  title: 'GST Included',
+                                  subtitle: 'GST (${_gstRateController.text}%) is already included in the item prices',
+                                  icon: Icons.check_circle_outline,
+                                ),
+                              ],
+                              const SizedBox(height: 24),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: _isLoadingGst ? null : _handleSaveGst,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0B63FF),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: 0,
+                                  ),
+                                  child: _isLoadingGst
+                                      ? const SizedBox(
+                                          height: 24,
+                                          width: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Save GST Settings',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                ),
                               ),
                             ],
                           ),
-                          Text(
-                            _gstEnabled
-                                ? 'GST will be applied to all orders'
-                                : 'GST will not be applied to orders',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
+                        ),
+                        const SizedBox(height: 16),
 
-                          // GST Rate (only when enabled)
-                          if (_gstEnabled) ...[
-                            const SizedBox(height: 16),
-                            TextField(
-                              controller: _gstRateController,
-                              decoration: const InputDecoration(
-                                labelText: 'GST Rate (%)',
-                                hintText: '5.00',
-                                border: OutlineInputBorder(),
+                        // Change Password Card
+                        _SectionCard(
+                          icon: Icons.lock_outline,
+                          title: 'Change Password',
+                          child: Column(
+                            children: [
+                              _ModernTextField(
+                                controller: _currentPasswordController,
+                                label: 'Current Password',
+                                icon: Icons.lock,
+                                obscureText: true,
                               ),
-                              keyboardType: TextInputType.numberWithOptions(decimal: true),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Enter the GST percentage rate (e.g., 5.00 for 5%, 18.00 for 18%)',
+                              const SizedBox(height: 16),
+                              _ModernTextField(
+                                controller: _newPasswordController,
+                                label: 'New Password',
+                                icon: Icons.lock_open,
+                                obscureText: true,
+                              ),
+                              const SizedBox(height: 16),
+                              _ModernTextField(
+                                controller: _confirmPasswordController,
+                                label: 'Confirm New Password',
+                                icon: Icons.verified_user,
+                                obscureText: true,
+                              ),
+                              const SizedBox(height: 24),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: _isLoadingPassword ? null : _handleChangePassword,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0B63FF),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: 0,
+                                  ),
+                                  child: _isLoadingPassword
+                                      ? const SizedBox(
+                                          height: 24,
+                                          width: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Update Password',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Logout Button
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _handleLogout,
+                            icon: const Icon(Icons.logout, color: Colors.red),
+                            label: const Text(
+                              'Logout',
                               style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.red,
                               ),
                             ),
-                          ],
-
-                          // GST Calculation Method (only when enabled)
-                          if (_gstEnabled) ...[
-                            const SizedBox(height: 16),
-                            const Text(
-                              'GST Calculation Method',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w500,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              side: const BorderSide(color: Colors.red, width: 1.5),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            RadioListTile<bool>(
-                              title: const Text('GST Excluded'),
-                              subtitle: Text(
-                                'GST (${_gstRateController.text}%) will be added on top of the order total',
-                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                              ),
-                              value: false,
-                              groupValue: _gstIncluded,
-                              onChanged: (value) {
-                                setState(() {
-                                  _gstIncluded = false;
-                                });
-                              },
-                            ),
-                            RadioListTile<bool>(
-                              title: const Text('GST Included'),
-                              subtitle: Text(
-                                'GST (${_gstRateController.text}%) is already included in the item prices',
-                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                              ),
-                              value: true,
-                              groupValue: _gstIncluded,
-                              onChanged: (value) {
-                                setState(() {
-                                  _gstIncluded = true;
-                                });
-                              },
-                            ),
-                          ],
-
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _isLoadingGst ? null : _handleSaveGst,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0B63FF),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                              ),
-                              child: _isLoadingGst
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                      ),
-                                    )
-                                  : const Text('Save GST Settings'),
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 32),
+                      ],
                     ),
                   ),
-
-                  const SizedBox(height: 24),
-
-                  // Change Password Card
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Change Password',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _currentPasswordController,
-                            decoration: const InputDecoration(
-                              labelText: 'Current Password',
-                              border: OutlineInputBorder(),
-                            ),
-                            obscureText: true,
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _newPasswordController,
-                            decoration: const InputDecoration(
-                              labelText: 'New Password',
-                              border: OutlineInputBorder(),
-                            ),
-                            obscureText: true,
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _confirmPasswordController,
-                            decoration: const InputDecoration(
-                              labelText: 'Confirm New Password',
-                              border: OutlineInputBorder(),
-                            ),
-                            obscureText: true,
-                          ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _isLoadingPassword ? null : _handleChangePassword,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0B63FF),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                              ),
-                              child: _isLoadingPassword
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                      ),
-                                    )
-                                  : const Text('Update Password'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Logout Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _handleLogout,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: const Text('Logout'),
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-                ],
-              );
-            },
-            loading: () => const Center(
-              child: CircularProgressIndicator(),
-            ),
-            error: (error, stack) => Center(
+                ),
+              ],
+            );
+          },
+          loading: () => const Center(
+            child: CircularProgressIndicator(),
+          ),
+          error: (error, stack) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error, size: 48, color: Colors.red),
+                  Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Colors.red.shade300,
+                  ),
                   const SizedBox(height: 16),
-                  Text('Error loading profile: ${error.toString()}'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
+                  Text(
+                    'Error loading profile',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    error.toString(),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
                     onPressed: () {
                       ref.invalidate(userProfileProvider);
                     },
-                    child: const Text('Retry'),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0B63FF),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -547,30 +678,124 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
     );
   }
+}
 
-  Widget _buildInfoRow(String label, String value) {
-    return Column(
+/// Modern Section Card Widget
+class _SectionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Widget child;
+
+  const _SectionCard({
+    required this.icon,
+    required this.title,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: Colors.grey.shade200,
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0B63FF).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: const Color(0xFF0B63FF),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F1724),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Modern Info Row Widget
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 4),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: Colors.grey.shade100,
             borderRadius: BorderRadius.circular(8),
           ),
-          width: double.infinity,
-          child: Text(
-            value,
-            style: const TextStyle(fontSize: 14),
+          child: Icon(
+            icon,
+            size: 20,
+            color: Colors.grey.shade600,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: valueColor ?? const Color(0xFF0F1724),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -578,3 +803,222 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 }
 
+/// Modern Text Field Widget
+class _ModernTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final IconData icon;
+  final bool obscureText;
+  final TextInputType? keyboardType;
+  final String? helperText;
+  final int? maxLength;
+
+  const _ModernTextField({
+    required this.controller,
+    required this.label,
+    this.hint,
+    required this.icon,
+    this.obscureText = false,
+    this.keyboardType,
+    this.helperText,
+    this.maxLength,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: controller,
+          obscureText: obscureText,
+          keyboardType: keyboardType,
+          maxLength: maxLength,
+          decoration: InputDecoration(
+            labelText: label,
+            hintText: hint,
+            prefixIcon: Icon(icon, color: const Color(0xFF0B63FF)),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 2),
+            ),
+            filled: true,
+            fillColor: Colors.grey.shade50,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
+          ),
+        ),
+        if (helperText != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            helperText!,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Modern Switch Widget
+class _ModernSwitch extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+
+  const _ModernSwitch({
+    required this.value,
+    required this.onChanged,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: value ? const Color(0xFF0B63FF).withOpacity(0.1) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: value ? const Color(0xFF0B63FF) : Colors.grey.shade300,
+          width: value ? 2 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: value ? const Color(0xFF0B63FF) : Colors.grey.shade600,
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: value ? const Color(0xFF0F1724) : Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: const Color(0xFF0B63FF),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Modern Radio Option Widget
+class _ModernRadioOption extends StatelessWidget {
+  final bool value;
+  final bool groupValue;
+  final ValueChanged<bool?> onChanged;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+
+  const _ModernRadioOption({
+    required this.value,
+    required this.groupValue,
+    required this.onChanged,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = groupValue == value;
+    
+    return InkWell(
+      onTap: () => onChanged(value),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF0B63FF).withOpacity(0.1) : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF0B63FF) : Colors.grey.shade300,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? const Color(0xFF0B63FF) : Colors.grey.shade600,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected ? const Color(0xFF0F1724) : Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Radio<bool>(
+              value: value,
+              groupValue: groupValue,
+              onChanged: onChanged,
+              activeColor: const Color(0xFF0B63FF),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

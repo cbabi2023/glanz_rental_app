@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../models/order_item.dart';
 import 'camera_upload_widget.dart';
 import 'dart:io';
@@ -38,27 +39,6 @@ class OrderItemsWidget extends StatelessWidget {
     );
 
     onAddItem(newItem);
-  }
-
-  OrderItem _handleUpdateItem(int index, String field, dynamic value) {
-    final item = items[index];
-    
-    // Create updated item with new value
-    final updatedQuantity = field == 'quantity' ? value : item.quantity;
-    final updatedPrice = field == 'price_per_day' ? value : item.pricePerDay;
-    
-    // Calculate line total
-    final updatedLineTotal = updatedQuantity * updatedPrice * item.days;
-    
-    return OrderItem(
-      id: item.id,
-      photoUrl: item.photoUrl,
-      productName: field == 'product_name' ? value : item.productName,
-      quantity: updatedQuantity,
-      pricePerDay: updatedPrice,
-      days: item.days,
-      lineTotal: updatedLineTotal,
-    );
   }
 
   @override
@@ -103,19 +83,118 @@ class OrderItemsWidget extends StatelessWidget {
           ...items.asMap().entries.map((entry) {
             final index = entry.key;
             final item = entry.value;
-            return _buildItemCard(context, index, item);
+            return _OrderItemCard(
+              key: ValueKey(item.id?.isEmpty ?? true ? 'item_$index' : item.id!),
+              item: item,
+              index: index,
+              days: days,
+              onUpdateItem: onUpdateItem,
+              onRemoveItem: onRemoveItem,
+              onImageClick: onImageClick,
+            );
           }),
       ],
     );
   }
+}
 
-  Widget _buildItemCard(BuildContext context, int index, OrderItem item) {
-    final productNameController = TextEditingController(text: item.productName);
-    final quantityController =
-        TextEditingController(text: item.quantity.toString());
-    final priceController =
-        TextEditingController(text: item.pricePerDay.toString());
+/// Individual Order Item Card
+/// 
+/// Stateful widget to maintain text controllers across rebuilds
+class _OrderItemCard extends StatefulWidget {
+  final OrderItem item;
+  final int index;
+  final int days;
+  final Function(int, OrderItem) onUpdateItem;
+  final Function(int) onRemoveItem;
+  final Function(String)? onImageClick;
 
+  const _OrderItemCard({
+    super.key,
+    required this.item,
+    required this.index,
+    required this.days,
+    required this.onUpdateItem,
+    required this.onRemoveItem,
+    this.onImageClick,
+  });
+
+  @override
+  State<_OrderItemCard> createState() => _OrderItemCardState();
+}
+
+class _OrderItemCardState extends State<_OrderItemCard> {
+  late TextEditingController _productNameController;
+  late TextEditingController _quantityController;
+  late TextEditingController _priceController;
+
+  @override
+  void initState() {
+    super.initState();
+    _productNameController = TextEditingController(text: widget.item.productName ?? '');
+    _quantityController = TextEditingController(text: widget.item.quantity.toString());
+    _priceController = TextEditingController(text: _formatPrice(widget.item.pricePerDay));
+  }
+
+  // Format price without unnecessary decimals
+  String _formatPrice(double price) {
+    if (price == price.truncateToDouble()) {
+      return price.toInt().toString();
+    }
+    return price.toString();
+  }
+
+  @override
+  void didUpdateWidget(_OrderItemCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // NEVER sync controller text from item value during typing
+    // Only reset controllers if photo URL changed (completely new item)
+    // This prevents dots and unwanted formatting from appearing automatically
+    if (oldWidget.item.photoUrl != widget.item.photoUrl) {
+      // Photo changed - this is a completely new item, reset controllers
+      _productNameController.text = widget.item.productName ?? '';
+      _quantityController.text = widget.item.quantity.toString();
+      _priceController.text = _formatPrice(widget.item.pricePerDay);
+    }
+    // Otherwise, let the user type freely without any interference
+  }
+
+  @override
+  void dispose() {
+    _productNameController.dispose();
+    _quantityController.dispose();
+    _priceController.dispose();
+    super.dispose();
+  }
+
+  OrderItem _handleUpdateItem(String field, dynamic value) {
+    final item = widget.item;
+    
+    // Create updated item with new value
+    final updatedQuantity = field == 'quantity' ? value : item.quantity;
+    final updatedPrice = field == 'price_per_day' ? value : item.pricePerDay;
+    
+    // Calculate line total
+    final updatedLineTotal = updatedQuantity * updatedPrice * widget.days;
+    
+    return OrderItem(
+      id: item.id,
+      photoUrl: item.photoUrl,
+      productName: field == 'product_name' ? value : item.productName,
+      quantity: updatedQuantity,
+      pricePerDay: updatedPrice,
+      days: widget.days,
+      lineTotal: updatedLineTotal,
+    );
+  }
+
+  void _updateItem(String field, dynamic value) {
+    final updatedItem = _handleUpdateItem(field, value);
+    widget.onUpdateItem(widget.index, updatedItem);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
@@ -125,12 +204,12 @@ class OrderItemsWidget extends StatelessWidget {
             // Photo
             Center(
               child: GestureDetector(
-                onTap: () => onImageClick?.call(item.photoUrl),
+                onTap: () => widget.onImageClick?.call(widget.item.photoUrl),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: item.photoUrl.startsWith('http')
+                  child: widget.item.photoUrl.startsWith('http')
                       ? Image.network(
-                          item.photoUrl,
+                          widget.item.photoUrl,
                           width: 80,
                           height: 80,
                           fit: BoxFit.cover,
@@ -144,7 +223,7 @@ class OrderItemsWidget extends StatelessWidget {
                           },
                         )
                       : Image.file(
-                          File(item.photoUrl),
+                          File(widget.item.photoUrl),
                           width: 80,
                           height: 80,
                           fit: BoxFit.cover,
@@ -156,15 +235,14 @@ class OrderItemsWidget extends StatelessWidget {
 
             // Product Name
             TextField(
-              controller: productNameController,
+              controller: _productNameController,
               decoration: const InputDecoration(
                 labelText: 'Product Name',
                 hintText: 'Optional',
                 border: OutlineInputBorder(),
               ),
               onChanged: (value) {
-                final updatedItem = _handleUpdateItem(index, 'product_name', value);
-                onUpdateItem(index, updatedItem);
+                _updateItem('product_name', value);
               },
             ),
             const SizedBox(height: 16),
@@ -174,19 +252,35 @@ class OrderItemsWidget extends StatelessWidget {
               children: [
                 Expanded(
                   child: TextField(
-                    controller: quantityController,
+                    controller: _quantityController,
                     decoration: const InputDecoration(
                       labelText: 'Quantity',
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
                     onChanged: (value) {
-                      final quantity = int.tryParse(value) ?? 0;
-                      if (quantity >= 0) {
-                        final updatedItem =
-                            _handleUpdateItem(index, 'quantity', quantity);
-                        quantityController.text = quantity.toString();
-                        onUpdateItem(index, updatedItem);
+                      // Allow empty value during editing - don't reset immediately
+                      if (value.isEmpty) {
+                        // Don't update the item, just allow empty field
+                        return;
+                      }
+                      final quantity = int.tryParse(value);
+                      if (quantity != null && quantity >= 0) {
+                        _updateItem('quantity', quantity);
+                      }
+                    },
+                    onEditingComplete: () {
+                      // When done editing, ensure field has a valid value
+                      if (_quantityController.text.isEmpty || _quantityController.text.trim().isEmpty) {
+                        _quantityController.text = '0';
+                        _updateItem('quantity', 0);
+                      }
+                    },
+                    onTapOutside: (_) {
+                      // When user taps outside, ensure field has a valid value
+                      if (_quantityController.text.isEmpty || _quantityController.text.trim().isEmpty) {
+                        _quantityController.text = '0';
+                        _updateItem('quantity', 0);
                       }
                     },
                   ),
@@ -194,19 +288,66 @@ class OrderItemsWidget extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
-                    controller: priceController,
+                    controller: _priceController,
                     decoration: const InputDecoration(
                       labelText: 'Price per Day',
                       border: OutlineInputBorder(),
                     ),
-                    keyboardType: TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      // Allow only numbers and one decimal point
+                      // User must manually type the dot - it won't appear automatically
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                    ],
                     onChanged: (value) {
-                      final price = double.tryParse(value) ?? 0.0;
-                      if (price >= 0) {
-                        final updatedItem =
-                            _handleUpdateItem(index, 'price_per_day', price);
-                        priceController.text = price.toString();
-                        onUpdateItem(index, updatedItem);
+                      // Never update the controller text from here - let user type freely
+                      // Allow empty value during editing - don't reset immediately
+                      if (value.isEmpty) {
+                        // Don't update the item, just allow empty field
+                        return;
+                      }
+                      // Allow partial decimal input (like "0." or ".") - don't update yet
+                      if (value == '.' || value == '0.') {
+                        return;
+                      }
+                      // Only update the item value, but don't touch the controller text
+                      final price = double.tryParse(value);
+                      if (price != null && price >= 0) {
+                        _updateItem('price_per_day', price);
+                      }
+                    },
+                    onEditingComplete: () {
+                      // When done editing, ensure field has a valid value
+                      final text = _priceController.text.trim();
+                      if (text.isEmpty || text == '.' || text == '0.') {
+                        _priceController.text = '0';
+                        _updateItem('price_per_day', 0.0);
+                      } else {
+                        final price = double.tryParse(text);
+                        if (price == null || price < 0) {
+                          _priceController.text = '0';
+                          _updateItem('price_per_day', 0.0);
+                        } else {
+                          // Format without unnecessary decimals
+                          _priceController.text = _formatPrice(price);
+                        }
+                      }
+                    },
+                    onTapOutside: (_) {
+                      // When user taps outside, ensure field has a valid value
+                      final text = _priceController.text.trim();
+                      if (text.isEmpty || text == '.' || text == '0.') {
+                        _priceController.text = '0';
+                        _updateItem('price_per_day', 0.0);
+                      } else {
+                        final price = double.tryParse(text);
+                        if (price == null || price < 0) {
+                          _priceController.text = '0';
+                          _updateItem('price_per_day', 0.0);
+                        } else {
+                          // Format without unnecessary decimals
+                          _priceController.text = _formatPrice(price);
+                        }
                       }
                     },
                   ),
@@ -216,12 +357,12 @@ class OrderItemsWidget extends StatelessWidget {
             const SizedBox(height: 16),
 
             // Line Total
-            Divider(),
+            const Divider(),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${item.quantity} × ₹${item.pricePerDay.toStringAsFixed(2)} × $days days',
+                  '${widget.item.quantity} × ₹${widget.item.pricePerDay.toStringAsFixed(2)} × ${widget.days} days',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey.shade600,
@@ -230,7 +371,7 @@ class OrderItemsWidget extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      '₹${item.lineTotal.toStringAsFixed(2)}',
+                      '₹${widget.item.lineTotal.toStringAsFixed(2)}',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -240,7 +381,7 @@ class OrderItemsWidget extends StatelessWidget {
                     const SizedBox(width: 8),
                     IconButton(
                       icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => onRemoveItem(index),
+                      onPressed: () => widget.onRemoveItem(widget.index),
                     ),
                   ],
                 ),
@@ -252,4 +393,3 @@ class OrderItemsWidget extends StatelessWidget {
     );
   }
 }
-

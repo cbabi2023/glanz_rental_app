@@ -438,12 +438,20 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
             },
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline, color: Color(0xFF0B63FF)),
-            onPressed: () => context.push('/orders/new'),
-            tooltip: 'New Order',
-          ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push('/orders/new'),
+        backgroundColor: const Color(0xFF0B63FF),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text(
+          'New Order',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
       body: ordersAsync.when(
         data: (orders) {
@@ -553,14 +561,19 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
       return _OrderCategory.returned;
     }
 
-    // Parse dates
+    // Parse dates - compare by date only, not time
     final now = DateTime.now();
-    DateTime? startDate;
-    DateTime? endDate;
+    final today = DateTime(now.year, now.month, now.day); // Start of today (no time)
+    DateTime startDate;
+    DateTime endDate;
+    DateTime startDateOnly;
+    DateTime endDateOnly;
 
     try {
       final startStr = order.startDatetime ?? order.startDate;
       startDate = DateTime.parse(startStr);
+      // Extract date only (without time) for comparison
+      startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
     } catch (e) {
       // If parsing fails, treat as ongoing
       return _OrderCategory.ongoing;
@@ -569,26 +582,30 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
     try {
       final endStr = order.endDatetime ?? order.endDate;
       endDate = DateTime.parse(endStr);
+      // Extract date only (without time) for comparison
+      endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
     } catch (e) {
       // If parsing fails, treat as ongoing
       return _OrderCategory.ongoing;
     }
 
-    // Scheduled: start date is in the future
-    if (startDate.isAfter(now)) {
+    // Scheduled: start date is in the future (tomorrow or later)
+    // Compare by date only, not time - so orders starting today are ongoing
+    if (startDateOnly.isAfter(today)) {
       return _OrderCategory.scheduled;
     }
 
     // Late: end date has passed and order is not completed
-    if (endDate.isBefore(now) && 
+    if (endDateOnly.isBefore(today) && 
         order.status != OrderStatus.completed && 
         order.status != OrderStatus.cancelled) {
       return _OrderCategory.late;
     }
 
-    // Ongoing: start date has passed, end date hasn't, and status is active or pending_return
-    if (startDate.isBefore(now) || startDate.isAtSameMomentAs(now)) {
-      if (endDate.isAfter(now) || endDate.isAtSameMomentAs(now)) {
+    // Ongoing: start date is today or in the past, end date hasn't passed
+    // and status is active or pending_return
+    if (startDateOnly.isBefore(today) || startDateOnly.isAtSameMomentAs(today)) {
+      if (endDateOnly.isAfter(today) || endDateOnly.isAtSameMomentAs(today)) {
         if (order.status == OrderStatus.active || 
             order.status == OrderStatus.pendingReturn) {
           return _OrderCategory.ongoing;
@@ -990,13 +1007,18 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
       return _OrderCategory.returned;
     }
 
+    // Compare by date only, not time - so orders starting today are ongoing
     final now = DateTime.now();
-    DateTime? startDate;
-    DateTime? endDate;
+    final today = DateTime(now.year, now.month, now.day); // Start of today (no time)
+    DateTime startDate;
+    DateTime endDate;
+    DateTime startDateOnly;
+    DateTime endDateOnly;
 
     try {
       final startStr = order.startDatetime ?? order.startDate;
       startDate = DateTime.parse(startStr);
+      startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
     } catch (e) {
       return _OrderCategory.ongoing;
     }
@@ -1004,22 +1026,26 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
     try {
       final endStr = order.endDatetime ?? order.endDate;
       endDate = DateTime.parse(endStr);
+      endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
     } catch (e) {
       return _OrderCategory.ongoing;
     }
 
-    if (startDate.isAfter(now)) {
+    // Scheduled: start date is in the future (tomorrow or later)
+    if (startDateOnly.isAfter(today)) {
       return _OrderCategory.scheduled;
     }
 
-    if (endDate.isBefore(now) && 
+    // Late: end date has passed and order is not completed
+    if (endDateOnly.isBefore(today) && 
         order.status != OrderStatus.completed && 
         order.status != OrderStatus.cancelled) {
       return _OrderCategory.late;
     }
 
-    if (startDate.isBefore(now) || startDate.isAtSameMomentAs(now)) {
-      if (endDate.isAfter(now) || endDate.isAtSameMomentAs(now)) {
+    // Ongoing: start date is today or in the past
+    if (startDateOnly.isBefore(today) || startDateOnly.isAtSameMomentAs(today)) {
+      if (endDateOnly.isAfter(today) || endDateOnly.isAtSameMomentAs(today)) {
         if (order.status == OrderStatus.active || 
             order.status == OrderStatus.pendingReturn) {
           return _OrderCategory.ongoing;
@@ -1163,6 +1189,76 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
     }
   }
 
+  Future<void> _handleCancelOrder(Order order) async {
+    final shouldCancel = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel Order'),
+        content: Text(
+          'Are you sure you want to cancel order ${order.invoiceNumber}? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldCancel != true) {
+      return;
+    }
+
+    setState(() {
+      _isUpdating = true;
+    });
+
+    try {
+      final ordersService = ref.read(ordersServiceProvider);
+      await ordersService.updateOrderStatus(
+        orderId: order.id,
+        status: OrderStatus.cancelled,
+        lateFee: 0.0,
+      );
+
+      // Invalidate order queries to refresh the list
+      final branchId = ref.read(userProfileProvider).value?.branchId;
+      ref.invalidate(ordersProvider(OrdersParams(branchId: branchId)));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Order cancelled successfully'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+        });
+      }
+    }
+  }
+
   Color _statusColor(_OrderCategory category) {
     switch (category) {
       case _OrderCategory.scheduled:
@@ -1202,6 +1298,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
     final phone = order.customer?.phone ?? '';
     final dateInfo = _getDateInfo(order);
     final canMarkReturned = category == _OrderCategory.ongoing || category == _OrderCategory.late;
+    final canCancel = category == _OrderCategory.scheduled;
     final itemsCount = order.items?.length ?? 0;
 
     return Padding(
@@ -1462,7 +1559,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                   ),
                   const SizedBox(height: 16),
                 ],
-                // Action Button
+                // Action Buttons
                 if (canMarkReturned) ...[
                   SizedBox(
                     width: double.infinity,
@@ -1493,6 +1590,39 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
+                if (canCancel) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _isUpdating ? null : () => _handleCancelOrder(order),
+                      icon: _isUpdating
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+                              ),
+                            )
+                          : const Icon(Icons.cancel_outlined, size: 18),
+                      label: Text(
+                        _isUpdating ? 'Processing...' : 'Cancel Order',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red.shade600,
+                        side: BorderSide(color: Colors.red.shade600, width: 1.5),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
                   ),
