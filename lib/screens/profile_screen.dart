@@ -588,6 +588,82 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                         const SizedBox(height: 16),
 
+                        // Branch Management Card (Super Admin only)
+                        if (profile.canManageBranches)
+                          _SectionCard(
+                            icon: Icons.store_outlined,
+                            title: 'Branch Management',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Manage all branches in the system',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () => context.push('/branches'),
+                                    icon: const Icon(Icons.store),
+                                    label: const Text('Manage Branches'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF0B63FF),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (profile.canManageBranches) const SizedBox(height: 16),
+
+                        // Staff Management Card (Super Admin & Branch Admin)
+                        if (profile.canManageStaff)
+                          _SectionCard(
+                            icon: Icons.people_outline,
+                            title: 'Staff Management',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  profile.isSuperAdmin
+                                      ? 'Manage all staff members across all branches'
+                                      : 'Manage staff members in your branch',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () => context.push('/staff'),
+                                    icon: const Icon(Icons.people),
+                                    label: const Text('Manage Staff'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF0B63FF),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (profile.canManageStaff) const SizedBox(height: 16),
+
                         // Logout Button
                         SizedBox(
                           width: double.infinity,
