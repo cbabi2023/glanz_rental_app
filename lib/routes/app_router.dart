@@ -10,6 +10,7 @@ import '../screens/customers/customers_list_screen.dart';
 import '../screens/customers/customer_detail_screen.dart';
 import '../screens/customers/create_customer_screen.dart';
 import '../screens/customers/edit_customer_screen.dart';
+import '../screens/calendar/calendar_screen.dart';
 import '../screens/profile_screen.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/main_layout.dart';
@@ -79,6 +80,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: '/customers',
                 name: 'customers',
                 builder: (context, state) => const CustomersListScreen(),
+              ),
+            ],
+          ),
+          // Calendar branch
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/calendar',
+                name: 'calendar',
+                builder: (context, state) => const CalendarScreen(),
               ),
             ],
           ),
