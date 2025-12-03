@@ -157,6 +157,23 @@ class CustomerDetailScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 16),
 
+                      // Quick Stats Card
+                      ordersAsync.when(
+                        data: (orders) {
+                          if (orders.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          return Column(
+                            children: [
+                              _CustomerStatsCard(orders: orders),
+                              const SizedBox(height: 16),
+                            ],
+                          );
+                        },
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
+                      ),
+
                       // Due Amount Card (if applicable)
                       if (customer.dueAmount != null && customer.dueAmount! > 0)
                         _DueAmountCard(
@@ -1136,6 +1153,185 @@ class _ErrorCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Customer Stats Card
+/// 
+/// Displays quick statistics: Total Orders, Total Spent, Active Rentals
+class _CustomerStatsCard extends StatelessWidget {
+  final List<Order> orders;
+
+  const _CustomerStatsCard({required this.orders});
+
+  int get totalOrders => orders.length;
+
+  double get totalSpent {
+    return orders.fold(0.0, (sum, order) => sum + order.totalAmount);
+  }
+
+  int get activeRentals {
+    return orders.where((order) {
+      return order.isActive || 
+             order.isPendingReturn || 
+             order.isPartiallyReturned ||
+             order.isScheduled;
+    }).length;
+  }
+
+  /// Format number with simplified notation (1k, 20.8k, 1.5M, etc.)
+  String _formatSimplifiedAmount(double amount) {
+    if (amount < 1000) {
+      return '₹${NumberFormat('#,##0').format(amount)}';
+    } else if (amount < 1000000) {
+      // Thousands (1k, 20.8k)
+      final thousands = amount / 1000;
+      if (thousands % 1 == 0) {
+        return '₹${thousands.toInt()}k';
+      } else {
+        return '₹${thousands.toStringAsFixed(1)}k';
+      }
+    } else {
+      // Millions (1M, 2.5M)
+      final millions = amount / 1000000;
+      if (millions % 1 == 0) {
+        return '₹${millions.toInt()}M';
+      } else {
+        return '₹${millions.toStringAsFixed(1)}M';
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.bar_chart_outlined,
+                  size: 20,
+                  color: Colors.indigo.shade600,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Quick Stats',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F1724),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                // Total Orders
+                Expanded(
+                  child: _StatItem(
+                    icon: Icons.receipt_long_outlined,
+                    label: 'Total Orders',
+                    value: totalOrders.toString(),
+                    color: Colors.blue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Total Spent
+                Expanded(
+                  child: _StatItem(
+                    icon: Icons.account_balance_wallet_outlined,
+                    label: 'Total Spent',
+                    value: _formatSimplifiedAmount(totalSpent),
+                    color: Colors.green,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Active Rentals
+                Expanded(
+                  child: _StatItem(
+                    icon: Icons.local_activity_outlined,
+                    label: 'Active Rental',
+                    value: activeRentals.toString(),
+                    color: Colors.orange,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _StatItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: color.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            size: 24,
+            color: color,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
