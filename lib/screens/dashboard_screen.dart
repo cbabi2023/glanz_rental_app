@@ -65,7 +65,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         return DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
       case _DashboardFilter.yesterday:
         final yesterday = now.subtract(const Duration(days: 1));
-        return DateTime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59, 999);
+        return DateTime(
+          yesterday.year,
+          yesterday.month,
+          yesterday.day,
+          23,
+          59,
+          59,
+          999,
+        );
       case _DashboardFilter.thisWeek:
       case _DashboardFilter.thisMonth:
       case _DashboardFilter.last7Days:
@@ -74,13 +82,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         // Not used (handled by null dates), fallback to now
         return DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
       case _DashboardFilter.custom:
-        return _customEndDate ?? DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+        return _customEndDate ??
+            DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
     }
   }
 
   Future<void> _showCustomDatePicker() async {
     final now = DateTime.now();
-    final initialStart = _customStartDate ?? now.subtract(const Duration(days: 6));
+    final initialStart =
+        _customStartDate ?? now.subtract(const Duration(days: 6));
     final initialEnd = _customEndDate ?? now;
 
     final pickedStart = await showDatePicker(
@@ -103,8 +113,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     if (pickedEnd != null) {
       setState(() {
-        _customStartDate = DateTime(pickedStart.year, pickedStart.month, pickedStart.day);
-        _customEndDate = DateTime(pickedEnd.year, pickedEnd.month, pickedEnd.day, 23, 59, 59, 999);
+        _customStartDate = DateTime(
+          pickedStart.year,
+          pickedStart.month,
+          pickedStart.day,
+        );
+        _customEndDate = DateTime(
+          pickedEnd.year,
+          pickedEnd.month,
+          pickedEnd.day,
+          23,
+          59,
+          59,
+          999,
+        );
         _selectedFilter = _DashboardFilter.custom;
       });
     }
@@ -139,10 +161,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final userProfile = ref.watch(userProfileProvider);
     final branchId = userProfile.value?.branchId;
 
-    final DateTime? startDate =
-        _selectedFilter == _DashboardFilter.allTime ? null : _startForFilter(_selectedFilter);
-    final DateTime? endDate =
-        _selectedFilter == _DashboardFilter.allTime ? null : _endForFilter(_selectedFilter);
+    final DateTime? startDate = _selectedFilter == _DashboardFilter.allTime
+        ? null
+        : _startForFilter(_selectedFilter);
+    final DateTime? endDate = _selectedFilter == _DashboardFilter.allTime
+        ? null
+        : _endForFilter(_selectedFilter);
 
     final statsParams = DashboardStatsParams(
       branchId: branchId,
@@ -291,7 +315,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                     _ModernStatCard(
                       title: 'Today Collection',
-                      value: '₹${NumberFormat('#,##0').format(stats.todayCollection)}',
+                      value:
+                          '₹${NumberFormat('#,##0').format(stats.todayCollection)}',
                       icon: Icons.currency_rupee,
                       borderColor: const Color(0xFF0B63FF),
                       iconColor: const Color(0xFF0B63FF),
@@ -325,7 +350,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     padding: const EdgeInsets.all(20),
                     child: Column(
                       children: [
-                        Icon(Icons.error_outline, color: Colors.red.shade700, size: 48),
+                        Icon(
+                          Icons.error_outline,
+                          color: Colors.red.shade700,
+                          size: 48,
+                        ),
                         const SizedBox(height: 12),
                         Text(
                           'Error loading statistics',
@@ -337,7 +366,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         const SizedBox(height: 8),
                         Text(
                           error.toString(),
-                          style: TextStyle(color: Colors.red.shade600, fontSize: 12),
+                          style: TextStyle(
+                            color: Colors.red.shade600,
+                            fontSize: 12,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -406,7 +438,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   }
 
                   return Column(
-                    children: orders.map((order) => _ModernOrderCard(order: order)).toList(),
+                    children: orders
+                        .map((order) => _ModernOrderCard(order: order))
+                        .toList(),
                   );
                 },
                 loading: () => Column(
@@ -418,7 +452,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     padding: const EdgeInsets.all(20),
                     child: Column(
                       children: [
-                        Icon(Icons.error_outline, color: Colors.red.shade700, size: 32),
+                        Icon(
+                          Icons.error_outline,
+                          color: Colors.red.shade700,
+                          size: 32,
+                        ),
                         const SizedBox(height: 12),
                         Text(
                           'Error loading recent activity',
@@ -632,10 +670,7 @@ class _ActionButton extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               label,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -648,9 +683,7 @@ class _ActionButton extends StatelessWidget {
         foregroundColor: const Color(0xFF0B63FF),
         side: const BorderSide(color: Color(0xFF0B63FF), width: 1.5),
         padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -659,10 +692,7 @@ class _ActionButton extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -678,6 +708,8 @@ class _ModernOrderCard extends StatelessWidget {
 
   Color _getStatusColor(OrderStatus status) {
     switch (status) {
+      case OrderStatus.scheduled:
+        return Colors.grey;
       case OrderStatus.active:
         return Colors.green;
       case OrderStatus.pendingReturn:
@@ -686,11 +718,15 @@ class _ModernOrderCard extends StatelessWidget {
         return Colors.grey;
       case OrderStatus.cancelled:
         return Colors.grey;
+      case OrderStatus.partiallyReturned:
+        return Colors.blue;
     }
   }
 
   String _getStatusText(OrderStatus status) {
     switch (status) {
+      case OrderStatus.scheduled:
+        return 'Scheduled';
       case OrderStatus.active:
         return 'Active';
       case OrderStatus.pendingReturn:
@@ -699,6 +735,8 @@ class _ModernOrderCard extends StatelessWidget {
         return 'Completed';
       case OrderStatus.cancelled:
         return 'Cancelled';
+      case OrderStatus.partiallyReturned:
+        return 'Partially Returned';
     }
   }
 
@@ -729,9 +767,7 @@ class _ModernOrderCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: isPendingReturn
-              ? Colors.red.shade300
-              : Colors.grey.shade200,
+          color: isPendingReturn ? Colors.red.shade300 : Colors.grey.shade200,
           width: isPendingReturn ? 1.5 : 1,
         ),
       ),
@@ -1014,10 +1050,7 @@ class _EmptyStateCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Orders will appear here once created',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey.shade500,
-              ),
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
               textAlign: TextAlign.center,
             ),
           ],

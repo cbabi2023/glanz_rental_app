@@ -22,6 +22,7 @@ enum _OrdersTab {
   ongoing,
   late,
   returned,
+  partiallyReturned,
   cancelled,
 }
 
@@ -44,7 +45,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
 
   DateTime? _startForFilter(_DateFilter filter) {
     if (filter == _DateFilter.allTime) return null;
-    
+
     final now = DateTime.now();
     switch (filter) {
       case _DateFilter.allTime:
@@ -71,7 +72,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
 
   DateTime? _endForFilter(_DateFilter filter) {
     if (filter == _DateFilter.allTime) return null;
-    
+
     final now = DateTime.now();
     switch (filter) {
       case _DateFilter.allTime:
@@ -80,7 +81,15 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
         return DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
       case _DateFilter.yesterday:
         final yesterday = now.subtract(const Duration(days: 1));
-        return DateTime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59, 999);
+        return DateTime(
+          yesterday.year,
+          yesterday.month,
+          yesterday.day,
+          23,
+          59,
+          59,
+          999,
+        );
       case _DateFilter.thisWeek:
       case _DateFilter.thisMonth:
       case _DateFilter.last7Days:
@@ -92,7 +101,8 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
 
   Future<void> _showCustomDatePicker() async {
     final now = DateTime.now();
-    final initialStart = _customStartDate ?? now.subtract(const Duration(days: 6));
+    final initialStart =
+        _customStartDate ?? now.subtract(const Duration(days: 6));
     final initialEnd = _customEndDate ?? now;
 
     final pickedStart = await showDatePicker(
@@ -115,8 +125,20 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
 
     if (pickedEnd != null) {
       setState(() {
-        _customStartDate = DateTime(pickedStart.year, pickedStart.month, pickedStart.day);
-        _customEndDate = DateTime(pickedEnd.year, pickedEnd.month, pickedEnd.day, 23, 59, 59, 999);
+        _customStartDate = DateTime(
+          pickedStart.year,
+          pickedStart.month,
+          pickedStart.day,
+        );
+        _customEndDate = DateTime(
+          pickedEnd.year,
+          pickedEnd.month,
+          pickedEnd.day,
+          23,
+          59,
+          59,
+          999,
+        );
         _selectedDateFilter = _DateFilter.custom;
       });
     }
@@ -126,10 +148,10 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
   Widget build(BuildContext context) {
     final userProfile = ref.watch(userProfileProvider);
     final branchId = userProfile.value?.branchId;
-    
+
     final startDate = _startForFilter(_selectedDateFilter);
     final endDate = _endForFilter(_selectedDateFilter);
-    
+
     final ordersAsync = ref.watch(
       ordersProvider(
         OrdersParams(
@@ -182,260 +204,265 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
               ),
               tooltip: 'Date Filter',
               itemBuilder: (context) => [
-              PopupMenuItem(
-                value: _DateFilter.allTime,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.all_inclusive,
-                      size: 20,
-                      color: _selectedDateFilter == _DateFilter.allTime
-                          ? const Color(0xFF0B63FF)
-                          : Colors.grey.shade600,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'All Time',
-                      style: TextStyle(
-                        fontWeight: _selectedDateFilter == _DateFilter.allTime
-                            ? FontWeight.w600
-                            : FontWeight.normal,
+                PopupMenuItem(
+                  value: _DateFilter.allTime,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.all_inclusive,
+                        size: 20,
                         color: _selectedDateFilter == _DateFilter.allTime
                             ? const Color(0xFF0B63FF)
-                            : Colors.grey.shade700,
+                            : Colors.grey.shade600,
                       ),
-                    ),
-                    if (_selectedDateFilter == _DateFilter.allTime) ...[
-                      const Spacer(),
-                      Icon(
-                        Icons.check,
-                        size: 18,
-                        color: const Color(0xFF0B63FF),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: _DateFilter.today,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.today,
-                      size: 20,
-                      color: _selectedDateFilter == _DateFilter.today
-                          ? const Color(0xFF0B63FF)
-                          : Colors.grey.shade600,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Today',
-                      style: TextStyle(
-                        fontWeight: _selectedDateFilter == _DateFilter.today
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                        color: _selectedDateFilter == _DateFilter.today
-                            ? const Color(0xFF0B63FF)
-                            : Colors.grey.shade700,
-                      ),
-                    ),
-                    if (_selectedDateFilter == _DateFilter.today) ...[
-                      const Spacer(),
-                      Icon(
-                        Icons.check,
-                        size: 18,
-                        color: const Color(0xFF0B63FF),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: _DateFilter.yesterday,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.history,
-                      size: 20,
-                      color: _selectedDateFilter == _DateFilter.yesterday
-                          ? const Color(0xFF0B63FF)
-                          : Colors.grey.shade600,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Yesterday',
-                      style: TextStyle(
-                        fontWeight: _selectedDateFilter == _DateFilter.yesterday
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                        color: _selectedDateFilter == _DateFilter.yesterday
-                            ? const Color(0xFF0B63FF)
-                            : Colors.grey.shade700,
-                      ),
-                    ),
-                    if (_selectedDateFilter == _DateFilter.yesterday) ...[
-                      const Spacer(),
-                      Icon(
-                        Icons.check,
-                        size: 18,
-                        color: const Color(0xFF0B63FF),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: _DateFilter.thisWeek,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.date_range,
-                      size: 20,
-                      color: _selectedDateFilter == _DateFilter.thisWeek
-                          ? const Color(0xFF0B63FF)
-                          : Colors.grey.shade600,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'This Week',
-                      style: TextStyle(
-                        fontWeight: _selectedDateFilter == _DateFilter.thisWeek
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                        color: _selectedDateFilter == _DateFilter.thisWeek
-                            ? const Color(0xFF0B63FF)
-                            : Colors.grey.shade700,
-                      ),
-                    ),
-                    if (_selectedDateFilter == _DateFilter.thisWeek) ...[
-                      const Spacer(),
-                      Icon(
-                        Icons.check,
-                        size: 18,
-                        color: const Color(0xFF0B63FF),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: _DateFilter.thisMonth,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.calendar_month,
-                      size: 20,
-                      color: _selectedDateFilter == _DateFilter.thisMonth
-                          ? const Color(0xFF0B63FF)
-                          : Colors.grey.shade600,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'This Month',
-                      style: TextStyle(
-                        fontWeight: _selectedDateFilter == _DateFilter.thisMonth
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                        color: _selectedDateFilter == _DateFilter.thisMonth
-                            ? const Color(0xFF0B63FF)
-                            : Colors.grey.shade700,
-                      ),
-                    ),
-                    if (_selectedDateFilter == _DateFilter.thisMonth) ...[
-                      const Spacer(),
-                      Icon(
-                        Icons.check,
-                        size: 18,
-                        color: const Color(0xFF0B63FF),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: _DateFilter.last7Days,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.view_week,
-                      size: 20,
-                      color: _selectedDateFilter == _DateFilter.last7Days
-                          ? const Color(0xFF0B63FF)
-                          : Colors.grey.shade600,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Last 7 Days',
-                      style: TextStyle(
-                        fontWeight: _selectedDateFilter == _DateFilter.last7Days
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                        color: _selectedDateFilter == _DateFilter.last7Days
-                            ? const Color(0xFF0B63FF)
-                            : Colors.grey.shade700,
-                      ),
-                    ),
-                    if (_selectedDateFilter == _DateFilter.last7Days) ...[
-                      const Spacer(),
-                      Icon(
-                        Icons.check,
-                        size: 18,
-                        color: const Color(0xFF0B63FF),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: _DateFilter.custom,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.event_note,
-                      size: 20,
-                      color: _selectedDateFilter == _DateFilter.custom
-                          ? const Color(0xFF0B63FF)
-                          : Colors.grey.shade600,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _selectedDateFilter == _DateFilter.custom &&
-                                _customStartDate != null &&
-                                _customEndDate != null
-                            ? '${DateFormat('dd MMM').format(_customStartDate!)} - ${DateFormat('dd MMM yyyy').format(_customEndDate!)}'
-                            : 'Custom',
+                      const SizedBox(width: 12),
+                      Text(
+                        'All Time',
                         style: TextStyle(
-                          fontWeight: _selectedDateFilter == _DateFilter.custom
+                          fontWeight: _selectedDateFilter == _DateFilter.allTime
                               ? FontWeight.w600
                               : FontWeight.normal,
-                          color: _selectedDateFilter == _DateFilter.custom
+                          color: _selectedDateFilter == _DateFilter.allTime
                               ? const Color(0xFF0B63FF)
                               : Colors.grey.shade700,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    if (_selectedDateFilter == _DateFilter.custom)
-                      Icon(
-                        Icons.check,
-                        size: 18,
-                        color: const Color(0xFF0B63FF),
-                      ),
-                  ],
+                      if (_selectedDateFilter == _DateFilter.allTime) ...[
+                        const Spacer(),
+                        Icon(
+                          Icons.check,
+                          size: 18,
+                          color: const Color(0xFF0B63FF),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-            onSelected: (filter) {
-              if (filter == _DateFilter.custom) {
-                _showCustomDatePicker();
-              } else {
-                setState(() {
-                  _selectedDateFilter = filter;
-                });
-              }
-            },
+                PopupMenuItem(
+                  value: _DateFilter.today,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.today,
+                        size: 20,
+                        color: _selectedDateFilter == _DateFilter.today
+                            ? const Color(0xFF0B63FF)
+                            : Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Today',
+                        style: TextStyle(
+                          fontWeight: _selectedDateFilter == _DateFilter.today
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: _selectedDateFilter == _DateFilter.today
+                              ? const Color(0xFF0B63FF)
+                              : Colors.grey.shade700,
+                        ),
+                      ),
+                      if (_selectedDateFilter == _DateFilter.today) ...[
+                        const Spacer(),
+                        Icon(
+                          Icons.check,
+                          size: 18,
+                          color: const Color(0xFF0B63FF),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _DateFilter.yesterday,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.history,
+                        size: 20,
+                        color: _selectedDateFilter == _DateFilter.yesterday
+                            ? const Color(0xFF0B63FF)
+                            : Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Yesterday',
+                        style: TextStyle(
+                          fontWeight:
+                              _selectedDateFilter == _DateFilter.yesterday
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: _selectedDateFilter == _DateFilter.yesterday
+                              ? const Color(0xFF0B63FF)
+                              : Colors.grey.shade700,
+                        ),
+                      ),
+                      if (_selectedDateFilter == _DateFilter.yesterday) ...[
+                        const Spacer(),
+                        Icon(
+                          Icons.check,
+                          size: 18,
+                          color: const Color(0xFF0B63FF),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _DateFilter.thisWeek,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.date_range,
+                        size: 20,
+                        color: _selectedDateFilter == _DateFilter.thisWeek
+                            ? const Color(0xFF0B63FF)
+                            : Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'This Week',
+                        style: TextStyle(
+                          fontWeight:
+                              _selectedDateFilter == _DateFilter.thisWeek
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: _selectedDateFilter == _DateFilter.thisWeek
+                              ? const Color(0xFF0B63FF)
+                              : Colors.grey.shade700,
+                        ),
+                      ),
+                      if (_selectedDateFilter == _DateFilter.thisWeek) ...[
+                        const Spacer(),
+                        Icon(
+                          Icons.check,
+                          size: 18,
+                          color: const Color(0xFF0B63FF),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _DateFilter.thisMonth,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_month,
+                        size: 20,
+                        color: _selectedDateFilter == _DateFilter.thisMonth
+                            ? const Color(0xFF0B63FF)
+                            : Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'This Month',
+                        style: TextStyle(
+                          fontWeight:
+                              _selectedDateFilter == _DateFilter.thisMonth
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: _selectedDateFilter == _DateFilter.thisMonth
+                              ? const Color(0xFF0B63FF)
+                              : Colors.grey.shade700,
+                        ),
+                      ),
+                      if (_selectedDateFilter == _DateFilter.thisMonth) ...[
+                        const Spacer(),
+                        Icon(
+                          Icons.check,
+                          size: 18,
+                          color: const Color(0xFF0B63FF),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _DateFilter.last7Days,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.view_week,
+                        size: 20,
+                        color: _selectedDateFilter == _DateFilter.last7Days
+                            ? const Color(0xFF0B63FF)
+                            : Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Last 7 Days',
+                        style: TextStyle(
+                          fontWeight:
+                              _selectedDateFilter == _DateFilter.last7Days
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: _selectedDateFilter == _DateFilter.last7Days
+                              ? const Color(0xFF0B63FF)
+                              : Colors.grey.shade700,
+                        ),
+                      ),
+                      if (_selectedDateFilter == _DateFilter.last7Days) ...[
+                        const Spacer(),
+                        Icon(
+                          Icons.check,
+                          size: 18,
+                          color: const Color(0xFF0B63FF),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _DateFilter.custom,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.event_note,
+                        size: 20,
+                        color: _selectedDateFilter == _DateFilter.custom
+                            ? const Color(0xFF0B63FF)
+                            : Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _selectedDateFilter == _DateFilter.custom &&
+                                  _customStartDate != null &&
+                                  _customEndDate != null
+                              ? '${DateFormat('dd MMM').format(_customStartDate!)} - ${DateFormat('dd MMM yyyy').format(_customEndDate!)}'
+                              : 'Custom',
+                          style: TextStyle(
+                            fontWeight:
+                                _selectedDateFilter == _DateFilter.custom
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: _selectedDateFilter == _DateFilter.custom
+                                ? const Color(0xFF0B63FF)
+                                : Colors.grey.shade700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (_selectedDateFilter == _DateFilter.custom)
+                        Icon(
+                          Icons.check,
+                          size: 18,
+                          color: const Color(0xFF0B63FF),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+              onSelected: (filter) {
+                if (filter == _DateFilter.custom) {
+                  _showCustomDatePicker();
+                } else {
+                  setState(() {
+                    _selectedDateFilter = filter;
+                  });
+                }
+              },
             ),
           ),
         ],
@@ -447,10 +474,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
         icon: const Icon(Icons.add),
         label: const Text(
           'New Order',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
       body: ordersAsync.when(
@@ -486,7 +510,9 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () async {
-                    ref.invalidate(ordersProvider(OrdersParams(branchId: branchId)));
+                    ref.invalidate(
+                      ordersProvider(OrdersParams(branchId: branchId)),
+                    );
                   },
                   child: CustomScrollView(
                     slivers: [
@@ -526,9 +552,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                             return _OrderCardItem(order: order);
                           },
                         ),
-                      const SliverToBoxAdapter(
-                        child: SizedBox(height: 24),
-                      ),
+                      const SliverToBoxAdapter(child: SizedBox(height: 24)),
                     ],
                   ),
                 ),
@@ -540,9 +564,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
         error: (error, stack) => _ErrorState(
           message: 'Error loading orders: $error',
           onRetry: () {
-            ref.invalidate(
-              ordersProvider(OrdersParams(branchId: branchId)),
-            );
+            ref.invalidate(ordersProvider(OrdersParams(branchId: branchId)));
           },
         ),
       ),
@@ -550,68 +572,53 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
   }
 
   /// Categorize order based on dates and status
+  /// CRITICAL: Scheduled orders ALWAYS return "scheduled" - do NOT check dates for scheduled status
   _OrderCategory _getOrderCategory(Order order) {
-    // Cancelled orders are always cancelled
-    if (order.status == OrderStatus.cancelled) {
-      return _OrderCategory.cancelled;
+    final status = order.status;
+
+    // Fast path: Check status first
+    if (status == OrderStatus.cancelled) return _OrderCategory.cancelled;
+    if (status == OrderStatus.partiallyReturned)
+      return _OrderCategory.partiallyReturned;
+    if (status == OrderStatus.completed) return _OrderCategory.returned;
+
+    // ⚠️ CRITICAL: Scheduled orders ALWAYS return "scheduled" regardless of date
+    // Do NOT check dates for scheduled orders - they remain scheduled until explicitly started
+    if (status == OrderStatus.scheduled) {
+      return _OrderCategory.scheduled;
     }
 
-    // Returned orders are always returned
-    if (order.status == OrderStatus.completed) {
-      return _OrderCategory.returned;
+    // Check for partial returns via items (if status is active but some items returned)
+    if (order.items != null && order.items!.isNotEmpty) {
+      final hasReturned = order.items!.any((item) => item.isReturned);
+      final hasNotReturned = order.items!.any((item) => item.isPending);
+
+      // If some items are returned but not all, it's partially returned
+      if (hasReturned && hasNotReturned) {
+        return _OrderCategory.partiallyReturned;
+      }
     }
 
-    // Parse dates - compare by date only, not time
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day); // Start of today (no time)
-    DateTime startDate;
-    DateTime endDate;
-    DateTime startDateOnly;
-    DateTime endDateOnly;
-
-    try {
-      final startStr = order.startDatetime ?? order.startDate;
-      startDate = DateTime.parse(startStr);
-      // Extract date only (without time) for comparison
-      startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
-    } catch (e) {
-      // If parsing fails, treat as ongoing
-      return _OrderCategory.ongoing;
-    }
+    // Parse dates for active orders
+    DateTime? endDate;
 
     try {
       final endStr = order.endDatetime ?? order.endDate;
       endDate = DateTime.parse(endStr);
-      // Extract date only (without time) for comparison
-      endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
     } catch (e) {
       // If parsing fails, treat as ongoing
       return _OrderCategory.ongoing;
     }
 
-    // Scheduled: start date is in the future (tomorrow or later)
-    // Compare by date only, not time - so orders starting today are ongoing
-    if (startDateOnly.isAfter(today)) {
-      return _OrderCategory.scheduled;
-    }
+    // Check if late (end date passed and not completed/cancelled)
+    final isLate =
+        DateTime.now().isAfter(endDate) &&
+        status != OrderStatus.completed &&
+        status != OrderStatus.cancelled &&
+        status != OrderStatus.partiallyReturned;
 
-    // Late: end date has passed and order is not completed
-    if (endDateOnly.isBefore(today) && 
-        order.status != OrderStatus.completed && 
-        order.status != OrderStatus.cancelled) {
-      return _OrderCategory.late;
-    }
-
-    // Ongoing: start date is today or in the past, end date hasn't passed
-    // and status is active or pending_return
-    if (startDateOnly.isBefore(today) || startDateOnly.isAtSameMomentAs(today)) {
-      if (endDateOnly.isAfter(today) || endDateOnly.isAtSameMomentAs(today)) {
-        if (order.status == OrderStatus.active || 
-            order.status == OrderStatus.pendingReturn) {
-          return _OrderCategory.ongoing;
-        }
-      }
-    }
+    if (isLate) return _OrderCategory.late;
+    if (status == OrderStatus.active) return _OrderCategory.ongoing;
 
     // Default to ongoing
     return _OrderCategory.ongoing;
@@ -635,6 +642,9 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
           case _OrdersTab.returned:
             if (category != _OrderCategory.returned) return false;
             break;
+          case _OrdersTab.partiallyReturned:
+            if (category != _OrderCategory.partiallyReturned) return false;
+            break;
           case _OrdersTab.cancelled:
             if (category != _OrderCategory.cancelled) return false;
             break;
@@ -649,7 +659,8 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
       final invoice = order.invoiceNumber.toLowerCase();
       final customerName = order.customer?.name.toLowerCase() ?? '';
       final phone = order.customer?.phone.toLowerCase() ?? '';
-      final customerNumber = order.customer?.customerNumber?.toLowerCase() ?? '';
+      final customerNumber =
+          order.customer?.customerNumber?.toLowerCase() ?? '';
 
       return invoice.contains(query) ||
           customerName.contains(query) ||
@@ -663,6 +674,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
     int ongoing = 0;
     int late = 0;
     int returned = 0;
+    int partiallyReturned = 0;
     int cancelled = 0;
 
     for (final order in orders) {
@@ -680,6 +692,9 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
         case _OrderCategory.returned:
           returned++;
           break;
+        case _OrderCategory.partiallyReturned:
+          partiallyReturned++;
+          break;
         case _OrderCategory.cancelled:
           cancelled++;
           break;
@@ -692,6 +707,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
       ongoing: ongoing,
       late: late,
       returned: returned,
+      partiallyReturned: partiallyReturned,
       cancelled: cancelled,
     );
   }
@@ -702,6 +718,7 @@ enum _OrderCategory {
   ongoing,
   late,
   returned,
+  partiallyReturned,
   cancelled,
 }
 
@@ -711,6 +728,7 @@ class _OrdersStats {
   final int ongoing;
   final int late;
   final int returned;
+  final int partiallyReturned;
   final int cancelled;
 
   const _OrdersStats({
@@ -719,6 +737,7 @@ class _OrdersStats {
     required this.ongoing,
     required this.late,
     required this.returned,
+    required this.partiallyReturned,
     required this.cancelled,
   });
 }
@@ -727,10 +746,7 @@ class _OrdersSearchBar extends StatelessWidget {
   final String value;
   final ValueChanged<String> onChanged;
 
-  const _OrdersSearchBar({
-    required this.value,
-    required this.onChanged,
-  });
+  const _OrdersSearchBar({required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -763,10 +779,7 @@ class _OrdersTabs extends StatelessWidget {
   final _OrdersTab selected;
   final ValueChanged<_OrdersTab> onChanged;
 
-  const _OrdersTabs({
-    required this.selected,
-    required this.onChanged,
-  });
+  const _OrdersTabs({required this.selected, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -808,6 +821,13 @@ class _OrdersTabs extends StatelessWidget {
             icon: Icons.check_circle_outline,
             selected: selected == _OrdersTab.returned,
             onTap: () => onChanged(_OrdersTab.returned),
+          ),
+          const SizedBox(width: 8),
+          _OrdersTabChip(
+            label: 'Partially Returned',
+            icon: Icons.history,
+            selected: selected == _OrdersTab.partiallyReturned,
+            onTap: () => onChanged(_OrdersTab.partiallyReturned),
           ),
           const SizedBox(width: 8),
           _OrdersTabChip(
@@ -873,7 +893,9 @@ class _OrdersTabChip extends StatelessWidget {
         side: BorderSide(
           color: selected
               ? (isWarning ? warningColor : const Color(0xFF0B63FF))
-              : (isWarning ? warningColor.withOpacity(0.5) : Colors.grey.shade300),
+              : (isWarning
+                    ? warningColor.withOpacity(0.5)
+                    : Colors.grey.shade300),
         ),
       ),
     );
@@ -891,11 +913,7 @@ class _OrdersStatsRow extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          _StatPill(
-            label: 'Total',
-            value: stats.total,
-            icon: Icons.list_alt,
-          ),
+          _StatPill(label: 'Total', value: stats.total, icon: Icons.list_alt),
           const SizedBox(width: 8),
           _StatPill(
             label: 'Scheduled',
@@ -923,6 +941,13 @@ class _OrdersStatsRow extends StatelessWidget {
             value: stats.returned,
             icon: Icons.check_circle_outline,
             color: Colors.green.shade600,
+          ),
+          const SizedBox(width: 8),
+          _StatPill(
+            label: 'Partially Returned',
+            value: stats.partiallyReturned,
+            icon: Icons.history,
+            color: Colors.blue.shade600,
           ),
           const SizedBox(width: 8),
           _StatPill(
@@ -976,10 +1001,7 @@ class _StatPill extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
         ],
       ),
@@ -1000,59 +1022,53 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
   bool _isUpdating = false;
 
   _OrderCategory _getOrderCategory(Order order) {
-    if (order.status == OrderStatus.cancelled) {
-      return _OrderCategory.cancelled;
-    }
-    if (order.status == OrderStatus.completed) {
-      return _OrderCategory.returned;
+    final status = order.status;
+
+    // Fast path: Check status first
+    if (status == OrderStatus.cancelled) return _OrderCategory.cancelled;
+    if (status == OrderStatus.partiallyReturned)
+      return _OrderCategory.partiallyReturned;
+    if (status == OrderStatus.completed) return _OrderCategory.returned;
+
+    // ⚠️ CRITICAL: Scheduled orders ALWAYS return "scheduled" regardless of date
+    // Do NOT check dates for scheduled orders - they remain scheduled until explicitly started
+    if (status == OrderStatus.scheduled) {
+      return _OrderCategory.scheduled;
     }
 
-    // Compare by date only, not time - so orders starting today are ongoing
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day); // Start of today (no time)
-    DateTime startDate;
-    DateTime endDate;
-    DateTime startDateOnly;
-    DateTime endDateOnly;
+    // Check for partial returns via items (if status is active but some items returned)
+    if (order.items != null && order.items!.isNotEmpty) {
+      final hasReturned = order.items!.any((item) => item.isReturned);
+      final hasNotReturned = order.items!.any((item) => item.isPending);
 
-    try {
-      final startStr = order.startDatetime ?? order.startDate;
-      startDate = DateTime.parse(startStr);
-      startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
-    } catch (e) {
-      return _OrderCategory.ongoing;
+      // If some items are returned but not all, it's partially returned
+      if (hasReturned && hasNotReturned) {
+        return _OrderCategory.partiallyReturned;
+      }
     }
+
+    // Parse dates for active orders
+    DateTime? endDate;
 
     try {
       final endStr = order.endDatetime ?? order.endDate;
       endDate = DateTime.parse(endStr);
-      endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
     } catch (e) {
+      // If parsing fails, treat as ongoing
       return _OrderCategory.ongoing;
     }
 
-    // Scheduled: start date is in the future (tomorrow or later)
-    if (startDateOnly.isAfter(today)) {
-      return _OrderCategory.scheduled;
-    }
+    // Check if late (end date passed and not completed/cancelled)
+    final isLate =
+        DateTime.now().isAfter(endDate) &&
+        status != OrderStatus.completed &&
+        status != OrderStatus.cancelled &&
+        status != OrderStatus.partiallyReturned;
 
-    // Late: end date has passed and order is not completed
-    if (endDateOnly.isBefore(today) && 
-        order.status != OrderStatus.completed && 
-        order.status != OrderStatus.cancelled) {
-      return _OrderCategory.late;
-    }
+    if (isLate) return _OrderCategory.late;
+    if (status == OrderStatus.active) return _OrderCategory.ongoing;
 
-    // Ongoing: start date is today or in the past
-    if (startDateOnly.isBefore(today) || startDateOnly.isAtSameMomentAs(today)) {
-      if (endDateOnly.isAfter(today) || endDateOnly.isAtSameMomentAs(today)) {
-        if (order.status == OrderStatus.active || 
-            order.status == OrderStatus.pendingReturn) {
-          return _OrderCategory.ongoing;
-        }
-      }
-    }
-
+    // Default to ongoing
     return _OrderCategory.ongoing;
   }
 
@@ -1088,7 +1104,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
 
   void _showLateFeeDialog(Order order) {
     final lateFeeController = TextEditingController(text: '0');
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1130,20 +1146,8 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
   }
 
   Future<void> _handleMarkReturned(Order order) async {
-    final dateInfo = _getDateInfo(order);
-    if (dateInfo.containsKey('error')) {
-      await _markAsReturned(order, 0.0);
-      return;
-    }
-
-    final endDate = dateInfo['endDate'] as DateTime;
-    final isLate = DateTime.now().isAfter(endDate);
-    
-    if (isLate) {
-      _showLateFeeDialog(order);
-    } else {
-      await _markAsReturned(order, 0.0);
-    }
+    // Navigate to return screen for item-wise returns
+    context.push('/orders/${order.id}/return');
   }
 
   Future<void> _markAsReturned(Order order, double lateFee) async {
@@ -1204,9 +1208,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Yes, Cancel'),
           ),
         ],
@@ -1269,6 +1271,8 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
         return Colors.red.shade600;
       case _OrderCategory.returned:
         return Colors.green.shade600;
+      case _OrderCategory.partiallyReturned:
+        return Colors.blue.shade600;
       case _OrderCategory.cancelled:
         return Colors.grey.shade500;
     }
@@ -1284,6 +1288,8 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
         return 'Late';
       case _OrderCategory.returned:
         return 'Returned';
+      case _OrderCategory.partiallyReturned:
+        return 'Partial';
       case _OrderCategory.cancelled:
         return 'Cancelled';
     }
@@ -1297,8 +1303,10 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
     final customerName = order.customer?.name ?? 'Unknown';
     final phone = order.customer?.phone ?? '';
     final dateInfo = _getDateInfo(order);
-    final canMarkReturned = category == _OrderCategory.ongoing || category == _OrderCategory.late;
-    final canCancel = category == _OrderCategory.scheduled;
+    // Show return button if order has pending items to return
+    final canMarkReturned =
+        order.hasPendingReturnItems && !order.isScheduled && !order.isCompleted;
+    final canCancel = order.canCancel();
     final itemsCount = order.items?.length ?? 0;
 
     return Padding(
@@ -1309,8 +1317,8 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: BorderSide(
-            color: category == _OrderCategory.late 
-                ? Colors.red.shade200 
+            color: category == _OrderCategory.late
+                ? Colors.red.shade200
                 : Colors.grey.shade200,
             width: category == _OrderCategory.late ? 1.5 : 1,
           ),
@@ -1335,6 +1343,9 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                           Row(
                             children: [
                               Container(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 120,
+                                ),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 10,
                                   vertical: 5,
@@ -1356,24 +1367,32 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                                       color: statusColor,
                                     ),
                                     const SizedBox(width: 6),
-                                    Text(
-                                      _statusText(category),
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: statusColor,
+                                    Flexible(
+                                      child: Text(
+                                        _statusText(category),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: statusColor,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Text(
-                                '#${order.invoiceNumber}',
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF0F1724),
+                              Expanded(
+                                child: Text(
+                                  '#${order.invoiceNumber}',
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F1724),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
@@ -1482,7 +1501,9 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    DateFormat('dd MMM yyyy, hh:mm a').format(dateInfo['startDate'] as DateTime),
+                                    DateFormat(
+                                      'dd MMM yyyy, hh:mm a',
+                                    ).format(dateInfo['startDate'] as DateTime),
                                     style: const TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
@@ -1512,7 +1533,9 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    DateFormat('dd MMM yyyy, hh:mm a').format(dateInfo['endDate'] as DateTime),
+                                    DateFormat(
+                                      'dd MMM yyyy, hh:mm a',
+                                    ).format(dateInfo['endDate'] as DateTime),
                                     style: const TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
@@ -1564,20 +1587,12 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: _isUpdating ? null : () => _handleMarkReturned(order),
-                      icon: _isUpdating
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Icon(Icons.check_circle_outline, size: 18),
-                      label: Text(
-                        _isUpdating ? 'Processing...' : 'Mark as Returned',
-                        style: const TextStyle(
+                      onPressed: () =>
+                          context.push('/orders/${order.id}/return'),
+                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      label: const Text(
+                        'Process Return',
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1598,14 +1613,18 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: _isUpdating ? null : () => _handleCancelOrder(order),
+                      onPressed: _isUpdating
+                          ? null
+                          : () => _handleCancelOrder(order),
                       icon: _isUpdating
                           ? const SizedBox(
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.red,
+                                ),
                               ),
                             )
                           : const Icon(Icons.cancel_outlined, size: 18),
@@ -1618,7 +1637,10 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red.shade600,
-                        side: BorderSide(color: Colors.red.shade600, width: 1.5),
+                        side: BorderSide(
+                          color: Colors.red.shade600,
+                          width: 1.5,
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -1673,10 +1695,7 @@ class _EmptyOrdersState extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Create your first order to get started',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey.shade500,
-              ),
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -1686,7 +1705,10 @@ class _EmptyOrdersState extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0B63FF),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -1711,11 +1733,7 @@ class _NoResultsState extends StatelessWidget {
             color: Colors.grey.shade100,
             shape: BoxShape.circle,
           ),
-          child: Icon(
-            Icons.search_off,
-            size: 40,
-            color: Colors.grey.shade400,
-          ),
+          child: Icon(Icons.search_off, size: 40, color: Colors.grey.shade400),
         ),
         const SizedBox(height: 12),
         Text(
@@ -1729,10 +1747,7 @@ class _NoResultsState extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           'Try adjusting the search or filters to see more results.',
-          style: TextStyle(
-            fontSize: 13,
-            color: Colors.grey.shade500,
-          ),
+          style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
           textAlign: TextAlign.center,
         ),
       ],
@@ -1744,10 +1759,7 @@ class _ErrorState extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
 
-  const _ErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -1770,10 +1782,7 @@ class _ErrorState extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               message,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.red.shade400,
-              ),
+              style: TextStyle(fontSize: 13, color: Colors.red.shade400),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
@@ -1792,4 +1801,3 @@ class _ErrorState extends StatelessWidget {
     );
   }
 }
-

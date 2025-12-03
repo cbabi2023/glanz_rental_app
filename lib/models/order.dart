@@ -5,16 +5,20 @@ import 'order_item.dart';
 
 /// Order Status Enum
 enum OrderStatus {
+  scheduled('scheduled'),
   active('active'),
   pendingReturn('pending_return'),
   completed('completed'),
-  cancelled('cancelled');
+  cancelled('cancelled'),
+  partiallyReturned('partially_returned');
 
   final String value;
   const OrderStatus(this.value);
 
   static OrderStatus fromString(String value) {
     switch (value) {
+      case 'scheduled':
+        return OrderStatus.scheduled;
       case 'active':
         return OrderStatus.active;
       case 'pending_return':
@@ -23,6 +27,8 @@ enum OrderStatus {
         return OrderStatus.completed;
       case 'cancelled':
         return OrderStatus.cancelled;
+      case 'partially_returned':
+        return OrderStatus.partiallyReturned;
       default:
         throw ArgumentError('Unknown order status: $value');
     }
@@ -38,6 +44,9 @@ class Order {
   final String staffId;
   final String customerId;
   final String invoiceNumber;
+  
+  // Booking date - when order was booked/created
+  final String? bookingDate;
   
   // Legacy date fields (for backward compatibility)
   final String startDate;
@@ -66,6 +75,7 @@ class Order {
     required this.staffId,
     required this.customerId,
     required this.invoiceNumber,
+    this.bookingDate,
     required this.startDate,
     required this.endDate,
     this.startDatetime,
@@ -145,6 +155,7 @@ class Order {
       staffId: safeString(json['staff_id']),
       customerId: safeString(json['customer_id']),
       invoiceNumber: safeString(json['invoice_number']),
+      bookingDate: json['booking_date']?.toString(),
       startDate: safeString(json['start_date']),
       endDate: safeString(json['end_date']),
       startDatetime: json['start_datetime']?.toString(),
@@ -169,6 +180,7 @@ class Order {
       'staff_id': staffId,
       'customer_id': customerId,
       'invoice_number': invoiceNumber,
+      'booking_date': bookingDate,
       'start_date': startDate,
       'end_date': endDate,
       'start_datetime': startDatetime,
@@ -188,13 +200,64 @@ class Order {
   }
 
   // Helper methods
+  bool get isScheduled => status == OrderStatus.scheduled;
   bool get isActive => status == OrderStatus.active;
   bool get isPendingReturn => status == OrderStatus.pendingReturn;
   bool get isCompleted => status == OrderStatus.completed;
   bool get isCancelled => status == OrderStatus.cancelled;
+  bool get isPartiallyReturned => status == OrderStatus.partiallyReturned;
 
   bool get canEdit => isActive || isPendingReturn;
-  bool get canMarkReturned => isActive || isPendingReturn;
+  bool get canMarkReturned {
+    // Can return if active, pending return, or partially returned
+    if (isActive || isPendingReturn || isPartiallyReturned) {
+      return true;
+    }
+    return false;
+  }
+  
+  /// Check if there are items that still need to be returned
+  bool get hasPendingReturnItems {
+    if (items == null || items!.isEmpty) {
+      return false;
+    }
+    return items!.any((item) => item.isPending);
+  }
+  
+  bool get canStartRental => isScheduled;
+  
+  /// Check if order can be cancelled based on status and time rules
+  /// - Scheduled orders: can be cancelled anytime
+  /// - Active orders: can be cancelled only within 10 minutes of becoming active
+  /// - Completed/Cancelled orders: cannot be cancelled
+  bool canCancel() {
+    // Already cancelled or completed cannot be cancelled
+    if (isCancelled || isCompleted) {
+      return false;
+    }
+    
+    // Scheduled orders can be cancelled anytime
+    if (isScheduled) {
+      return true;
+    }
+    
+    // Active orders: check 10-minute window
+    if (isActive) {
+      // Use start_datetime as the timestamp when rental became active
+      final activeSince = startDatetime != null 
+        ? DateTime.parse(startDatetime!)
+        : createdAt;
+        
+      final now = DateTime.now();
+      final minutesSinceActive = now.difference(activeSince).inMinutes;
+      
+      // Can cancel if less than 10 minutes since becoming active
+      return minutesSinceActive <= 10;
+    }
+    
+    // Other statuses cannot be cancelled
+    return false;
+  }
 }
 
 /// Order Draft Model

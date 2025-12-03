@@ -236,23 +236,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   }
 
   Future<void> _handleMarkReturned() async {
-    final order = ref.read(orderProvider(widget.orderId)).value;
-    if (order == null) return;
-
-    // Check if order is late
-    final endDateStr = order.endDatetime ?? order.endDate;
-    try {
-      final endDate = DateTime.parse(endDateStr);
-      final isLate = DateTime.now().isAfter(endDate);
-
-      if (isLate) {
-        _showLateFeeDialog();
-      } else {
-        await _markAsReturned(0.0);
-      }
-    } catch (e) {
-      await _markAsReturned(0.0);
-    }
+    // Navigate to return screen for item-wise returns
+    context.push('/orders/${widget.orderId}/return');
   }
 
   Future<void> _markAsReturned(double lateFee) async {
@@ -338,53 +323,51 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   }
 
   _OrderCategory _getOrderCategory(Order order) {
-    if (order.status == OrderStatus.cancelled) {
-      return _OrderCategory.cancelled;
+    final status = order.status;
+    
+    // Fast path: Check status first
+    if (status == OrderStatus.cancelled) return _OrderCategory.cancelled;
+    if (status == OrderStatus.partiallyReturned) return _OrderCategory.partiallyReturned;
+    if (status == OrderStatus.completed) return _OrderCategory.returned;
+    
+    // ⚠️ CRITICAL: Scheduled orders ALWAYS return "scheduled" regardless of date
+    // Do NOT check dates for scheduled orders - they remain scheduled until explicitly started
+    if (status == OrderStatus.scheduled) {
+      return _OrderCategory.scheduled;
     }
-    if (order.status == OrderStatus.completed) {
-      return _OrderCategory.returned;
+    
+    // Check for partial returns via items (if status is active but some items returned)
+    if (order.items != null && order.items!.isNotEmpty) {
+      final hasReturned = order.items!.any((item) => item.isReturned);
+      final hasNotReturned = order.items!.any((item) => item.isPending);
+      
+      // If some items are returned but not all, it's partially returned
+      if (hasReturned && hasNotReturned) {
+        return _OrderCategory.partiallyReturned;
+      }
     }
-
-    // Compare by date only, not time - so orders starting today are ongoing
-    final now = DateTime.now();
-    final today = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ); // Start of today (no time)
-    DateTime startDate;
-    DateTime endDate;
-    DateTime startDateOnly;
-    DateTime endDateOnly;
-
-    try {
-      final startStr = order.startDatetime ?? order.startDate;
-      startDate = DateTime.parse(startStr);
-      startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
-    } catch (e) {
-      return _OrderCategory.ongoing;
-    }
+    
+    // Parse dates for active orders
+    DateTime? endDate;
 
     try {
       final endStr = order.endDatetime ?? order.endDate;
       endDate = DateTime.parse(endStr);
-      endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
     } catch (e) {
+      // If parsing fails, treat as ongoing
       return _OrderCategory.ongoing;
     }
-
-    // Scheduled: start date is in the future (tomorrow or later)
-    if (startDateOnly.isAfter(today)) {
-      return _OrderCategory.scheduled;
-    }
-
-    // Late: end date has passed and order is not completed
-    if (endDateOnly.isBefore(today) &&
-        order.status != OrderStatus.completed &&
-        order.status != OrderStatus.cancelled) {
-      return _OrderCategory.late;
-    }
-
+    
+    // Check if late (end date passed and not completed/cancelled)
+    final isLate = DateTime.now().isAfter(endDate) && 
+                   status != OrderStatus.completed && 
+                   status != OrderStatus.cancelled &&
+                   status != OrderStatus.partiallyReturned;
+    
+    if (isLate) return _OrderCategory.late;
+    if (status == OrderStatus.active) return _OrderCategory.ongoing;
+    
+    // Default to ongoing
     return _OrderCategory.ongoing;
   }
 
@@ -398,6 +381,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         return Colors.red.shade600;
       case _OrderCategory.returned:
         return Colors.green.shade600;
+      case _OrderCategory.partiallyReturned:
+        return Colors.blue.shade600;
       case _OrderCategory.cancelled:
         return Colors.grey.shade500;
     }
@@ -413,8 +398,79 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         return 'Late';
       case _OrderCategory.returned:
         return 'Returned';
+      case _OrderCategory.partiallyReturned:
+        return 'Partially Returned';
       case _OrderCategory.cancelled:
         return 'Cancelled';
+    }
+  }
+  
+  Future<void> _handleStartRental(Order order) async {
+    final shouldStart = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Start Rental'),
+        content: Text(
+          'Are you sure you want to start rental for order ${order.invoiceNumber}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.orange,
+            ),
+            child: const Text('Start Rental'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldStart != true) {
+      return;
+    }
+
+    setState(() {
+      _isUpdating = true;
+    });
+
+    try {
+      final ordersService = ref.read(ordersServiceProvider);
+      await ordersService.startRental(order.id);
+
+      // Invalidate order queries to refresh
+      ref.invalidate(orderProvider(widget.orderId));
+      final branchId = ref.read(userProfileProvider).value?.branchId;
+      if (branchId != null) {
+        ref.invalidate(ordersProvider(OrdersParams(branchId: branchId)));
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Rental started successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+        });
+      }
     }
   }
 
@@ -446,16 +502,16 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                 return Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // if (order.canEdit)
-                    //   IconButton(
-                    //     icon: const Icon(
-                    //       Icons.edit_outlined,
-                    //       color: Color(0xFF0B63FF),
-                    //     ),
-                    //     onPressed: () =>
-                    //         context.push('/orders/${order.id}/edit'),
-                    //     tooltip: 'Edit Order',
-                    //   ),
+                    // Start Rental button for scheduled orders
+                    if (order.isScheduled)
+                      IconButton(
+                        icon: const Icon(
+                          Icons.play_arrow,
+                          color: Colors.orange,
+                        ),
+                        onPressed: _isUpdating ? null : () => _handleStartRental(order),
+                        tooltip: 'Start Rental',
+                      ),
                     // Invoice Actions Menu
                     PopupMenuButton<String>(
                       icon: const Icon(
@@ -544,7 +600,11 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           final categoryColor = _getCategoryColor(category);
           final categoryText = _getCategoryText(category);
           final dateInfo = _getDateInfo(order);
-          final canMarkReturned = order.canMarkReturned;
+          // Show return button if order has pending items to return (not scheduled or completed)
+          final canMarkReturned = !order.isScheduled && 
+                                  !order.isCompleted && 
+                                  order.hasPendingReturnItems;
+          final canStartRental = order.isScheduled;
 
           return Stack(
             children: [
@@ -1213,8 +1273,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                 ),
               ),
 
-              // Action Button
-              if (canMarkReturned)
+              // Action Buttons
+              if (canMarkReturned || canStartRental)
                 Positioned(
                   left: 0,
                   right: 0,
@@ -1234,34 +1294,57 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     child: SafeArea(
                       child: SizedBox(
                         width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _isUpdating ? null : _handleMarkReturned,
-                          icon: _isUpdating
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white,
-                                    ),
+                        child: canStartRental
+                            ? ElevatedButton.icon(
+                                onPressed: _isUpdating ? null : () => _handleStartRental(order),
+                                icon: _isUpdating
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(
+                                            Colors.white,
+                                          ),
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.play_arrow,
+                                        size: 20,
+                                      ),
+                                label: Text(
+                                  _isUpdating ? 'Processing...' : 'Start Rental',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                )
-                              : const Icon(
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  backgroundColor: Colors.orange.shade600,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              )
+                            : ElevatedButton.icon(
+                                onPressed: () => context.push('/orders/${order.id}/return'),
+                                icon: const Icon(
                                   Icons.check_circle_outline,
                                   size: 20,
                                 ),
-                          label: Text(
-                            _isUpdating ? 'Processing...' : 'Mark as Returned',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            backgroundColor: Colors.green.shade600,
-                            foregroundColor: Colors.white,
+                                label: const Text(
+                                  'Process Return',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  backgroundColor: Colors.green.shade600,
+                                  foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -1323,13 +1406,25 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   }
 }
 
-enum _OrderCategory { scheduled, ongoing, late, returned, cancelled }
+enum _OrderCategory { scheduled, ongoing, late, returned, partiallyReturned, cancelled }
 
 class _DateInfoWidget extends StatelessWidget {
   final String label;
   final DateTime date;
 
   const _DateInfoWidget({required this.label, required this.date});
+
+  String _formatDateTime12Hour(DateTime date) {
+    final hour = date.hour;
+    final minute = date.minute;
+    final period = hour >= 12 ? 'PM' : 'AM';
+    // Convert 24-hour to 12-hour format
+    final hour12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    final minuteStr = minute.toString().padLeft(2, '0');
+    
+    final dateStr = DateFormat('dd MMM yyyy').format(date);
+    return '$dateStr, $hour12:$minuteStr $period';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1346,17 +1441,12 @@ class _DateInfoWidget extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          DateFormat('dd MMM yyyy').format(date),
+          _formatDateTime12Hour(date),
           style: const TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
             color: Color(0xFF0F1724),
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          DateFormat('hh:mm a').format(date),
-          style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
         ),
       ],
     );

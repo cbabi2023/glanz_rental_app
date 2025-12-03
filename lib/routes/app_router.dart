@@ -5,6 +5,7 @@ import '../screens/orders/orders_list_screen.dart';
 import '../screens/orders/create_order_screen.dart';
 import '../screens/orders/order_detail_screen.dart';
 import '../screens/orders/edit_order_screen.dart';
+import '../screens/orders/order_return_screen.dart';
 import '../screens/customers/customers_list_screen.dart';
 import '../screens/customers/customer_detail_screen.dart';
 import '../screens/customers/create_customer_screen.dart';
@@ -69,27 +70,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 name: 'orders',
                 builder: (context, state) => const OrdersListScreen(),
               ),
-              GoRoute(
-                path: '/orders/new',
-                name: 'create-order',
-                builder: (context, state) => const CreateOrderScreen(),
-              ),
-              GoRoute(
-                path: '/orders/:id',
-                name: 'order-detail',
-                builder: (context, state) {
-                  final orderId = state.pathParameters['id']!;
-                  return OrderDetailScreen(orderId: orderId);
-                },
-              ),
-              GoRoute(
-                path: '/orders/:id/edit',
-                name: 'edit-order',
-                builder: (context, state) {
-                  final orderId = state.pathParameters['id']!;
-                  return EditOrderScreen(orderId: orderId);
-                },
-              ),
             ],
           ),
           // Customers branch
@@ -99,27 +79,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: '/customers',
                 name: 'customers',
                 builder: (context, state) => const CustomersListScreen(),
-              ),
-              GoRoute(
-                path: '/customers/new',
-                name: 'create-customer',
-                builder: (context, state) => const CreateCustomerScreen(),
-              ),
-              GoRoute(
-                path: '/customers/:id',
-                name: 'customer-detail',
-                builder: (context, state) {
-                  final customerId = state.pathParameters['id']!;
-                  return CustomerDetailScreen(customerId: customerId);
-                },
-              ),
-              GoRoute(
-                path: '/customers/:id/edit',
-                name: 'edit-customer',
-                builder: (context, state) {
-                  final customerId = state.pathParameters['id']!;
-                  return EditCustomerScreen(customerId: customerId);
-                },
               ),
             ],
           ),
@@ -134,6 +93,57 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
+      ),
+      // Detail and edit routes outside shell (full-screen navigation)
+      GoRoute(
+        path: '/orders/new',
+        name: 'create-order',
+        builder: (context, state) => const CreateOrderScreen(),
+      ),
+      GoRoute(
+        path: '/orders/:id',
+        name: 'order-detail',
+        builder: (context, state) {
+          final orderId = state.pathParameters['id']!;
+          return OrderDetailScreen(orderId: orderId);
+        },
+      ),
+      GoRoute(
+        path: '/orders/:id/return',
+        name: 'order-return',
+        builder: (context, state) {
+          final orderId = state.pathParameters['id']!;
+          return OrderReturnScreen(orderId: orderId);
+        },
+      ),
+      GoRoute(
+        path: '/orders/:id/edit',
+        name: 'edit-order',
+        builder: (context, state) {
+          final orderId = state.pathParameters['id']!;
+          return EditOrderScreen(orderId: orderId);
+        },
+      ),
+      GoRoute(
+        path: '/customers/new',
+        name: 'create-customer',
+        builder: (context, state) => const CreateCustomerScreen(),
+      ),
+      GoRoute(
+        path: '/customers/:id',
+        name: 'customer-detail',
+        builder: (context, state) {
+          final customerId = state.pathParameters['id']!;
+          return CustomerDetailScreen(customerId: customerId);
+        },
+      ),
+      GoRoute(
+        path: '/customers/:id/edit',
+        name: 'edit-customer',
+        builder: (context, state) {
+          final customerId = state.pathParameters['id']!;
+          return EditCustomerScreen(customerId: customerId);
+        },
       ),
     ],
   );

@@ -1,3 +1,27 @@
+/// Return Status Enum
+enum ReturnStatus {
+  notYetReturned('not_yet_returned'),
+  returned('returned'),
+  missing('missing');
+
+  final String value;
+  const ReturnStatus(this.value);
+
+  static ReturnStatus? fromString(String? value) {
+    if (value == null) return null;
+    switch (value) {
+      case 'not_yet_returned':
+        return ReturnStatus.notYetReturned;
+      case 'returned':
+        return ReturnStatus.returned;
+      case 'missing':
+        return ReturnStatus.missing;
+      default:
+        return null;
+    }
+  }
+}
+
 /// Order Item Model
 /// 
 /// Represents an item within an order
@@ -10,6 +34,12 @@ class OrderItem {
   final double pricePerDay;
   final int days;
   final double lineTotal;
+  
+  // Return tracking fields
+  final ReturnStatus? returnStatus;
+  final DateTime? actualReturnDate;
+  final bool? lateReturn;
+  final String? missingNote;
 
   OrderItem({
     this.id,
@@ -20,6 +50,10 @@ class OrderItem {
     required this.pricePerDay,
     required this.days,
     required this.lineTotal,
+    this.returnStatus,
+    this.actualReturnDate,
+    this.lateReturn,
+    this.missingNote,
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
@@ -27,6 +61,17 @@ class OrderItem {
     String safeString(dynamic value, [String defaultValue = '']) {
       if (value == null) return defaultValue;
       return value.toString();
+    }
+    
+    // Helper function to parse datetime
+    DateTime? safeDateTime(dynamic value) {
+      if (value == null) return null;
+      if (value is DateTime) return value;
+      try {
+        return DateTime.parse(value.toString());
+      } catch (e) {
+        return null;
+      }
     }
 
     return OrderItem(
@@ -38,6 +83,10 @@ class OrderItem {
       pricePerDay: (json['price_per_day'] as num?)?.toDouble() ?? 0.0,
       days: (json['days'] as num?)?.toInt() ?? 0,
       lineTotal: (json['line_total'] as num?)?.toDouble() ?? 0.0,
+      returnStatus: ReturnStatus.fromString(json['return_status']?.toString()),
+      actualReturnDate: safeDateTime(json['actual_return_date']),
+      lateReturn: json['late_return'] as bool?,
+      missingNote: json['missing_note']?.toString(),
     );
   }
 
@@ -51,8 +100,17 @@ class OrderItem {
       'price_per_day': pricePerDay,
       'days': days,
       'line_total': lineTotal,
+      if (returnStatus != null) 'return_status': returnStatus!.value,
+      if (actualReturnDate != null) 'actual_return_date': actualReturnDate!.toIso8601String(),
+      if (lateReturn != null) 'late_return': lateReturn,
+      if (missingNote != null) 'missing_note': missingNote,
     };
   }
+  
+  // Helper methods
+  bool get isReturned => returnStatus == ReturnStatus.returned;
+  bool get isMissing => returnStatus == ReturnStatus.missing;
+  bool get isPending => returnStatus == null || returnStatus == ReturnStatus.notYetReturned;
 
   /// Calculate line total (quantity * price_per_day * days)
   static double calculateLineTotal({

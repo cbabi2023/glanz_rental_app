@@ -70,15 +70,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       return;
     }
 
-    if (_invoiceNumberController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter an invoice number'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+    // Invoice number is optional - will be auto-generated if empty
 
     if (userProfile?.branchId == null || userProfile?.id == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -134,11 +126,12 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
       // Create order
       final branchId = userProfile!.branchId!;
+      final invoiceNumber = _invoiceNumberController.text.trim();
       await ordersService.createOrder(
         branchId: branchId,
         staffId: userProfile.id,
         customerId: _selectedCustomer!.id,
-        invoiceNumber: _invoiceNumberController.text.trim(),
+        invoiceNumber: invoiceNumber.isEmpty ? null : invoiceNumber,
         startDate: draft.startDate,
         endDate: draft.endDate,
         startDatetime: draft.startDate,
@@ -437,7 +430,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                     child: _ModernTextField(
                       controller: _invoiceNumberController,
                       label: 'Invoice Number',
-                      hint: 'Enter invoice number',
+                      hint: 'Optional - Auto-generated if empty',
                       prefixIcon: Icons.receipt_outlined,
                       onChanged: (value) {
                         ref.read(orderDraftProvider.notifier).setInvoiceNumber(value);

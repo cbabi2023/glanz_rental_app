@@ -977,6 +977,8 @@ class _OrderCard extends StatelessWidget {
 
   Color _getStatusColor(OrderStatus status) {
     switch (status) {
+      case OrderStatus.scheduled:
+        return Colors.grey;
       case OrderStatus.active:
         return Colors.green;
       case OrderStatus.pendingReturn:
@@ -985,11 +987,15 @@ class _OrderCard extends StatelessWidget {
         return Colors.blue;
       case OrderStatus.cancelled:
         return Colors.red;
+      case OrderStatus.partiallyReturned:
+        return Colors.blue;
     }
   }
 
   IconData _getStatusIcon(OrderStatus status) {
     switch (status) {
+      case OrderStatus.scheduled:
+        return Icons.calendar_today;
       case OrderStatus.active:
         return Icons.check_circle;
       case OrderStatus.pendingReturn:
@@ -998,11 +1004,15 @@ class _OrderCard extends StatelessWidget {
         return Icons.done_all;
       case OrderStatus.cancelled:
         return Icons.cancel;
+      case OrderStatus.partiallyReturned:
+        return Icons.history;
     }
   }
 
   String _formatStatus(OrderStatus status) {
     switch (status) {
+      case OrderStatus.scheduled:
+        return 'Scheduled';
       case OrderStatus.active:
         return 'Active';
       case OrderStatus.pendingReturn:
@@ -1011,6 +1021,8 @@ class _OrderCard extends StatelessWidget {
         return 'Completed';
       case OrderStatus.cancelled:
         return 'Cancelled';
+      case OrderStatus.partiallyReturned:
+        return 'Partially Returned';
     }
   }
 

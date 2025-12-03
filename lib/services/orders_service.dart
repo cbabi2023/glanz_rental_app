@@ -1,11 +1,47 @@
+import 'dart:math';
 import '../core/supabase_client.dart';
 import '../models/order.dart';
+
+/// Item Return Model for processing returns
+class ItemReturn {
+  final String itemId;
+  final String returnStatus; // 'returned' or 'missing'
+  final DateTime? actualReturnDate;
+  final String? missingNote;
+  
+  ItemReturn({
+    required this.itemId,
+    required this.returnStatus,
+    this.actualReturnDate,
+    this.missingNote,
+  });
+  
+  Map<String, dynamic> toJson() {
+    return {
+      'item_id': itemId,
+      'return_status': returnStatus,
+      'actual_return_date': actualReturnDate?.toIso8601String() ?? DateTime.now().toIso8601String(),
+      'missing_note': missingNote,
+    };
+  }
+}
 
 /// Orders Service
 ///
 /// Handles all order-related database operations
 class OrdersService {
   final _supabase = SupabaseService.client;
+  
+  /// Generate auto invoice number in format: GLAORD-YYYYMMDD-XXXX
+  String generateInvoiceNumber() {
+    final now = DateTime.now();
+    final year = now.year.toString();
+    final month = now.month.toString().padLeft(2, '0');
+    final day = now.day.toString().padLeft(2, '0');
+    final random = Random().nextInt(10000).toString().padLeft(4, '0');
+    
+    return 'GLAORD-$year$month$day-$random';
+  }
 
   /// Get orders with optional filters
   Future<List<Order>> getOrders({
@@ -21,11 +57,11 @@ class OrdersService {
         .from('orders')
         .select(
           'id, invoice_number, branch_id, staff_id, customer_id, '
-          'start_date, end_date, start_datetime, end_datetime, '
+          'booking_date, start_date, end_date, start_datetime, end_datetime, '
           'status, total_amount, subtotal, gst_amount, late_fee, created_at, '
           'customer:customers(id, name, phone, customer_number), '
           'branch:branches(id, name), '
-          'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total)',
+          'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note)',
         );
 
     // Apply filters
@@ -69,18 +105,21 @@ class OrdersService {
       final response = await _supabase
           .from('orders')
           .select(
-            '*, '
+            'id, invoice_number, branch_id, staff_id, customer_id, '
+            'booking_date, start_date, end_date, start_datetime, end_datetime, '
+            'status, total_amount, subtotal, gst_amount, late_fee, created_at, '
             'customer:customers(*), '
             'staff:profiles(id, full_name, upi_id), '
             'branch:branches(*), '
-            'items:order_items(*)',
+            'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note)',
           )
           .eq('id', orderId)
           .single();
 
       return Order.fromJson(response);
-    } catch (e) {
-      print('Error fetching order: $e');
+    } catch (e, stackTrace) {
+      print('Error fetching order $orderId: $e');
+      print('Stack trace: $stackTrace');
       return null;
     }
   }
@@ -113,7 +152,7 @@ class OrdersService {
     required String branchId,
     required String staffId,
     required String customerId,
-    required String invoiceNumber,
+    String? invoiceNumber,
     required String startDate,
     required String endDate,
     required String? startDatetime,
@@ -123,20 +162,37 @@ class OrdersService {
     double? gstAmount,
     required List<Map<String, dynamic>> items,
   }) async {
+    // Parse start date to determine status
+    final startDateParsed = DateTime.parse(startDate);
+    final today = DateTime.now();
+    final todayStart = DateTime(today.year, today.month, today.day);
+    final startDateOnly = DateTime(startDateParsed.year, startDateParsed.month, startDateParsed.day);
+    
+    // Calculate status: scheduled if future date, active if today or past
+    final orderStatus = startDateOnly.isAfter(todayStart) 
+      ? OrderStatus.scheduled 
+      : OrderStatus.active;
+    
+    // Generate invoice number if not provided
+    final finalInvoiceNumber = invoiceNumber?.trim().isEmpty ?? true
+      ? generateInvoiceNumber()
+      : invoiceNumber!;
+    
     // Prepare order data
-    final startDateOnly = startDate.split('T')[0];
-    final endDateOnly = endDate.split('T')[0];
+    final startDateOnlyStr = startDate.split('T')[0];
+    final endDateOnlyStr = endDate.split('T')[0];
 
     final orderData = {
       'branch_id': branchId,
       'staff_id': staffId,
       'customer_id': customerId,
-      'invoice_number': invoiceNumber,
-      'start_date': startDateOnly,
-      'end_date': endDateOnly,
+      'invoice_number': finalInvoiceNumber,
+      'booking_date': DateTime.now().toIso8601String(), // Always set booking date
+      'start_date': startDateOnlyStr,
+      'end_date': endDateOnlyStr,
       'start_datetime': startDatetime,
       'end_datetime': endDatetime,
-      'status': 'active',
+      'status': orderStatus.value, // Use calculated status
       'total_amount': totalAmount,
       'subtotal': subtotal,
       'gst_amount': gstAmount,
@@ -220,6 +276,33 @@ class OrdersService {
     return updatedOrder;
   }
 
+  /// Start rental - converts scheduled order to active
+  Future<Order> startRental(String orderId) async {
+    try {
+      final response = await _supabase
+        .from('orders')
+        .update({
+          'status': OrderStatus.active.value,
+          'start_datetime': DateTime.now().toIso8601String(),
+        })
+        .eq('id', orderId)
+        .select()
+        .single();
+      
+      if (response.isEmpty) {
+        throw Exception('Failed to start rental: Order not found');
+      }
+      
+      final updatedOrder = await getOrder(orderId);
+      if (updatedOrder == null) {
+        throw Exception('Failed to retrieve updated order');
+      }
+      return updatedOrder;
+    } catch (e) {
+      throw Exception('Error starting rental: $e');
+    }
+  }
+
   /// Update order status
   Future<Order> updateOrderStatus({
     required String orderId,
@@ -250,6 +333,39 @@ class OrdersService {
       throw Exception('Failed to retrieve updated order');
     }
     return updatedOrder;
+  }
+  
+  /// Process order return with item-wise tracking
+  /// Uses RPC function process_order_return_optimized
+  Future<Map<String, dynamic>> processOrderReturn({
+    required String orderId,
+    required List<ItemReturn> itemReturns,
+    required String userId,
+    double lateFee = 0,
+  }) async {
+    try {
+      final itemReturnsJson = itemReturns.map((ir) => ir.toJson()).toList();
+      
+      final response = await _supabase.rpc('process_order_return_optimized', params: {
+        'p_order_id': orderId,
+        'p_item_returns': itemReturnsJson,
+        'p_user_id': userId,
+        'p_late_fee': lateFee,
+      });
+      
+      // RPC returns data directly as Map
+      if (response is Map<String, dynamic>) {
+        return response;
+      } else if (response is Map) {
+        return Map<String, dynamic>.from(response);
+      } else {
+        // If response is not a Map, wrap it
+        return {'success': true, 'data': response};
+      }
+    } catch (e) {
+      print('Error processing order return: $e');
+      rethrow;
+    }
   }
 
   /// Get orders for a specific customer
