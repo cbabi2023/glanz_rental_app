@@ -26,6 +26,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   bool _isViewingInvoice = false;
   bool _isSharingInvoice = false;
   bool _isDownloadingInvoice = false;
+  bool _isPrintingInvoice = false;
 
   Future<void> _handleInvoiceAction(String action, Order order) async {
     // Set loading state for specific action
@@ -40,11 +41,16 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           _isSharingInvoice = true;
         });
         break;
-      case 'download':
-        setState(() {
-          _isDownloadingInvoice = true;
-        });
-        break;
+        case 'download':
+          setState(() {
+            _isDownloadingInvoice = true;
+          });
+          break;
+        case 'print':
+          setState(() {
+            _isPrintingInvoice = true;
+          });
+          break;
     }
 
     try {
@@ -140,6 +146,22 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
             });
           }
           break;
+
+        case 'print':
+          await InvoiceService.printInvoice(order);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Print dialog opened'),
+                backgroundColor: Colors.blue.shade600,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            );
+          }
+          break;
       }
     } catch (e) {
       if (mounted) {
@@ -167,130 +189,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
             case 'download':
               _isDownloadingInvoice = false;
               break;
+            case 'print':
+              _isPrintingInvoice = false;
+              break;
           }
         });
       }
     }
   }
 
-  void _showLateFeeDialog() {
-    final lateFeeController = TextEditingController(text: '0');
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Late Fee',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'This order is late. Please enter any late fee (if applicable).',
-              style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: lateFeeController,
-              decoration: InputDecoration(
-                labelText: 'Late Fee (₹)',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                prefixText: '₹ ',
-                filled: true,
-                fillColor: Colors.grey.shade50,
-              ),
-              keyboardType: TextInputType.number,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: Colors.grey.shade700),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final lateFee = double.tryParse(lateFeeController.text) ?? 0.0;
-              Navigator.pop(context);
-              _markAsReturned(lateFee);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green.shade600,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text('Mark as Returned'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _handleMarkReturned() async {
-    // Navigate to return screen for item-wise returns
-    context.push('/orders/${widget.orderId}/return');
-  }
-
-  Future<void> _markAsReturned(double lateFee) async {
-    setState(() {
-      _isUpdating = true;
-    });
-
-    try {
-      final ordersService = ref.read(ordersServiceProvider);
-      await ordersService.updateOrderStatus(
-        orderId: widget.orderId,
-        status: OrderStatus.completed,
-        lateFee: lateFee,
-      );
-
-      final branchId = ref.read(userProfileProvider).value?.branchId;
-      ref.invalidate(orderProvider(widget.orderId));
-      ref.invalidate(ordersProvider(OrdersParams(branchId: branchId)));
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Order marked as returned'),
-            backgroundColor: Colors.green.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        );
-        context.pop();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isUpdating = false;
-        });
-      }
-    }
-  }
 
   Map<String, dynamic> _getDateInfo(Order order) {
     DateTime? startDate;
@@ -405,6 +312,97 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
   }
   
+  Future<void> _handleCancelOrder(Order order) async {
+    final shouldCancel = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Cancel Order',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        ),
+        content: Text(
+          'Are you sure you want to cancel order ${order.invoiceNumber}? This action cannot be undone.',
+          style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'No',
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldCancel != true) {
+      return;
+    }
+
+    setState(() {
+      _isUpdating = true;
+    });
+
+    try {
+      final ordersService = ref.read(ordersServiceProvider);
+      await ordersService.updateOrderStatus(
+        orderId: order.id,
+        status: OrderStatus.cancelled,
+        lateFee: 0.0,
+      );
+
+      final branchId = ref.read(userProfileProvider).value?.branchId;
+      ref.invalidate(orderProvider(widget.orderId));
+      ref.invalidate(ordersProvider(OrdersParams(branchId: branchId)));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Order cancelled successfully'),
+            backgroundColor: Colors.orange.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+        });
+      }
+    }
+  }
+
   Future<void> _handleStartRental(Order order) async {
     final shouldStart = await showDialog<bool>(
       context: context,
@@ -605,6 +603,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   !order.isCompleted && 
                                   order.hasPendingReturnItems;
           final canStartRental = order.isScheduled;
+          final canCancel = order.canCancel();
+          final canEdit = order.canEdit;
 
           return Stack(
             children: [
@@ -687,6 +687,16 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                         ),
                                       ),
                                       const SizedBox(height: 4),
+                                      if (order.bookingDate != null) ...[
+                                        Text(
+                                          'Booking Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(order.bookingDate!))}',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                      ],
                                       Text(
                                         'Created ${DateFormat('dd MMM yyyy, hh:mm a').format(order.createdAt)}',
                                         style: TextStyle(
@@ -722,6 +732,102 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               ],
                             ),
                           ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Customer Card (moved to top)
+                    Card(
+                      elevation: 0,
+                      color: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: Colors.grey.shade200),
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: order.customer != null
+                            ? () => context.push(
+                                '/customers/${order.customer!.id}',
+                              )
+                            : null,
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 28,
+                                backgroundColor: Colors.purple.shade100,
+                                child: Icon(
+                                  Icons.person,
+                                  color: Colors.purple.shade600,
+                                  size: 28,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.person_outline,
+                                          size: 16,
+                                          color: Colors.purple.shade600,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        const Text(
+                                          'Customer',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF0F1724),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      order.customer?.name ?? 'Unknown',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF0F1724),
+                                      ),
+                                    ),
+                                    if (order.customer?.phone != null) ...[
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.phone_outlined,
+                                            size: 14,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            order.customer?.phone ?? '',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.grey.shade700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              if (order.customer != null)
+                                Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 18,
+                                  color: Colors.grey.shade400,
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -768,7 +874,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                       onPressed:
                                           (_isViewingInvoice ||
                                               _isSharingInvoice ||
-                                              _isDownloadingInvoice)
+                                              _isDownloadingInvoice ||
+                                              _isPrintingInvoice)
                                           ? null
                                           : () => _handleInvoiceAction(
                                               'view',
@@ -787,7 +894,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                               size: 18,
                                             ),
                                       label: const Text(
-                                        'View Invoice',
+                                        'View',
                                         style: TextStyle(fontSize: 13),
                                       ),
                                       style: OutlinedButton.styleFrom(
@@ -818,7 +925,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                       onPressed:
                                           (_isViewingInvoice ||
                                               _isSharingInvoice ||
-                                              _isDownloadingInvoice)
+                                              _isDownloadingInvoice ||
+                                              _isPrintingInvoice)
                                           ? null
                                           : () => _handleInvoiceAction(
                                               'share',
@@ -859,7 +967,11 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
                                 Expanded(
                                   child: SizedBox(
                                     height: 48,
@@ -867,7 +979,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                       onPressed:
                                           (_isViewingInvoice ||
                                               _isSharingInvoice ||
-                                              _isDownloadingInvoice)
+                                              _isDownloadingInvoice ||
+                                              _isPrintingInvoice)
                                           ? null
                                           : () => _handleInvoiceAction(
                                               'download',
@@ -887,6 +1000,57 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                             ),
                                       label: const Text(
                                         'Download',
+                                        style: TextStyle(fontSize: 13),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(
+                                          0xFF0F1724,
+                                        ),
+                                        side: BorderSide(
+                                          color: Colors.grey.shade300,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 12,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 48,
+                                    child: OutlinedButton.icon(
+                                      onPressed:
+                                          (_isViewingInvoice ||
+                                              _isSharingInvoice ||
+                                              _isDownloadingInvoice ||
+                                              _isPrintingInvoice)
+                                          ? null
+                                          : () => _handleInvoiceAction(
+                                              'print',
+                                              order,
+                                            ),
+                                      icon: _isPrintingInvoice
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.print_outlined,
+                                              size: 18,
+                                            ),
+                                      label: const Text(
+                                        'Print',
                                         style: TextStyle(fontSize: 13),
                                       ),
                                       style: OutlinedButton.styleFrom(
@@ -1007,7 +1171,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       const SizedBox(height: 16),
                     ],
 
-                    // Customer Card
+                    // Order Timeline Card
                     Card(
                       elevation: 0,
                       color: Colors.white,
@@ -1015,117 +1179,32 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         borderRadius: BorderRadius.circular(16),
                         side: BorderSide(color: Colors.grey.shade200),
                       ),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: order.customer != null
-                            ? () => context.push(
-                                '/customers/${order.customer!.id}',
-                              )
-                            : null,
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.person_outline,
-                                    size: 20,
-                                    color: Colors.purple.shade600,
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.timeline_outlined,
+                                  size: 20,
+                                  color: Colors.indigo.shade600,
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Order Timeline',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F1724),
                                   ),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'Customer',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF0F1724),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 28,
-                                    backgroundColor: Colors.purple.shade100,
-                                    child: Icon(
-                                      Icons.person,
-                                      color: Colors.purple.shade600,
-                                      size: 28,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          order.customer?.name ?? 'Unknown',
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                            color: Color(0xFF0F1724),
-                                          ),
-                                        ),
-                                        if (order.customer?.phone != null) ...[
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.phone_outlined,
-                                                size: 14,
-                                                color: Colors.grey.shade600,
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                order.customer?.phone ?? '',
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  color: Colors.grey.shade700,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                        if (order.customer?.email != null) ...[
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.email_outlined,
-                                                size: 14,
-                                                color: Colors.grey.shade600,
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Expanded(
-                                                child: Text(
-                                                  order.customer?.email ?? '',
-                                                  style: TextStyle(
-                                                    fontSize: 14,
-                                                    color: Colors.grey.shade700,
-                                                  ),
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                  Icon(
-                                    Icons.chevron_right,
-                                    color: Colors.grey.shade400,
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            _OrderTimelineWidget(order: order),
+                          ],
                         ),
                       ),
                     ),
@@ -1274,7 +1353,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
               ),
 
               // Action Buttons
-              if (canMarkReturned || canStartRental)
+              if (canMarkReturned || canStartRental || canCancel || canEdit)
                 Positioned(
                   left: 0,
                   right: 0,
@@ -1292,10 +1371,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       ],
                     ),
                     child: SafeArea(
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: canStartRental
-                            ? ElevatedButton.icon(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (canStartRental)
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
                                 onPressed: _isUpdating ? null : () => _handleStartRental(order),
                                 icon: _isUpdating
                                     ? const SizedBox(
@@ -1327,8 +1409,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
-                              )
-                            : ElevatedButton.icon(
+                              ),
+                            ),
+                          if (canMarkReturned) ...[
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
                                 onPressed: () => context.push('/orders/${order.id}/return'),
                                 icon: const Icon(
                                   Icons.check_circle_outline,
@@ -1345,12 +1431,80 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   padding: const EdgeInsets.symmetric(vertical: 16),
                                   backgroundColor: Colors.green.shade600,
                                   foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 0,
+                                ),
+                              ),
                             ),
-                            elevation: 0,
-                          ),
-                        ),
+                          ],
+                          if (canEdit) ...[
+                            if (canMarkReturned || canStartRental) const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _isUpdating ? null : () => context.push('/orders/${order.id}/edit'),
+                                icon: const Icon(Icons.edit_outlined, size: 20),
+                                label: const Text(
+                                  'Edit Order',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  foregroundColor: const Color(0xFF0F1724),
+                                  side: BorderSide(color: Colors.grey.shade300),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (canCancel) ...[
+                            if (canMarkReturned || canStartRental || canEdit) const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _isUpdating ? null : () => _handleCancelOrder(order),
+                                icon: _isUpdating
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(
+                                            Colors.red,
+                                          ),
+                                        ),
+                                      )
+                                    : const Icon(Icons.cancel_outlined, size: 20),
+                                label: Text(
+                                  _isUpdating ? 'Processing...' : 'Cancel Order',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.red.shade600,
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  foregroundColor: Colors.red.shade600,
+                                  side: BorderSide(
+                                    color: Colors.red.shade600,
+                                    width: 1.5,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ),
@@ -2390,6 +2544,409 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Order Timeline Widget
+/// 
+/// Displays the order's journey from creation to completion
+class _OrderTimelineWidget extends StatelessWidget {
+  final Order order;
+
+  const _OrderTimelineWidget({required this.order});
+
+  String _formatDateTime12Hour(DateTime date) {
+    final hour = date.hour;
+    final minute = date.minute;
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final hour12 = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+    final minuteStr = minute.toString().padLeft(2, '0');
+    
+    final dateStr = DateFormat('dd MMM yyyy').format(date);
+    return '$dateStr, $hour12:$minuteStr $period';
+  }
+
+  List<_TimelineEvent> _buildTimelineEvents() {
+    final events = <_TimelineEvent>[];
+    final now = DateTime.now();
+
+    // 1. Order Created
+    events.add(_TimelineEvent(
+      icon: Icons.add_circle_outline,
+      title: 'Order Created',
+      description: 'Invoice #${order.invoiceNumber}',
+      date: order.createdAt,
+      color: Colors.blue,
+      isCompleted: true,
+      role: order.staff?.role.value ?? 'staff',
+      staffName: order.staff?.fullName,
+    ));
+
+    // 2. Booking Date (if different from created)
+    if (order.bookingDate != null) {
+      try {
+        final bookingDate = DateTime.parse(order.bookingDate!);
+        if (bookingDate.difference(order.createdAt).inMinutes.abs() > 1) {
+          events.add(_TimelineEvent(
+            icon: Icons.calendar_today_outlined,
+            title: 'Booking Confirmed',
+            description: 'Order booked',
+            date: bookingDate,
+            color: Colors.purple,
+            isCompleted: true,
+          ));
+        }
+      } catch (e) {
+        // Skip if date parsing fails
+      }
+    }
+
+    // 3. Scheduled Status
+    if (order.isScheduled) {
+      events.add(_TimelineEvent(
+        icon: Icons.schedule_outlined,
+        title: 'Scheduled',
+        description: 'Rental scheduled to start',
+        date: order.startDatetime != null 
+            ? DateTime.parse(order.startDatetime!) 
+            : DateTime.parse(order.startDate),
+        color: Colors.orange,
+        isCompleted: false,
+        isPending: true,
+      ));
+    }
+
+    // 4. Start Rental
+    if (order.startDatetime != null) {
+      try {
+        final startDate = DateTime.parse(order.startDatetime!);
+        events.add(_TimelineEvent(
+          icon: Icons.play_circle_outline,
+          title: 'Rental Started',
+          description: 'Rental period began',
+          date: startDate,
+          color: Colors.green,
+          isCompleted: !order.isScheduled,
+          isPending: order.isScheduled,
+        ));
+      } catch (e) {
+        // Skip if date parsing fails
+      }
+    } else if (!order.isScheduled) {
+      // If no start_datetime but order is active, use start_date
+      try {
+        final startDate = DateTime.parse(order.startDate);
+        events.add(_TimelineEvent(
+          icon: Icons.play_circle_outline,
+          title: 'Rental Started',
+          description: 'Rental period began',
+          date: startDate,
+          color: Colors.green,
+          isCompleted: order.isActive || order.isPendingReturn || order.isPartiallyReturned || order.isCompleted,
+        ));
+      } catch (e) {
+        // Skip if date parsing fails
+      }
+    }
+
+    // 5. End Rental Date
+    try {
+      final endDate = order.endDatetime != null 
+          ? DateTime.parse(order.endDatetime!) 
+          : DateTime.parse(order.endDate);
+      events.add(_TimelineEvent(
+        icon: Icons.event_outlined,
+        title: 'Rental End Date',
+        description: 'Scheduled return date',
+        date: endDate,
+        color: Colors.teal,
+        isCompleted: order.isCompleted || order.isCancelled,
+        isLate: now.isAfter(endDate) && !order.isCompleted && !order.isCancelled,
+      ));
+    } catch (e) {
+      // Skip if date parsing fails
+    }
+
+    // 6. Partially Returned
+    if (order.isPartiallyReturned) {
+      final returnedItems = order.items?.where((item) => item.isReturned).toList() ?? [];
+      if (returnedItems.isNotEmpty) {
+        final latestReturn = returnedItems
+            .where((item) => item.actualReturnDate != null)
+            .map((item) => item.actualReturnDate!)
+            .fold<DateTime?>(null, (latest, current) {
+              return latest == null || current.isAfter(latest) ? current : latest;
+            });
+        
+        if (latestReturn != null) {
+          events.add(_TimelineEvent(
+            icon: Icons.assignment_return_outlined,
+            title: 'Partially Returned',
+            description: '${returnedItems.length} item(s) returned',
+            date: latestReturn,
+            color: Colors.blue,
+            isCompleted: true,
+          ));
+        }
+      }
+    }
+
+    // 7. Completed
+    if (order.isCompleted) {
+      events.add(_TimelineEvent(
+        icon: Icons.check_circle_outline,
+        title: 'Order Completed',
+        description: 'All items returned',
+        date: now, // Use current time as placeholder, ideally from audit log
+        color: Colors.green,
+        isCompleted: true,
+        role: order.staff?.role.value,
+        staffName: order.staff?.fullName,
+      ));
+    }
+
+    // 8. Cancelled
+    if (order.isCancelled) {
+      events.add(_TimelineEvent(
+        icon: Icons.cancel_outlined,
+        title: 'Order Cancelled',
+        description: 'Order was cancelled',
+        date: now, // Use current time as placeholder, ideally from audit log
+        color: Colors.red,
+        isCompleted: true,
+        role: order.staff?.role.value,
+        staffName: order.staff?.fullName,
+      ));
+    }
+
+    // Sort events by date
+    events.sort((a, b) => a.date.compareTo(b.date));
+
+    return events;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final events = _buildTimelineEvents();
+
+    if (events.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: Text(
+            'No timeline data available',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: events.asMap().entries.map((entry) {
+        final index = entry.key;
+        final event = entry.value;
+        final isLast = index == events.length - 1;
+
+        return _TimelineItemWidget(
+          event: event,
+          isLast: isLast,
+          formatDateTime: _formatDateTime12Hour,
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _TimelineEvent {
+  final IconData icon;
+  final String title;
+  final String description;
+  final DateTime date;
+  final Color color;
+  final bool isCompleted;
+  final bool isPending;
+  final bool isLate;
+  final String? role;
+  final String? staffName;
+
+  _TimelineEvent({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.date,
+    required this.color,
+    this.isCompleted = false,
+    this.isPending = false,
+    this.isLate = false,
+    this.role,
+    this.staffName,
+  });
+}
+
+class _TimelineItemWidget extends StatelessWidget {
+  final _TimelineEvent event;
+  final bool isLast;
+  final String Function(DateTime) formatDateTime;
+
+  const _TimelineItemWidget({
+    required this.event,
+    required this.isLast,
+    required this.formatDateTime,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Timeline indicator
+        Column(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: event.isCompleted 
+                    ? event.color 
+                    : (event.isPending 
+                        ? event.color.withOpacity(0.3)
+                        : Colors.grey.shade300),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: event.isCompleted 
+                      ? event.color 
+                      : Colors.grey.shade400,
+                  width: 2,
+                ),
+              ),
+              child: Icon(
+                event.icon,
+                color: event.isCompleted 
+                    ? Colors.white 
+                    : (event.isPending 
+                        ? event.color 
+                        : Colors.grey.shade600),
+                size: 20,
+              ),
+            ),
+            if (!isLast)
+              Container(
+                width: 2,
+                height: 60,
+                color: event.isCompleted 
+                    ? event.color.withOpacity(0.3)
+                    : Colors.grey.shade300,
+              ),
+          ],
+        ),
+        const SizedBox(width: 16),
+        // Timeline content
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        event.title,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: event.isLate ? Colors.red.shade700 : const Color(0xFF0F1724),
+                        ),
+                      ),
+                    ),
+                    if (event.isPending)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.orange.shade300),
+                        ),
+                        child: Text(
+                          'Pending',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
+                      ),
+                    if (event.isLate)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.red.shade300),
+                        ),
+                        child: Text(
+                          'Late',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.red.shade700,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  event.description,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  formatDateTime(event.date),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade500,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (event.role != null || event.staffName != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.badge_outlined,
+                        size: 12,
+                        color: Colors.grey.shade500,
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          [
+                            if (event.staffName != null) event.staffName,
+                            if (event.role != null) 
+                              '(${event.role!.replaceAll('_', ' ').split(' ').map((word) => word.isEmpty ? '' : word[0].toUpperCase() + word.substring(1)).join(' ')})'
+                          ].where((s) => s != null && s.isNotEmpty).join(' - '),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

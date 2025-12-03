@@ -674,6 +674,18 @@ class InvoiceService {
       throw Exception('Failed to download invoice: ${e.toString()}');
     }
   }
+
+  /// Print invoice PDF
+  static Future<void> printInvoice(Order order) async {
+    try {
+      final pdfBytes = await generateInvoicePdf(order);
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdfBytes,
+      );
+    } catch (e) {
+      throw Exception('Failed to print invoice: ${e.toString()}');
+    }
+  }
   
 }
 
