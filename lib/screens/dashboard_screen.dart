@@ -208,78 +208,93 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Filter chips
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterChip(
-                      label: 'All Time',
-                      selected: _selectedFilter == _DashboardFilter.allTime,
-                      onSelected: () {
-                        setState(() {
-                          _selectedFilter = _DashboardFilter.allTime;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterChip(
-                      label: 'Today',
-                      selected: _selectedFilter == _DashboardFilter.today,
-                      onSelected: () {
-                        setState(() {
-                          _selectedFilter = _DashboardFilter.today;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterChip(
-                      label: 'Yesterday',
-                      selected: _selectedFilter == _DashboardFilter.yesterday,
-                      onSelected: () {
-                        setState(() {
-                          _selectedFilter = _DashboardFilter.yesterday;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterChip(
-                      label: 'This Week',
-                      selected: _selectedFilter == _DashboardFilter.thisWeek,
-                      onSelected: () {
-                        setState(() {
-                          _selectedFilter = _DashboardFilter.thisWeek;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterChip(
-                      label: 'This Month',
-                      selected: _selectedFilter == _DashboardFilter.thisMonth,
-                      onSelected: () {
-                        setState(() {
-                          _selectedFilter = _DashboardFilter.thisMonth;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterChip(
-                      label: 'Last 7 Days',
-                      selected: _selectedFilter == _DashboardFilter.last7Days,
-                      onSelected: () {
-                        setState(() {
-                          _selectedFilter = _DashboardFilter.last7Days;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterChip(
-                      label: _getFilterLabel(_DashboardFilter.custom),
-                      selected: _selectedFilter == _DashboardFilter.custom,
-                      onSelected: _showCustomDatePicker,
-                      isCustom: true,
+              // Modern Filter Chips Container
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 24,
+                      offset: const Offset(0, 6),
+                      spreadRadius: 0,
                     ),
                   ],
+                ),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _ModernFilterChip(
+                        label: 'All Time',
+                        selected: _selectedFilter == _DashboardFilter.allTime,
+                        onTap: () {
+                          setState(() {
+                            _selectedFilter = _DashboardFilter.allTime;
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _ModernFilterChip(
+                        label: 'Today',
+                        selected: _selectedFilter == _DashboardFilter.today,
+                        onTap: () {
+                          setState(() {
+                            _selectedFilter = _DashboardFilter.today;
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _ModernFilterChip(
+                        label: 'Yesterday',
+                        selected: _selectedFilter == _DashboardFilter.yesterday,
+                        onTap: () {
+                          setState(() {
+                            _selectedFilter = _DashboardFilter.yesterday;
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _ModernFilterChip(
+                        label: 'This Week',
+                        selected: _selectedFilter == _DashboardFilter.thisWeek,
+                        onTap: () {
+                          setState(() {
+                            _selectedFilter = _DashboardFilter.thisWeek;
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _ModernFilterChip(
+                        label: 'This Month',
+                        selected: _selectedFilter == _DashboardFilter.thisMonth,
+                        onTap: () {
+                          setState(() {
+                            _selectedFilter = _DashboardFilter.thisMonth;
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _ModernFilterChip(
+                        label: 'Last 7 Days',
+                        selected: _selectedFilter == _DashboardFilter.last7Days,
+                        onTap: () {
+                          setState(() {
+                            _selectedFilter = _DashboardFilter.last7Days;
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _ModernFilterChip(
+                        label: _getFilterLabel(_DashboardFilter.custom),
+                        selected: _selectedFilter == _DashboardFilter.custom,
+                        onTap: _showCustomDatePicker,
+                        icon: Icons.calendar_today_rounded,
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
@@ -1045,53 +1060,117 @@ class _OrderCardSkeleton extends StatelessWidget {
   }
 }
 
-/// Small filter chip used for date range selection
-class _FilterChip extends StatelessWidget {
+/// Modern Filter Chip with attractive design
+class _ModernFilterChip extends StatefulWidget {
   final String label;
   final bool selected;
-  final VoidCallback onSelected;
-  final bool isCustom;
+  final VoidCallback onTap;
+  final IconData? icon;
 
-  const _FilterChip({
+  const _ModernFilterChip({
     required this.label,
     required this.selected,
-    required this.onSelected,
-    this.isCustom = false,
+    required this.onTap,
+    this.icon,
   });
 
   @override
+  State<_ModernFilterChip> createState() => _ModernFilterChipState();
+}
+
+class _ModernFilterChipState extends State<_ModernFilterChip>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isCustom) ...[
-            const Icon(Icons.calendar_today, size: 14),
-            const SizedBox(width: 4),
-          ],
-          Flexible(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: selected ? Colors.white : Colors.grey.shade700,
-                fontSize: isCustom ? 12 : 13,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+    return GestureDetector(
+      onTapDown: (_) => _animationController.forward(),
+      onTapUp: (_) {
+        _animationController.reverse();
+        widget.onTap();
+      },
+      onTapCancel: () => _animationController.reverse(),
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: widget.selected
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF6366F1),
+                      Color(0xFF8B5CF6),
+                      Color(0xFFA855F7),
+                    ],
+                  )
+                : null,
+            color: widget.selected ? null : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: widget.selected
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF6366F1).withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                      spreadRadius: 0,
+                    ),
+                  ]
+                : null,
           ),
-        ],
-      ),
-      selected: selected,
-      onSelected: (_) => onSelected(),
-      selectedColor: const Color(0xFF0B63FF),
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: selected ? const Color(0xFF0B63FF) : Colors.grey.shade300,
-          width: selected ? 1.5 : 1,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.icon != null) ...[
+                Icon(
+                  widget.icon,
+                  size: 16,
+                  color: widget.selected
+                      ? Colors.white
+                      : const Color(0xFF64748B),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Flexible(
+                child: Text(
+                  widget.label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: widget.selected
+                        ? Colors.white
+                        : const Color(0xFF64748B),
+                    letterSpacing: 0.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
