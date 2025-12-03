@@ -278,6 +278,36 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     return _OrderCategory.ongoing;
   }
 
+  /// Check if order is currently late
+  bool _isOrderLate(Order order) {
+    if (order.isCompleted || order.isCancelled || order.isScheduled) {
+      return false;
+    }
+
+    try {
+      final endStr = order.endDatetime ?? order.endDate;
+      final endDate = DateTime.parse(endStr);
+      return DateTime.now().isAfter(endDate);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Calculate days overdue for a late order
+  int _getDaysOverdue(Order order) {
+    try {
+      final endStr = order.endDatetime ?? order.endDate;
+      final endDate = DateTime.parse(endStr);
+      final now = DateTime.now();
+      if (now.isAfter(endDate)) {
+        return now.difference(endDate).inDays;
+      }
+      return 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
   Color _getCategoryColor(_OrderCategory category) {
     switch (category) {
       case _OrderCategory.scheduled:
@@ -1277,6 +1307,159 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
+
+                    // Late Fee Section Card
+                    if (_isOrderLate(order) || (order.lateFee != null && order.lateFee! > 0))
+                      Card(
+                        elevation: 0,
+                        color: Colors.red.shade50,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: Colors.red.shade200, width: 1.5),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade100,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.warning_amber_rounded,
+                                      size: 20,
+                                      color: Colors.red.shade700,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Expanded(
+                                    child: Text(
+                                      'Late Fee',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF0F1724),
+                                      ),
+                                    ),
+                                  ),
+                                  if (_isOrderLate(order))
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade600,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Text(
+                                        'LATE',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              if (_isOrderLate(order)) ...[
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_today_outlined,
+                                      size: 16,
+                                      color: Colors.red.shade700,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Days Overdue: ${_getDaysOverdue(order)}',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.red.shade700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    order.lateFee != null && order.lateFee! > 0
+                                        ? 'Late Fee Amount'
+                                        : 'No Late Fee Applied',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                  if (order.lateFee != null && order.lateFee! > 0)
+                                    Text(
+                                      '₹${NumberFormat('#,##0.00').format(order.lateFee!)}',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.red.shade700,
+                                      ),
+                                    )
+                                  else
+                                    Text(
+                                      '₹0.00',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              if (_isOrderLate(order) && (order.lateFee == null || order.lateFee! == 0)) ...[
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.orange.shade200),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.info_outline,
+                                        size: 16,
+                                        color: Colors.orange.shade700,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Late fee will be applied when processing return',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.orange.shade700,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (_isOrderLate(order) || (order.lateFee != null && order.lateFee! > 0))
+                      const SizedBox(height: 16),
 
                     // Pricing Breakdown Card
                     Card(
