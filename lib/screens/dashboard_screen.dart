@@ -287,51 +287,138 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
               // Statistics Cards
               dashboardStats.when(
-                data: (stats) => GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1.3,
+                data: (stats) => Column(
                   children: [
-                    _ModernStatCard(
-                      title: 'Active Orders',
-                      value: stats.active.toString(),
-                      icon: Icons.shopping_bag_outlined,
-                      borderColor: Colors.green,
-                      iconColor: Colors.green,
-                      bgColor: Colors.white,
+                    GridView.count(
+                      crossAxisCount: 2,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1.3,
+                      children: [
+                        _ModernStatCard(
+                          title: 'Ongoing Rental',
+                          value: stats.active.toString(),
+                          icon: Icons.shopping_bag_outlined,
+                          borderColor: Colors.green,
+                          iconColor: Colors.green,
+                          bgColor: Colors.white,
+                        ),
+                        _ModernStatCard(
+                          title: 'Pending Return',
+                          value: stats.pendingReturn.toString(),
+                          icon: Icons.warning_amber_rounded,
+                          borderColor: Colors.red,
+                          iconColor: Colors.red,
+                          bgColor: Colors.red.shade50,
+                          textColor: Colors.red.shade700,
+                          blinking: stats.pendingReturn > 0,
+                        ),
+                        _ModernStatCard(
+                          title: 'Total Revenue',
+                          value:
+                              '₹${NumberFormat('#,##0').format(stats.todayCollection)}',
+                          icon: Icons.currency_rupee,
+                          borderColor: const Color(0xFF0B63FF),
+                          iconColor: const Color(0xFF0B63FF),
+                          bgColor: const Color(0xFF0B63FF).withOpacity(0.05),
+                          textColor: const Color(0xFF0B63FF),
+                        ),
+                        _ModernStatCard(
+                          title: 'Completed',
+                          value: stats.completed.toString(),
+                          icon: Icons.check_circle_outline,
+                          borderColor: Colors.grey,
+                          iconColor: Colors.grey.shade600,
+                          bgColor: Colors.grey.shade50,
+                          textColor: Colors.grey.shade700,
+                        ),
+                      ],
                     ),
-                    _ModernStatCard(
-                      title: 'Pending Return',
-                      value: stats.pendingReturn.toString(),
-                      icon: Icons.warning_amber_rounded,
-                      borderColor: Colors.red,
-                      iconColor: Colors.red,
-                      bgColor: Colors.red.shade50,
-                      textColor: Colors.red.shade700,
-                      blinking: stats.pendingReturn > 0,
+                    const SizedBox(height: 12),
+                    GridView.count(
+                      crossAxisCount: 2,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1.3,
+                      children: [
+                        _ModernStatCard(
+                          title: 'Total Orders',
+                          value: stats.totalOrders.toString(),
+                          icon: Icons.receipt_long_outlined,
+                          borderColor: Colors.purple,
+                          iconColor: Colors.purple,
+                          bgColor: Colors.purple.shade50,
+                          textColor: Colors.purple.shade700,
+                        ),
+                        _ModernStatCard(
+                          title: 'Total Customers',
+                          value: stats.totalCustomers.toString(),
+                          icon: Icons.people_outline,
+                          borderColor: Colors.teal,
+                          iconColor: Colors.teal,
+                          bgColor: Colors.teal.shade50,
+                          textColor: Colors.teal.shade700,
+                        ),
+                        _ModernStatCard(
+                          title: 'Late Return',
+                          value: stats.lateReturn.toString(),
+                          icon: Icons.access_time,
+                          borderColor: Colors.deepOrange,
+                          iconColor: Colors.deepOrange,
+                          bgColor: Colors.deepOrange.shade50,
+                          textColor: Colors.deepOrange.shade700,
+                          blinking: stats.lateReturn > 0,
+                        ),
+                        if (stats.scheduled > 0)
+                          _ModernStatCard(
+                            title: 'Scheduled',
+                            value: stats.scheduled.toString(),
+                            icon: Icons.calendar_today_outlined,
+                            borderColor: Colors.orange,
+                            iconColor: Colors.orange,
+                            bgColor: Colors.orange.shade50,
+                            textColor: Colors.orange.shade700,
+                          )
+                        else if (stats.partiallyReturned > 0)
+                          _ModernStatCard(
+                            title: 'Partially Returned',
+                            value: stats.partiallyReturned.toString(),
+                            icon: Icons.history_outlined,
+                            borderColor: Colors.blue,
+                            iconColor: Colors.blue,
+                            bgColor: Colors.blue.shade50,
+                            textColor: Colors.blue.shade700,
+                          )
+                        else
+                          const SizedBox.shrink(),
+                      ],
                     ),
-                    _ModernStatCard(
-                      title: 'Today Collection',
-                      value:
-                          '₹${NumberFormat('#,##0').format(stats.todayCollection)}',
-                      icon: Icons.currency_rupee,
-                      borderColor: const Color(0xFF0B63FF),
-                      iconColor: const Color(0xFF0B63FF),
-                      bgColor: const Color(0xFF0B63FF).withOpacity(0.05),
-                      textColor: const Color(0xFF0B63FF),
-                    ),
-                    _ModernStatCard(
-                      title: 'Completed',
-                      value: stats.completed.toString(),
-                      icon: Icons.check_circle_outline,
-                      borderColor: Colors.grey,
-                      iconColor: Colors.grey.shade600,
-                      bgColor: Colors.grey.shade50,
-                      textColor: Colors.grey.shade700,
-                    ),
+                    if (stats.scheduled > 0 && stats.partiallyReturned > 0) ...[
+                      const SizedBox(height: 12),
+                      GridView.count(
+                        crossAxisCount: 2,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        childAspectRatio: 1.3,
+                        children: [
+                          _ModernStatCard(
+                            title: 'Partially Returned',
+                            value: stats.partiallyReturned.toString(),
+                            icon: Icons.history_outlined,
+                            borderColor: Colors.blue,
+                            iconColor: Colors.blue,
+                            bgColor: Colors.blue.shade50,
+                            textColor: Colors.blue.shade700,
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
                 loading: () => GridView.count(

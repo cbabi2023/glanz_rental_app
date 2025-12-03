@@ -17,10 +17,10 @@ class DashboardService {
     DateTime? endDate,
   }) async {
     try {
-      // Base query for orders
+      // Base query for orders - need end_date/end_datetime for late calculation
       dynamic baseQuery = _supabase
           .from('orders')
-          .select('status, total_amount');
+          .select('status, total_amount, end_date, end_datetime');
 
       // Apply date range filter only when provided
       if (startDate != null && endDate != null) {
@@ -49,6 +49,18 @@ class DashboardService {
       }
 
       final ordersResponse = await baseQuery;
+      
+      // Get total orders count
+      int totalOrdersCount = ordersResponse is List ? ordersResponse.length : 0;
+      
+      // Get total customers count (all customers, not filtered by branch)
+      int totalCustomersCount = 0;
+      try {
+        final customersResponse = await _supabase.from('customers').select('id');
+        totalCustomersCount = (customersResponse as List).length;
+      } catch (e) {
+        print('Error fetching customers count: $e');
+      }
 
       if (ordersResponse == null || ordersResponse is! List) {
         return DashboardStats(
@@ -56,13 +68,22 @@ class DashboardService {
           pendingReturn: 0,
           todayCollection: 0.0,
           completed: 0,
+          scheduled: 0,
+          partiallyReturned: 0,
+          totalOrders: 0,
+          totalCustomers: 0,
+          lateReturn: 0,
         );
       }
 
       int activeCount = 0;
       int pendingCount = 0;
       int completedCount = 0;
+      int scheduledCount = 0;
+      int partiallyReturnedCount = 0;
+      int lateReturnCount = 0;
       double collection = 0.0;
+      final now = DateTime.now();
 
       for (final raw in ordersResponse) {
         final map = raw as Map<String, dynamic>;
@@ -80,8 +101,29 @@ class DashboardService {
             completedCount++;
             collection += amount;
             break;
+          case 'scheduled':
+            scheduledCount++;
+            break;
+          case 'partially_returned':
+            partiallyReturnedCount++;
+            break;
           default:
             break;
+        }
+        
+        // Check if order is late (past end date but not completed/cancelled/partially returned)
+        if (status != 'completed' && status != 'cancelled' && status != 'partially_returned') {
+          try {
+            final endStr = map['end_datetime']?.toString() ?? map['end_date']?.toString();
+            if (endStr != null && endStr.isNotEmpty) {
+              final endDate = DateTime.parse(endStr);
+              if (now.isAfter(endDate)) {
+                lateReturnCount++;
+              }
+            }
+          } catch (e) {
+            // Skip if date parsing fails
+          }
         }
       }
 
@@ -90,15 +132,25 @@ class DashboardService {
         pendingReturn: pendingCount,
         todayCollection: collection,
         completed: completedCount,
+        scheduled: scheduledCount,
+        partiallyReturned: partiallyReturnedCount,
+        totalOrders: totalOrdersCount,
+        totalCustomers: totalCustomersCount,
+        lateReturn: lateReturnCount,
       );
     } catch (e) {
       print('Error fetching dashboard stats: $e');
-      return DashboardStats(
-        active: 0,
-        pendingReturn: 0,
-        todayCollection: 0.0,
-        completed: 0,
-      );
+        return DashboardStats(
+          active: 0,
+          pendingReturn: 0,
+          todayCollection: 0.0,
+          completed: 0,
+          scheduled: 0,
+          partiallyReturned: 0,
+          totalOrders: 0,
+          totalCustomers: 0,
+          lateReturn: 0,
+        );
     }
   }
 
@@ -166,11 +218,54 @@ class DashboardService {
         todayCollection += (order['total_amount'] as num?)?.toDouble() ?? 0.0;
       }
 
+      // Also get scheduled and partially returned counts
+      var scheduledQuery = _supabase
+          .from('orders')
+          .select('id')
+          .eq('status', 'scheduled');
+
+      if (branchId != null) {
+        scheduledQuery = scheduledQuery.eq('branch_id', branchId);
+      }
+
+      final scheduledResponse = await scheduledQuery;
+      final scheduledCount = scheduledResponse.length;
+
+      var partiallyReturnedQuery = _supabase
+          .from('orders')
+          .select('id')
+          .eq('status', 'partially_returned');
+
+      if (branchId != null) {
+        partiallyReturnedQuery = partiallyReturnedQuery.eq('branch_id', branchId);
+      }
+
+      final partiallyReturnedResponse = await partiallyReturnedQuery;
+      final partiallyReturnedCount = partiallyReturnedResponse.length;
+
+      // Get total orders and customers counts
+      int totalOrdersCount = 0;
+      int totalCustomersCount = 0;
+      try {
+        final allOrdersResponse = await _supabase.from('orders').select('id');
+        totalOrdersCount = (allOrdersResponse as List).length;
+        
+        final allCustomersResponse = await _supabase.from('customers').select('id');
+        totalCustomersCount = (allCustomersResponse as List).length;
+      } catch (e) {
+        print('Error fetching total counts: $e');
+      }
+
       return DashboardStats(
         active: activeCount,
         pendingReturn: pendingCount,
         todayCollection: todayCollection,
         completed: completedCount,
+        scheduled: scheduledCount,
+        partiallyReturned: partiallyReturnedCount,
+        totalOrders: totalOrdersCount,
+        totalCustomers: totalCustomersCount,
+        lateReturn: 0, // Late return requires date checking, skip in legacy method
       );
     } catch (e) {
       print('Error fetching dashboard stats: $e');
@@ -179,6 +274,11 @@ class DashboardService {
         pendingReturn: 0,
         todayCollection: 0.0,
         completed: 0,
+        scheduled: 0,
+        partiallyReturned: 0,
+        totalOrders: 0,
+        totalCustomers: 0,
+        lateReturn: 0,
       );
     }
   }
