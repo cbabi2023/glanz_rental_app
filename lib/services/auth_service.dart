@@ -133,5 +133,30 @@ class AuthService {
       rethrow;
     }
   }
+
+  /// Update user branch
+  Future<UserProfile> updateBranch(String? branchId) async {
+    final user = currentUser;
+    if (user == null) {
+      throw Exception('User not authenticated');
+    }
+
+    try {
+      await _supabase
+          .from('profiles')
+          .update({'branch_id': branchId})
+          .eq('id', user.id);
+
+      // Return updated profile
+      final updatedProfile = await getUserProfile();
+      if (updatedProfile == null) {
+        throw Exception('Failed to retrieve updated profile');
+      }
+      return updatedProfile;
+    } catch (e) {
+      print('Error updating branch: $e');
+      rethrow;
+    }
+  }
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
+import '../providers/branches_provider.dart';
 import '../models/user_profile.dart';
 
 /// Profile Screen
@@ -26,6 +27,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _gstIncluded = false;
   bool _isLoadingPassword = false;
   bool _isLoadingGst = false;
+  bool _isLoadingBranch = false;
   bool _fieldsInitialized = false;
 
   @override
@@ -168,6 +170,45 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (mounted) {
         setState(() {
           _isLoadingGst = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleBranchSwitch(String? branchId) async {
+    setState(() {
+      _isLoadingBranch = true;
+    });
+
+    try {
+      final authService = ref.read(authServiceProvider);
+      await authService.updateBranch(branchId);
+
+      ref.invalidate(userProfileProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(branchId == null 
+              ? 'Branch cleared successfully' 
+              : 'Branch switched successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to switch branch: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingBranch = false;
         });
       }
     }
@@ -405,6 +446,84 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
+
+                        // Branch Switching Card (Super Admin only)
+                        if (profile.isSuperAdmin) ...[
+                          _SectionCard(
+                            icon: Icons.store_outlined,
+                            title: 'Branch Selection',
+                            child: ref.watch(branchesProvider).when(
+                              data: (branches) => Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Switch to a different branch to view its data',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  DropdownButtonFormField<String>(
+                                    value: profile.branchId,
+                                    decoration: InputDecoration(
+                                      labelText: 'Current Branch',
+                                      prefixIcon: const Icon(Icons.store, color: Color(0xFF0B63FF)),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide(color: Colors.grey.shade300),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide(color: Colors.grey.shade300),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 2),
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.grey.shade50,
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 16,
+                                      ),
+                                    ),
+                                    isExpanded: true,
+                                    items: [
+                                      const DropdownMenuItem<String>(
+                                        value: null,
+                                        child: Text('No Branch Selected'),
+                                      ),
+                                      ...branches.map((branch) {
+                                        return DropdownMenuItem<String>(
+                                          value: branch.id,
+                                          child: Text(branch.name),
+                                        );
+                                      }),
+                                    ],
+                                    onChanged: _isLoadingBranch
+                                        ? null
+                                        : (value) => _handleBranchSwitch(value),
+                                  ),
+                                ],
+                              ),
+                              loading: () => const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: CircularProgressIndicator(),
+                                ),
+                              ),
+                              error: (error, stack) => Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Text(
+                                  'Error loading branches: ${error.toString()}',
+                                  style: TextStyle(color: Colors.red.shade700),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
 
                         // GST Settings Card
                         _SectionCard(
