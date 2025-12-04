@@ -1002,6 +1002,8 @@ class _OrderCard extends StatelessWidget {
         return Colors.orange;
       case OrderStatus.completed:
         return Colors.blue;
+      case OrderStatus.completedWithIssues:
+        return Colors.orange;
       case OrderStatus.cancelled:
         return Colors.red;
       case OrderStatus.partiallyReturned:
@@ -1019,6 +1021,8 @@ class _OrderCard extends StatelessWidget {
         return Icons.schedule;
       case OrderStatus.completed:
         return Icons.done_all;
+      case OrderStatus.completedWithIssues:
+        return Icons.warning;
       case OrderStatus.cancelled:
         return Icons.cancel;
       case OrderStatus.partiallyReturned:
@@ -1036,6 +1040,8 @@ class _OrderCard extends StatelessWidget {
         return 'Pending Return';
       case OrderStatus.completed:
         return 'Completed';
+      case OrderStatus.completedWithIssues:
+        return 'Completed (Issues)';
       case OrderStatus.cancelled:
         return 'Cancelled';
       case OrderStatus.partiallyReturned:

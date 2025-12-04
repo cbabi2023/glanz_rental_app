@@ -13,6 +13,7 @@ import '../screens/customers/edit_customer_screen.dart';
 import '../screens/calendar/calendar_screen.dart';
 import '../screens/branches/branches_list_screen.dart';
 import '../screens/staff/staff_list_screen.dart';
+import '../screens/reports/reports_screen.dart';
 import '../screens/profile_screen.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/main_layout.dart';
@@ -169,6 +170,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/staff',
         name: 'staff',
         builder: (context, state) => const StaffListScreen(),
+      ),
+      // Reports Routes
+      GoRoute(
+        path: '/reports',
+        name: 'reports',
+        builder: (context, state) => const ReportsScreen(),
       ),
     ],
   );

@@ -43,7 +43,7 @@ class StaffService {
   }
 
   /// Create a new staff member
-  /// Uses RPC function to create user and profile (requires server-side function)
+  /// Creates auth user and profile directly
   Future<UserProfile> createStaff({
     required String email,
     required String password,
@@ -53,22 +53,42 @@ class StaffService {
     required UserRole role,
     String? branchId,
   }) async {
-    // Call RPC function to create user (this should be created in Supabase)
-    final response = await _supabase.rpc('create_staff_user', params: {
-      'p_email': email,
-      'p_password': password,
-      'p_username': username,
-      'p_full_name': fullName,
-      'p_phone': phone,
-      'p_role': role.value,
-      'p_branch_id': branchId,
-    });
+    // Step 1: Create auth user
+    final authResponse = await _supabase.auth.signUp(
+      email: email,
+      password: password,
+      data: {
+        'username': username,
+        'full_name': fullName,
+        'role': role.value,
+      },
+    );
 
-    // RPC should return the created profile
-    if (response is Map<String, dynamic>) {
-      return UserProfile.fromJson(response);
-    } else {
-      throw Exception('Unexpected response from create_staff_user RPC');
+    if (authResponse.user == null) {
+      throw Exception('Failed to create auth user');
+    }
+
+    final userId = authResponse.user!.id;
+
+    // Step 2: Create or update profile in profiles table
+    // (Profile might be auto-created by database trigger, so we use upsert)
+    try {
+      final profileResponse = await _supabase
+          .from('profiles')
+          .upsert({
+            'id': userId,
+            'username': username,
+            'full_name': fullName,
+            'phone': phone.isEmpty ? null : phone,
+            'role': role.value,
+            'branch_id': branchId,
+          })
+          .select()
+          .single();
+
+      return UserProfile.fromJson(profileResponse);
+    } catch (e) {
+      throw Exception('Failed to create profile: $e');
     }
   }
 
@@ -105,13 +125,15 @@ class StaffService {
     return UserProfile.fromJson(response);
   }
 
-  /// Delete a staff member (deletes both profile and auth user)
-  /// Uses RPC function for proper deletion
+  /// Delete a staff member
+  /// Note: This only deletes the profile. Auth user deletion requires admin privileges.
+  /// To fully delete a user, you'll need to implement this on the backend with admin access.
   Future<void> deleteStaff(String staffId) async {
-    // Call RPC function to delete user (this should be created in Supabase)
-    await _supabase.rpc('delete_staff_user', params: {
-      'p_user_id': staffId,
-    });
+    // Delete profile from profiles table
+    await _supabase.from('profiles').delete().eq('id', staffId);
+    
+    // Note: Auth user deletion requires admin/service role key
+    // This should be handled by a backend function or admin panel
   }
 }
 

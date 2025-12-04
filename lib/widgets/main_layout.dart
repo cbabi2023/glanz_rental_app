@@ -17,6 +17,7 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
+  static const _exitInterval = Duration(seconds: 2);
   DateTime? _lastBackPressTime;
   Timer? _backPressTimer;
 
@@ -26,21 +27,35 @@ class _MainLayoutState extends State<MainLayout> {
     super.dispose();
   }
 
+  /// Handles back button press with double-back-to-exit mechanism
   Future<void> _handleBackPress() async {
+    // If we're not on the dashboard (branch index 0), navigate back to dashboard first
+    final currentIndex = widget.navigationShell.currentIndex;
+    if (currentIndex != 0) {
+      // Navigate back to dashboard branch
+      widget.navigationShell.goBranch(0);
+      // Reset the exit timer since we navigated
+      _lastBackPressTime = null;
+      _backPressTimer?.cancel();
+      return;
+    }
+
+    // We're on the dashboard - implement double-back-to-exit
     final now = DateTime.now();
-    
-    // Check if this is the second back press within 2 seconds
+
+    // Check if this is the second back press within the exit interval
     if (_lastBackPressTime != null &&
-        now.difference(_lastBackPressTime!) < const Duration(seconds: 2)) {
-      // Second back press within 2 seconds - exit app
+        now.difference(_lastBackPressTime!) < _exitInterval) {
+      // Second back press within interval - exit the app
+      _backPressTimer?.cancel();
       SystemNavigator.pop();
       return;
     }
-    
-    // First back press - show message and set timer
+
+    // First back press - show toast message and start timer
     _lastBackPressTime = now;
-    
-    // Show snackbar message
+
+    // Show toast message
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text(
@@ -48,21 +63,20 @@ class _MainLayoutState extends State<MainLayout> {
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
+            color: Colors.white,
           ),
         ),
         backgroundColor: Colors.grey.shade800,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        duration: _exitInterval,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
 
-    // Reset timer after 2 seconds
+    // Reset timer after exit interval expires
     _backPressTimer?.cancel();
-    _backPressTimer = Timer(const Duration(seconds: 2), () {
+    _backPressTimer = Timer(_exitInterval, () {
       if (mounted) {
         setState(() {
           _lastBackPressTime = null;
@@ -75,7 +89,9 @@ class _MainLayoutState extends State<MainLayout> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) async {
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        // Handle both button back and gesture back
+        // Using onPopInvokedWithResult for better gesture back support
         if (!didPop) {
           await _handleBackPress();
         }

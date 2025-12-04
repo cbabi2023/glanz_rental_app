@@ -241,6 +241,7 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'customers_fab',
         onPressed: () => context.push('/customers/new'),
         backgroundColor: const Color(0xFF0B63FF),
         foregroundColor: Colors.white,

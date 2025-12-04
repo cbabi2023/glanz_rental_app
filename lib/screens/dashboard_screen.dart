@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -30,6 +32,60 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   _DashboardFilter _selectedFilter = _DashboardFilter.today;
   DateTime? _customStartDate;
   DateTime? _customEndDate;
+  DateTime? _lastBackPressTime;
+  Timer? _backPressTimer;
+  static const _exitInterval = Duration(seconds: 2);
+
+  @override
+  void dispose() {
+    _backPressTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _handleBackPress() async {
+    final now = DateTime.now();
+
+    // Check if this is the second back press within the exit interval
+    if (_lastBackPressTime != null &&
+        now.difference(_lastBackPressTime!) < _exitInterval) {
+      // Second back press within interval - exit the app
+      _backPressTimer?.cancel();
+      SystemNavigator.pop();
+      return;
+    }
+
+    // First back press - show toast message and start timer
+    _lastBackPressTime = now;
+
+    // Show toast message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'Press back again to exit',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: Colors.grey.shade800,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        duration: _exitInterval,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+
+    // Reset timer after exit interval expires
+    _backPressTimer?.cancel();
+    _backPressTimer = Timer(_exitInterval, () {
+      if (mounted) {
+        setState(() {
+          _lastBackPressTime = null;
+        });
+      }
+    });
+  }
 
   DateTime _startForFilter(_DashboardFilter filter) {
     final now = DateTime.now();
@@ -156,6 +212,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
   }
 
+  /// Format currency in compact format (k, M, etc.)
+  String _formatCompactCurrency(double amount) {
+    if (amount < 1000) {
+      return '₹${NumberFormat('#,##0').format(amount)}';
+    } else if (amount < 1000000) {
+      // Thousands (1k, 20.8k)
+      final thousands = amount / 1000;
+      if (thousands % 1 == 0) {
+        return '₹${thousands.toInt()}k';
+      } else {
+        return '₹${thousands.toStringAsFixed(1)}k';
+      }
+    } else {
+      // Millions (1M, 2.5M)
+      final millions = amount / 1000000;
+      if (millions % 1 == 0) {
+        return '₹${millions.toInt()}M';
+      } else {
+        return '₹${millions.toStringAsFixed(1)}M';
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final userProfile = ref.watch(userProfileProvider);
@@ -177,18 +256,57 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final dashboardStats = ref.watch(dashboardStatsProvider(statsParams));
     final recentOrders = ref.watch(recentOrdersProvider(branchId));
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FB),
-      appBar: AppBar(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        // Handle gesture back directly in dashboard screen
+        if (!didPop) {
+          await _handleBackPress();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7F9FB),
+        appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
-        title: const Text(
-          'Dashboard',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF0F1724),
+        leadingWidth: 60,
+        leading: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+          child: Image.asset(
+            'lib/assets/png/glanz.png',
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              // Fallback to icon if image not found
+              return Image.asset(
+                'lib/assets/png/glanzicon.png',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return const SizedBox.shrink();
+                },
+              );
+            },
           ),
+        ),
+        title: Row(
+          children: [
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [
+                  Color(0xFF0F1724),
+                  Color(0xFF273492),
+                  Color(0xFF0F1724),
+                ],
+              ).createShader(bounds),
+              child: const Text(
+                'Dashboard',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
         ),
         actions: [
           IconButton(
@@ -298,142 +416,168 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
 
-              // Statistics Cards
+              // Statistics Cards - Website Style Three Sections
               dashboardStats.when(
                 data: (stats) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    GridView.count(
-                      crossAxisCount: 2,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 1.3,
+                    // 1. Operational Overview Section
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _ModernStatCard(
-                          title: 'Ongoing Rental',
-                          value: stats.active.toString(),
-                          icon: Icons.shopping_bag_outlined,
-                          borderColor: Colors.green,
-                          iconColor: Colors.green,
-                          bgColor: Colors.white,
+                        Row(
+                          children: [
+                            Icon(Icons.flash_on, size: 20, color: const Color(0xFF273492)),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Operational Overview',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F1724),
+                              ),
+                            ),
+                          ],
                         ),
-                        _ModernStatCard(
-                          title: 'Pending Return',
-                          value: stats.pendingReturn.toString(),
-                          icon: Icons.warning_amber_rounded,
-                          borderColor: Colors.red,
-                          iconColor: Colors.red,
-                          bgColor: Colors.red.shade50,
-                          textColor: Colors.red.shade700,
-                          blinking: stats.pendingReturn > 0,
-                        ),
-                        _ModernStatCard(
-                          title: 'Total Revenue',
-                          value:
-                              '₹${NumberFormat('#,##0').format(stats.todayCollection)}',
-                          icon: Icons.currency_rupee,
-                          borderColor: const Color(0xFF0B63FF),
-                          iconColor: const Color(0xFF0B63FF),
-                          bgColor: const Color(0xFF0B63FF).withOpacity(0.05),
-                          textColor: const Color(0xFF0B63FF),
-                        ),
-                        _ModernStatCard(
-                          title: 'Completed',
-                          value: stats.completed.toString(),
-                          icon: Icons.check_circle_outline,
-                          borderColor: Colors.grey,
-                          iconColor: Colors.grey.shade600,
-                          bgColor: Colors.grey.shade50,
-                          textColor: Colors.grey.shade700,
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            _getFilterLabel(_selectedFilter),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     GridView.count(
                       crossAxisCount: 2,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       mainAxisSpacing: 12,
                       crossAxisSpacing: 12,
-                      childAspectRatio: 1.3,
+                      childAspectRatio: 1.25,
                       children: [
-                        _ModernStatCard(
+                        _PremiumStatCard(
+                          title: _selectedFilter == _DashboardFilter.allTime
+                              ? 'Scheduled Orders'
+                              : 'Scheduled',
+                          value: stats.scheduled.toString(),
+                          icon: Icons.calendar_today_outlined,
+                          variant: 'primary',
+                          blinking: stats.scheduled > 0,
+                          onTap: () => context.go('/orders?tab=scheduled'),
+                        ),
+                        _PremiumStatCard(
+                          title: 'Ongoing Rentals',
+                          value: stats.active.toString(),
+                          icon: Icons.shopping_bag_outlined,
+                          variant: 'success',
+                          onTap: () => context.go('/orders?tab=ongoing'),
+                        ),
+                        _PremiumStatCard(
+                          title: 'Late Returns',
+                          value: stats.lateReturn.toString(),
+                          icon: Icons.warning_amber_rounded,
+                          variant: 'danger',
+                          blinking: stats.lateReturn > 0,
+                          onTap: () => context.go('/orders?tab=late'),
+                        ),
+                        _PremiumStatCard(
+                          title: 'Partial Returns',
+                          value: stats.partiallyReturned.toString(),
+                          icon: Icons.history_outlined,
+                          variant: 'warning',
+                          blinking: stats.partiallyReturned > 0,
+                          onTap: () => context.go('/orders?tab=partially_returned'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    
+                    // 2. Business Metrics Section
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.trending_up, size: 20, color: const Color(0xFF273492)),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Business Metrics',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F1724),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            _getFilterLabel(_selectedFilter),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    GridView.count(
+                      crossAxisCount: 2,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1.25,
+                      children: [
+                        _PremiumStatCard(
                           title: 'Total Orders',
                           value: stats.totalOrders.toString(),
                           icon: Icons.receipt_long_outlined,
-                          borderColor: Colors.purple,
-                          iconColor: Colors.purple,
-                          bgColor: Colors.purple.shade50,
-                          textColor: Colors.purple.shade700,
+                          variant: 'default',
+                          onTap: () => context.go('/orders'),
                         ),
-                        _ModernStatCard(
+                        _PremiumStatCard(
+                          title: 'Total Completed',
+                          value: stats.completed.toString(),
+                          icon: Icons.check_circle_outline,
+                          variant: 'success',
+                          onTap: () => context.go('/orders'),
+                        ),
+                        _PremiumStatCard(
+                          title: 'Total Revenue',
+                          value: _formatCompactCurrency(stats.todayCollection),
+                          icon: Icons.currency_rupee,
+                          variant: 'primary',
+                          onTap: () => context.push('/reports'),
+                        ),
+                        _PremiumStatCard(
                           title: 'Total Customers',
                           value: stats.totalCustomers.toString(),
                           icon: Icons.people_outline,
-                          borderColor: Colors.teal,
-                          iconColor: Colors.teal,
-                          bgColor: Colors.teal.shade50,
-                          textColor: Colors.teal.shade700,
+                          variant: 'default',
+                          onTap: () => context.go('/customers'),
                         ),
-                        _ModernStatCard(
-                          title: 'Late Return',
-                          value: stats.lateReturn.toString(),
-                          icon: Icons.access_time,
-                          borderColor: Colors.deepOrange,
-                          iconColor: Colors.deepOrange,
-                          bgColor: Colors.deepOrange.shade50,
-                          textColor: Colors.deepOrange.shade700,
-                          blinking: stats.lateReturn > 0,
-                        ),
-                        if (stats.scheduled > 0)
-                          _ModernStatCard(
-                            title: 'Scheduled',
-                            value: stats.scheduled.toString(),
-                            icon: Icons.calendar_today_outlined,
-                            borderColor: Colors.orange,
-                            iconColor: Colors.orange,
-                            bgColor: Colors.orange.shade50,
-                            textColor: Colors.orange.shade700,
-                          )
-                        else if (stats.partiallyReturned > 0)
-                          _ModernStatCard(
-                            title: 'Partially Returned',
-                            value: stats.partiallyReturned.toString(),
-                            icon: Icons.history_outlined,
-                            borderColor: Colors.blue,
-                            iconColor: Colors.blue,
-                            bgColor: Colors.blue.shade50,
-                            textColor: Colors.blue.shade700,
-                          )
-                        else
-                          const SizedBox.shrink(),
                       ],
                     ),
-                    if (stats.scheduled > 0 && stats.partiallyReturned > 0) ...[
-                      const SizedBox(height: 12),
-                      GridView.count(
-                        crossAxisCount: 2,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: 1.3,
-                        children: [
-                          _ModernStatCard(
-                            title: 'Partially Returned',
-                            value: stats.partiallyReturned.toString(),
-                            icon: Icons.history_outlined,
-                            borderColor: Colors.blue,
-                            iconColor: Colors.blue,
-                            bgColor: Colors.blue.shade50,
-                            textColor: Colors.blue.shade700,
-                          ),
-                        ],
-                      ),
-                    ],
                   ],
                 ),
                 loading: () => GridView.count(
@@ -507,25 +651,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
               const SizedBox(height: 24),
 
-              // Recent Activity Section
+              // Recent Activity Section - Website Style
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Recent Activity',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F1724),
-                    ),
+                  Row(
+                    children: [
+                      Icon(Icons.access_time, size: 20, color: const Color(0xFF273492)),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Recent Activity',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F1724),
+                        ),
+                      ),
+                    ],
                   ),
-                  TextButton(
+                  TextButton.icon(
                     onPressed: () => context.go('/orders'),
-                    child: const Text(
-                      'View All',
+                    icon: const Icon(Icons.arrow_forward, size: 16),
+                    label: const Text(
+                      'View all',
                       style: TextStyle(
-                        color: Color(0xFF0B63FF),
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
+                        color: Color(0xFF273492),
                       ),
                     ),
                   ),
@@ -585,6 +737,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -693,6 +846,196 @@ class _ModernStatCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Premium Stat Card matching website design
+class _PremiumStatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final String variant; // 'default', 'primary', 'success', 'warning', 'danger'
+  final bool blinking;
+  final String? badge;
+  final VoidCallback? onTap;
+
+  const _PremiumStatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    this.variant = 'default',
+    this.blinking = false,
+    this.badge,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final variantStyles = {
+      'default': {
+        'iconBg': Colors.grey.shade100,
+        'iconColor': Colors.grey.shade600,
+        'border': Colors.grey.shade200,
+        'accent': Colors.grey.shade600,
+        'cardBg': Colors.white,
+      },
+      'primary': {
+        'iconBg': const Color(0xFF273492).withOpacity(0.1),
+        'iconColor': const Color(0xFF273492),
+        'border': const Color(0xFF273492).withOpacity(0.2),
+        'accent': const Color(0xFF273492),
+        'cardBg': Colors.white,
+      },
+      'success': {
+        'iconBg': Colors.green.shade50,
+        'iconColor': Colors.green.shade600,
+        'border': Colors.green.shade200,
+        'accent': Colors.green.shade600,
+        'cardBg': Colors.white,
+      },
+      'warning': {
+        'iconBg': Colors.orange.shade50,
+        'iconColor': Colors.orange.shade600,
+        'border': Colors.orange.shade200,
+        'accent': Colors.orange.shade600,
+        'cardBg': Colors.white,
+      },
+      'danger': {
+        'iconBg': Colors.red.shade50,
+        'iconColor': const Color(0xFFE7342F),
+        'border': Colors.red.shade200,
+        'accent': const Color(0xFFE7342F),
+        'cardBg': Colors.white,
+      },
+    };
+
+    final styles = variantStyles[variant]!;
+    final isClickable = onTap != null;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: blinking && variant == 'danger'
+              ? Colors.red.shade300
+              : blinking && variant == 'warning'
+                  ? Colors.orange.shade300
+                  : styles['border'] as Color,
+          width: 1,
+        ),
+      ),
+      color: styles['cardBg'] as Color,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+          child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade500,
+                        letterSpacing: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (badge != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF273492).withOpacity(0.1),
+                            const Color(0xFF273492).withOpacity(0.05),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: const Color(0xFF273492).withOpacity(0.2),
+                        ),
+                      ),
+                      child: Text(
+                        badge!,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF273492),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey.shade900,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: styles['iconBg'] as Color,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      icon,
+                      color: styles['iconColor'] as Color,
+                      size: 20,
+                    ),
+                  ),
+                ],
+              ),
+              if (isClickable) ...[
+                const SizedBox(height: 12),
+                Divider(height: 1, color: Colors.grey.shade200),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      'View details',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 12,
+                      color: Colors.grey.shade500,
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -818,6 +1161,8 @@ class _ModernOrderCard extends StatelessWidget {
         return Colors.red;
       case OrderStatus.completed:
         return Colors.grey;
+      case OrderStatus.completedWithIssues:
+        return Colors.orange;
       case OrderStatus.cancelled:
         return Colors.grey;
       case OrderStatus.partiallyReturned:
@@ -835,6 +1180,8 @@ class _ModernOrderCard extends StatelessWidget {
         return 'Pending';
       case OrderStatus.completed:
         return 'Completed';
+      case OrderStatus.completedWithIssues:
+        return 'Completed (Issues)';
       case OrderStatus.cancelled:
         return 'Cancelled';
       case OrderStatus.partiallyReturned:
@@ -884,42 +1231,48 @@ class _ModernOrderCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: statusColor.withOpacity(0.3),
-                            width: 1,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: statusColor.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            _getStatusText(order.status),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: statusColor,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                         ),
-                        child: Text(
-                          _getStatusText(order.status),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: statusColor,
-                            letterSpacing: 0.5,
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(
+                            order.invoiceNumber,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F1724),
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        order.invoiceNumber,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F1724),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     _formatTimeAgo(order.createdAt),
                     style: TextStyle(

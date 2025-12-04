@@ -664,6 +664,42 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                         if (profile.canManageStaff) const SizedBox(height: 16),
 
+                        // Reports Card (All roles can access)
+                        _SectionCard(
+                          icon: Icons.analytics_outlined,
+                          title: 'Reports & Analytics',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'View detailed analytics and reports with date range filters',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: () => context.push('/reports'),
+                                  icon: const Icon(Icons.analytics),
+                                  label: const Text('View Reports'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0B63FF),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
                         // Logout Button
                         SizedBox(
                           width: double.infinity,

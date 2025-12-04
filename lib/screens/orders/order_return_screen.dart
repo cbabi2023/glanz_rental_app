@@ -26,6 +26,7 @@ class OrderReturnScreen extends ConsumerStatefulWidget {
 
 class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
   final Set<String> _selectedItemIds = {}; // Item IDs to mark as returned
+  final Set<String> _unselectedReturnedItemIds = {}; // Item IDs that were returned but now unselected
   final Map<String, bool> _missingItems = {}; // Item ID -> is missing
   final Map<String, String> _missingNotes = {}; // Item ID -> missing note
   double _lateFee = 0.0;
@@ -83,6 +84,19 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
               ),
             );
           }
+
+          // Initialize selected items with already returned items on first build
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_selectedItemIds.isEmpty && _unselectedReturnedItemIds.isEmpty) {
+              setState(() {
+                for (var item in items) {
+                  if (item.id != null && item.isReturned) {
+                    _selectedItemIds.add(item.id!);
+                  }
+                }
+              });
+            }
+          });
 
           // Calculate stats
           final returnedCount = items.where((item) => item.isReturned).length;
@@ -164,13 +178,14 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                     final isItemReturned = item.isReturned;
                     final isItemMissing = item.isMissing;
                     final isItemLate = item.lateReturn == true;
-                    final isSelected = _selectedItemIds.contains(item.id);
+                    final isUnselectedReturned = _unselectedReturnedItemIds.contains(item.id);
+                    final isSelected = _selectedItemIds.contains(item.id) && !isUnselectedReturned;
                     final isMarkedMissing = _missingItems[item.id] == true;
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       elevation: 0,
-                      color: isItemReturned
+                      color: isItemReturned && !isUnselectedReturned
                           ? Colors.green.shade50
                           : isItemMissing || isMarkedMissing
                               ? Colors.red.shade50
@@ -180,7 +195,7 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                         side: BorderSide(
-                          color: isItemReturned
+                          color: isItemReturned && !isUnselectedReturned
                               ? Colors.green.shade200
                               : isItemMissing || isMarkedMissing
                                   ? Colors.red.shade200
@@ -193,21 +208,34 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                           children: [
                             // Checkbox
                             Checkbox(
-                              value: isSelected || isItemReturned,
-                              onChanged: isItemReturned
-                                  ? null
-                                  : (value) {
-                                      setState(() {
-                                        if (value == true) {
-                                          _selectedItemIds.add(item.id!);
-                                          _missingItems[item.id!] = false;
-                                        } else {
-                                          _selectedItemIds.remove(item.id!);
-                                          _missingItems.remove(item.id!);
-                                          _missingNotes.remove(item.id!);
-                                        }
-                                      });
-                                    },
+                              value: (isItemReturned && !isUnselectedReturned) || (isSelected && !isItemReturned),
+                              onChanged: (value) {
+                                setState(() {
+                                  if (value == true) {
+                                    // Selecting item
+                                    if (isItemReturned) {
+                                      // This is a returned item - just remove from unselected list
+                                      _unselectedReturnedItemIds.remove(item.id!);
+                                    } else {
+                                      // This is a pending item - add to selected
+                                      _selectedItemIds.add(item.id!);
+                                      _missingItems[item.id!] = false;
+                                    }
+                                  } else {
+                                    // Unselecting item
+                                    if (isItemReturned) {
+                                      // This is a returned item being unselected (marked for unreturn)
+                                      _unselectedReturnedItemIds.add(item.id!);
+                                      _selectedItemIds.remove(item.id!);
+                                    } else {
+                                      // This is a pending item being unselected
+                                      _selectedItemIds.remove(item.id!);
+                                      _missingItems.remove(item.id!);
+                                      _missingNotes.remove(item.id!);
+                                    }
+                                  }
+                                });
+                              },
                             ),
 
                             const SizedBox(width: 8),
@@ -388,7 +416,7 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    if (_selectedItemIds.isNotEmpty)
+                    if (_selectedItemIds.isNotEmpty || _unselectedReturnedItemIds.isNotEmpty)
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
@@ -407,7 +435,7 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                           label: Text(
                             _isProcessing
                                 ? 'Processing...'
-                                : 'Process Return (${_selectedItemIds.length} selected)',
+                                : _buildProcessButtonLabel(),
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green.shade600,
@@ -491,6 +519,20 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
     );
   }
 
+  String _buildProcessButtonLabel() {
+    final selectedCount = _selectedItemIds.length;
+    final unselectedCount = _unselectedReturnedItemIds.length;
+    
+    if (selectedCount > 0 && unselectedCount > 0) {
+      return 'Process Changes ($selectedCount to return, $unselectedCount to unreturn)';
+    } else if (selectedCount > 0) {
+      return 'Process Return ($selectedCount selected)';
+    } else if (unselectedCount > 0) {
+      return 'Unreturn Items ($unselectedCount selected)';
+    }
+    return 'Process Return';
+  }
+
   void _markAllReturned() {
     final order = ref.read(orderProvider(widget.orderId)).value;
     if (order == null) return;
@@ -571,10 +613,10 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
       return;
     }
 
-    if (_selectedItemIds.isEmpty) {
+    if (_selectedItemIds.isEmpty && _unselectedReturnedItemIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select at least one item to return'),
+          content: Text('No changes to process'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -588,18 +630,50 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
     try {
       final ordersService = ref.read(ordersServiceProvider);
 
-      // Build item returns list
-      final itemReturns = _selectedItemIds.map((itemId) {
-        final isMissing = _missingItems[itemId] == true;
-        final missingNote = _missingNotes[itemId];
+      // Build item returns list - only include items that need changes
+      final List<ItemReturn> itemReturns = [];
+      final items = order.items ?? [];
+      
+      // Add items to be returned or marked as missing (only if not already returned)
+      for (final itemId in _selectedItemIds) {
+        final item = items.firstWhere((i) => i.id == itemId, orElse: () => items.first);
+        // Only process if item is not already returned
+        if (!item.isReturned) {
+          final isMissing = _missingItems[itemId] == true;
+          final missingNote = _missingNotes[itemId];
 
-        return ItemReturn(
+          itemReturns.add(ItemReturn(
+            itemId: itemId,
+            returnStatus: isMissing ? 'missing' : 'returned',
+            actualReturnDate: isMissing ? null : DateTime.now(),
+            missingNote: missingNote?.isEmpty ?? true ? null : missingNote,
+          ));
+        }
+      }
+      
+      // Add items to be unreturned (reverted to not_yet_returned)
+      for (final itemId in _unselectedReturnedItemIds) {
+        itemReturns.add(ItemReturn(
           itemId: itemId,
-          returnStatus: isMissing ? 'missing' : 'returned',
-          actualReturnDate: isMissing ? null : DateTime.now(),
-          missingNote: missingNote?.isEmpty ?? true ? null : missingNote,
+          returnStatus: 'not_yet_returned',
+          actualReturnDate: null,
+          missingNote: null,
+        ));
+      }
+      
+      // If no actual changes, return early
+      if (itemReturns.isEmpty) {
+        setState(() {
+          _isProcessing = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No changes to process'),
+            backgroundColor: Colors.orange,
+          ),
         );
-      }).toList();
+        return;
+      }
 
       await ordersService.processOrderReturn(
         orderId: widget.orderId,

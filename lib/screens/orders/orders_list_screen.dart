@@ -146,6 +146,42 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Read query parameters from route to set tab filter
+    final uri = GoRouterState.of(context).uri;
+    final tabParam = uri.queryParameters['tab'];
+    
+    if (tabParam != null) {
+      _OrdersTab? targetTab;
+      switch (tabParam) {
+        case 'scheduled':
+          targetTab = _OrdersTab.scheduled;
+          break;
+        case 'ongoing':
+          targetTab = _OrdersTab.ongoing;
+          break;
+        case 'late':
+          targetTab = _OrdersTab.late;
+          break;
+        case 'partially_returned':
+          targetTab = _OrdersTab.partiallyReturned;
+          break;
+        case 'completed':
+          targetTab = _OrdersTab.returned;
+          break;
+        default:
+          targetTab = null;
+      }
+      
+      if (targetTab != null && _selectedTab != targetTab) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _selectedTab = targetTab!;
+            });
+          }
+        });
+      }
+    }
     final userProfile = ref.watch(userProfileProvider);
     final branchId = userProfile.value?.branchId;
 
@@ -468,6 +504,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'orders_fab',
         onPressed: () => context.push('/orders/new'),
         backgroundColor: const Color(0xFF0B63FF),
         foregroundColor: Colors.white,
@@ -580,7 +617,9 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
     if (status == OrderStatus.cancelled) return _OrderCategory.cancelled;
     if (status == OrderStatus.partiallyReturned)
       return _OrderCategory.partiallyReturned;
-    if (status == OrderStatus.completed) return _OrderCategory.returned;
+    if (status == OrderStatus.completed || status == OrderStatus.completedWithIssues) {
+      return _OrderCategory.returned;
+    }
 
     // ⚠️ CRITICAL: Scheduled orders ALWAYS return "scheduled" regardless of date
     // Do NOT check dates for scheduled orders - they remain scheduled until explicitly started
@@ -614,6 +653,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
     final isLate =
         DateTime.now().isAfter(endDate) &&
         status != OrderStatus.completed &&
+        status != OrderStatus.completedWithIssues &&
         status != OrderStatus.cancelled &&
         status != OrderStatus.partiallyReturned;
 
@@ -1028,7 +1068,9 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
     if (status == OrderStatus.cancelled) return _OrderCategory.cancelled;
     if (status == OrderStatus.partiallyReturned)
       return _OrderCategory.partiallyReturned;
-    if (status == OrderStatus.completed) return _OrderCategory.returned;
+    if (status == OrderStatus.completed || status == OrderStatus.completedWithIssues) {
+      return _OrderCategory.returned;
+    }
 
     // ⚠️ CRITICAL: Scheduled orders ALWAYS return "scheduled" regardless of date
     // Do NOT check dates for scheduled orders - they remain scheduled until explicitly started
@@ -1062,6 +1104,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
     final isLate =
         DateTime.now().isAfter(endDate) &&
         status != OrderStatus.completed &&
+        status != OrderStatus.completedWithIssues &&
         status != OrderStatus.cancelled &&
         status != OrderStatus.partiallyReturned;
 

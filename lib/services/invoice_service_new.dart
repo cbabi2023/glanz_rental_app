@@ -68,32 +68,19 @@ class InvoiceService {
     return null;
   }
 
-  /// Format currency with proper formatting (using Rs. instead of ₹ for PDF compatibility)
+  /// Format currency with proper formatting
   static String _formatCurrency(double amount) {
     final formatted = amount.toStringAsFixed(2);
     final parts = formatted.split('.');
     final integerPart = parts[0];
-    // toStringAsFixed(2) always returns 2 decimal places, so parts[1] always exists
-    final decimalPart = parts[1];
+    final decimalPart = parts[1] ?? '00';
     // Add commas for thousands
     final regex = RegExp(r'(\d)(?=(\d{3})+(?!\d))');
     final formattedInteger = integerPart.replaceAllMapped(
       regex,
       (match) => '${match[1]},',
     );
-    return 'Rs. $formattedInteger.$decimalPart';
-  }
-  
-  /// Generate UPI payment string for QR code
-  static String? _generateUpiPaymentString(String upiId, double amount, String merchantName, String invoiceNumber) {
-    if (upiId.isEmpty) return null;
-    
-    // UPI payment URL format: upi://pay?pa=<UPI_ID>&pn=<MerchantName>&am=<Amount>&cu=INR&tn=<TransactionNote>
-    final encodedMerchantName = Uri.encodeComponent(merchantName);
-    final encodedNote = Uri.encodeComponent('Payment for Order $invoiceNumber');
-    final amountString = amount.toStringAsFixed(2);
-    
-    return 'upi://pay?pa=$upiId&pn=$encodedMerchantName&am=$amountString&cu=INR&tn=$encodedNote';
+    return '₹$formattedInteger.$decimalPart';
   }
 
   /// Format date
@@ -144,18 +131,6 @@ class InvoiceService {
 
     // Get UPI ID
     final upiId = await _getUpiIdForOrder(order);
-    
-    // Generate UPI payment string for QR code
-    String? upiPaymentString;
-    if (upiId != null && upiId.isNotEmpty) {
-      final merchantName = order.branch?.name ?? order.staff?.fullName ?? 'GLANZ COSTUMES';
-      upiPaymentString = _generateUpiPaymentString(
-        upiId,
-        order.totalAmount,
-        merchantName,
-        order.invoiceNumber,
-      );
-    }
 
     // Get branch info
     final branchName = order.branch?.name ?? 'GLANZ COSTUMES';
@@ -687,57 +662,6 @@ class InvoiceService {
             ),
 
             pw.SizedBox(height: 32),
-
-            // Payment QR Code Section (if UPI ID is available)
-            if (upiPaymentString != null && upiId != null && upiId.isNotEmpty) ...[
-              pw.Container(
-                padding: const pw.EdgeInsets.all(16),
-                decoration: pw.BoxDecoration(
-                  color: PdfColors.grey100,
-                  borderRadius: pw.BorderRadius.circular(4),
-                ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.center,
-                  children: [
-                    pw.Text(
-                      'Scan to Pay',
-                      style: pw.TextStyle(
-                        fontSize: 10,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.grey900,
-                      ),
-                    ),
-                    pw.SizedBox(height: 12),
-                    pw.BarcodeWidget(
-                      barcode: pw.Barcode.qrCode(),
-                      data: upiPaymentString ?? '',
-                      width: 120,
-                      height: 120,
-                      color: PdfColors.black,
-                    ),
-                    pw.SizedBox(height: 10),
-                    pw.Text(
-                      'UPI ID: $upiId',
-                      style: pw.TextStyle(
-                        fontSize: 8,
-                        color: PdfColors.grey700,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                    pw.SizedBox(height: 4),
-                    pw.Text(
-                      'Amount: ${_formatCurrency(order.totalAmount)}',
-                      style: pw.TextStyle(
-                        fontSize: 9,
-                        color: PdfColors.grey900,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 16),
-            ],
 
             // Footer
             pw.Container(

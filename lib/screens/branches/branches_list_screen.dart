@@ -182,6 +182,7 @@ class _BranchesListScreenState extends ConsumerState<BranchesListScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'branches_fab',
         onPressed: () => _showCreateBranchDialog(context),
         backgroundColor: const Color(0xFF0B63FF),
         icon: const Icon(Icons.add),

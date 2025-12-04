@@ -9,6 +9,7 @@ enum OrderStatus {
   active('active'),
   pendingReturn('pending_return'),
   completed('completed'),
+  completedWithIssues('completed_with_issues'),
   cancelled('cancelled'),
   partiallyReturned('partially_returned');
 
@@ -25,6 +26,8 @@ enum OrderStatus {
         return OrderStatus.pendingReturn;
       case 'completed':
         return OrderStatus.completed;
+      case 'completed_with_issues':
+        return OrderStatus.completedWithIssues;
       case 'cancelled':
         return OrderStatus.cancelled;
       case 'partially_returned':
@@ -204,8 +207,12 @@ class Order {
   bool get isActive => status == OrderStatus.active;
   bool get isPendingReturn => status == OrderStatus.pendingReturn;
   bool get isCompleted => status == OrderStatus.completed;
+  bool get isCompletedWithIssues => status == OrderStatus.completedWithIssues;
   bool get isCancelled => status == OrderStatus.cancelled;
   bool get isPartiallyReturned => status == OrderStatus.partiallyReturned;
+  
+  // Check if order is in any completed state (completed or completed_with_issues)
+  bool get isAnyCompleted => isCompleted || isCompletedWithIssues;
 
   bool get canEdit => isActive || isPendingReturn;
   bool get canMarkReturned {
@@ -232,7 +239,7 @@ class Order {
   /// - Completed/Cancelled orders: cannot be cancelled
   bool canCancel() {
     // Already cancelled or completed cannot be cancelled
-    if (isCancelled || isCompleted) {
+    if (isCancelled || isAnyCompleted) {
       return false;
     }
     

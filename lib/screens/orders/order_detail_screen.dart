@@ -235,7 +235,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     // Fast path: Check status first
     if (status == OrderStatus.cancelled) return _OrderCategory.cancelled;
     if (status == OrderStatus.partiallyReturned) return _OrderCategory.partiallyReturned;
-    if (status == OrderStatus.completed) return _OrderCategory.returned;
+    if (status == OrderStatus.completed || status == OrderStatus.completedWithIssues) {
+      return _OrderCategory.returned;
+    }
     
     // ⚠️ CRITICAL: Scheduled orders ALWAYS return "scheduled" regardless of date
     // Do NOT check dates for scheduled orders - they remain scheduled until explicitly started
@@ -267,7 +269,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     
     // Check if late (end date passed and not completed/cancelled)
     final isLate = DateTime.now().isAfter(endDate) && 
-                   status != OrderStatus.completed && 
+                   status != OrderStatus.completed &&
+                   status != OrderStatus.completedWithIssues &&
                    status != OrderStatus.cancelled &&
                    status != OrderStatus.partiallyReturned;
     

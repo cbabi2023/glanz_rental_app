@@ -5,7 +5,7 @@ import '../models/order.dart';
 /// Item Return Model for processing returns
 class ItemReturn {
   final String itemId;
-  final String returnStatus; // 'returned' or 'missing'
+  final String returnStatus; // 'returned', 'missing', or 'not_yet_returned' (to unreturn)
   final DateTime? actualReturnDate;
   final String? missingNote;
   

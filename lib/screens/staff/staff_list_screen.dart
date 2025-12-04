@@ -273,6 +273,7 @@ class _StaffListScreenState extends ConsumerState<StaffListScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'staff_fab',
         onPressed: () => _showCreateStaffDialog(context, branchesAsync),
         backgroundColor: const Color(0xFF0B63FF),
         icon: const Icon(Icons.person_add),
@@ -348,7 +349,7 @@ class _StaffListScreenState extends ConsumerState<StaffListScreen> {
           staffId: staff.id,
           username: result['username'] as String,
           fullName: result['fullName'] as String,
-          phone: result['phone'] as String,
+          phone: staff.phone, // Keep existing phone value
           role: result['role'] as UserRole?,
           branchId: result['branchId'] as String?,
         );
@@ -656,7 +657,6 @@ class _StaffFormDialogState extends ConsumerState<_StaffFormDialog> {
   final _passwordController = TextEditingController();
   final _usernameController = TextEditingController();
   final _fullNameController = TextEditingController();
-  final _phoneController = TextEditingController();
 
   UserRole _selectedRole = UserRole.staff;
   String? _selectedBranchId;
@@ -667,7 +667,6 @@ class _StaffFormDialogState extends ConsumerState<_StaffFormDialog> {
     if (widget.staff != null) {
       _usernameController.text = widget.staff!.username;
       _fullNameController.text = widget.staff!.fullName;
-      _phoneController.text = widget.staff!.phone;
       _selectedRole = widget.staff!.role;
       _selectedBranchId = widget.staff!.branchId;
     }
@@ -679,7 +678,6 @@ class _StaffFormDialogState extends ConsumerState<_StaffFormDialog> {
     _passwordController.dispose();
     _usernameController.dispose();
     _fullNameController.dispose();
-    _phoneController.dispose();
     super.dispose();
   }
 
@@ -691,13 +689,19 @@ class _StaffFormDialogState extends ConsumerState<_StaffFormDialog> {
 
     return AlertDialog(
       title: Text(widget.staff == null ? 'Create Staff' : 'Edit Staff'),
-      content: SizedBox(
-        width: double.maxFinite,
+      contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      content: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75,
+          maxWidth: double.infinity,
+        ),
+        width: MediaQuery.of(context).size.width * 0.85,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (widget.staff == null) ...[
                   TextFormField(
@@ -769,85 +773,89 @@ class _StaffFormDialogState extends ConsumerState<_StaffFormDialog> {
                   },
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
-                  controller: _phoneController,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone *',
-                    prefixIcon: Icon(Icons.phone),
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Phone is required';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
                 if (isSuperAdmin) ...[
-                  DropdownButtonFormField<UserRole>(
-                    initialValue: _selectedRole,
-                    decoration: const InputDecoration(
-                      labelText: 'Role *',
-                      prefixIcon: Icon(Icons.security),
-                      border: OutlineInputBorder(),
-                    ),
-                    items: [
-                      if (isSuperAdmin)
-                        const DropdownMenuItem(
-                          value: UserRole.superAdmin,
-                          child: Text('Super Admin'),
+                  SizedBox(
+                    width: double.infinity,
+                    child: DropdownButtonFormField<UserRole>(
+                      initialValue: _selectedRole,
+                      decoration: const InputDecoration(
+                        labelText: 'Role *',
+                        prefixIcon: Icon(Icons.security),
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 16,
                         ),
-                      const DropdownMenuItem(
-                        value: UserRole.branchAdmin,
-                        child: Text('Branch Admin'),
                       ),
-                      const DropdownMenuItem(
-                        value: UserRole.staff,
-                        child: Text('Staff'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          _selectedRole = value;
-                        });
-                      }
-                    },
+                      isExpanded: true,
+                      items: const [
+                        DropdownMenuItem(
+                          value: UserRole.branchAdmin,
+                          child: Text('Branch Admin'),
+                        ),
+                        DropdownMenuItem(
+                          value: UserRole.staff,
+                          child: Text('Staff'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _selectedRole = value;
+                          });
+                        }
+                      },
+                    ),
                   ),
                   const SizedBox(height: 16),
                 ],
                 widget.branchesAsync.when(
                   data: (branches) {
-                    return DropdownButtonFormField<String>(
-                      initialValue: _selectedBranchId,
-                      decoration: const InputDecoration(
-                        labelText: 'Branch',
-                        prefixIcon: Icon(Icons.store),
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        const DropdownMenuItem<String>(
-                          value: null,
-                          child: Text('No Branch'),
+                    if (branches.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return SizedBox(
+                      width: double.infinity,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _selectedBranchId,
+                        decoration: const InputDecoration(
+                          labelText: 'Branch',
+                          prefixIcon: Icon(Icons.store),
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 16,
+                          ),
                         ),
-                        ...branches.map((branch) {
-                          return DropdownMenuItem<String>(
-                            value: branch.id,
-                            child: Text(branch.name),
-                          );
-                        }),
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedBranchId = value;
-                        });
-                      },
+                        isExpanded: true,
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: null,
+                            child: Text(
+                              'No Branch',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          ...branches.map((branch) {
+                            return DropdownMenuItem<String>(
+                              value: branch.id,
+                              child: Text(
+                                branch.name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedBranchId = value;
+                          });
+                        },
+                      ),
                     );
                   },
-                  loading: () => const CircularProgressIndicator(),
-                  error: (_, __) => const Text('Error loading branches'),
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
                 ),
                 if (!isSuperAdmin && userBranchId != null)
                   Padding(
@@ -878,7 +886,7 @@ class _StaffFormDialogState extends ConsumerState<_StaffFormDialog> {
                 'password': _passwordController.text,
                 'username': _usernameController.text.trim(),
                 'fullName': _fullNameController.text.trim(),
-                'phone': _phoneController.text.trim(),
+                'phone': '', // Phone removed from form
                 'role': _selectedRole,
                 'branchId': isSuperAdmin ? _selectedBranchId : userBranchId,
               });
