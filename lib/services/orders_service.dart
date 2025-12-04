@@ -228,6 +228,7 @@ class OrdersService {
   /// Update an existing order
   Future<Order> updateOrder({
     required String orderId,
+    String? customerId,
     required String invoiceNumber,
     required String startDate,
     required String endDate,
@@ -241,19 +242,27 @@ class OrdersService {
     final startDateOnly = startDate.split('T')[0];
     final endDateOnly = endDate.split('T')[0];
 
+    // Build update map
+    final updateData = <String, dynamic>{
+      'invoice_number': invoiceNumber,
+      'start_date': startDateOnly,
+      'end_date': endDateOnly,
+      'start_datetime': startDatetime,
+      'end_datetime': endDatetime,
+      'total_amount': totalAmount,
+      'subtotal': subtotal,
+      'gst_amount': gstAmount,
+    };
+
+    // Add customer_id if provided
+    if (customerId != null) {
+      updateData['customer_id'] = customerId;
+    }
+
     // Update order
     await _supabase
         .from('orders')
-        .update({
-          'invoice_number': invoiceNumber,
-          'start_date': startDateOnly,
-          'end_date': endDateOnly,
-          'start_datetime': startDatetime,
-          'end_datetime': endDatetime,
-          'total_amount': totalAmount,
-          'subtotal': subtotal,
-          'gst_amount': gstAmount,
-        })
+        .update(updateData)
         .eq('id', orderId);
 
     // Delete existing items

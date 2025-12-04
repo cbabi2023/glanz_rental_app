@@ -117,12 +117,16 @@ class OrderDraftNotifier extends StateNotifier<OrderDraftState> {
   }
 
   void loadOrder(Order order) {
+    // Use datetime fields if available, otherwise use date fields
+    final startDate = order.startDatetime ?? order.startDate;
+    final endDate = order.endDatetime ?? order.endDate;
+    
     state = OrderDraftState(
       customerId: order.customerId,
       customerName: order.customer?.name,
       customerPhone: order.customer?.phone,
-      startDate: order.startDate,
-      endDate: order.endDate,
+      startDate: startDate,
+      endDate: endDate,
       invoiceNumber: order.invoiceNumber,
       items: order.items ?? [],
     );

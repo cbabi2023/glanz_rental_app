@@ -639,10 +639,28 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           final canCancel = order.canCancel();
           final canEdit = order.canEdit;
 
+          // Calculate bottom padding based on number of buttons
+          int buttonCount = 0;
+          if (canStartRental) buttonCount++;
+          if (canMarkReturned) buttonCount++;
+          if (canEdit) buttonCount++;
+          if (canCancel) buttonCount++;
+          
+          // Calculate bottom padding: button height (56px) + spacing (8px) + container padding (32px) + safe area (~34px)
+          // For multiple buttons: (buttonCount * 56) + ((buttonCount - 1) * 8) + 32 + 34
+          final bottomPadding = buttonCount > 0
+              ? (buttonCount * 56.0) + ((buttonCount - 1) * 8.0) + 32.0 + 34.0
+              : 16.0;
+
           return Stack(
             children: [
               SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: bottomPadding,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1533,7 +1551,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 100),
                   ],
                 ),
               ),
