@@ -646,10 +646,11 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           if (canEdit) buttonCount++;
           if (canCancel) buttonCount++;
           
-          // Calculate bottom padding: button height (56px) + spacing (8px) + container padding (32px) + safe area (~34px)
-          // For multiple buttons: (buttonCount * 56) + ((buttonCount - 1) * 8) + 32 + 34
+          // Calculate bottom padding to ensure pricing breakdown is fully visible
+          // Button height: ~56px each, spacing: 8px between buttons, container padding: 32px (16 top + 16 bottom)
+          // SafeArea bottom padding: ~34px, plus extra buffer: 20px
           final bottomPadding = buttonCount > 0
-              ? (buttonCount * 56.0) + ((buttonCount - 1) * 8.0) + 32.0 + 34.0
+              ? (buttonCount * 56.0) + ((buttonCount - 1) * 8.0) + 32.0 + 34.0 + 20.0
               : 16.0;
 
           return Stack(
