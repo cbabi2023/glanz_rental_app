@@ -753,6 +753,28 @@ class InvoiceService {
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                     children: [
+                      // Total Items
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text(
+                            'Total Items',
+                            style: pw.TextStyle(
+                              fontSize: 10,
+                              color: PdfColors.black,
+                            ),
+                          ),
+                          pw.Text(
+                            (order.items?.length ?? 0).toString(),
+                            style: pw.TextStyle(
+                              fontSize: 10,
+                              color: PdfColors.black,
+                              fontWeight: pw.FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                      pw.SizedBox(height: 8),
                       // Subtotal
                       if (order.subtotal != null) ...[
                         pw.Row(
@@ -777,20 +799,42 @@ class InvoiceService {
                         ),
                         pw.SizedBox(height: 8),
                       ],
-                      // GST
+                      // CGST (2.5%)
                       if (order.gstAmount != null && order.gstAmount! > 0) ...[
                         pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                           children: [
                             pw.Text(
-                              'GST',
+                              'CGST (2.5%)',
                               style: pw.TextStyle(
                                 fontSize: 10,
                                 color: PdfColors.black,
                               ),
                             ),
                             pw.Text(
-                              _formatCurrency(order.gstAmount!),
+                              _formatCurrency(order.gstAmount! / 2),
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.black,
+                                fontWeight: pw.FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                        pw.SizedBox(height: 8),
+                        // SGST (2.5%)
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text(
+                              'SGST (2.5%)',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.black,
+                              ),
+                            ),
+                            pw.Text(
+                              _formatCurrency(order.gstAmount! / 2),
                               style: pw.TextStyle(
                                 fontSize: 10,
                                 color: PdfColors.black,
@@ -826,7 +870,7 @@ class InvoiceService {
                         pw.SizedBox(height: 8),
                       ],
                       // Divider
-                      pw.Divider(color: PdfColors.grey400, height: 1),
+                      pw.Divider(color: PdfColors.black, height: 1.5),
                       pw.SizedBox(height: 8),
                       // Total
                       pw.Row(
@@ -858,94 +902,229 @@ class InvoiceService {
 
             pw.SizedBox(height: 32),
 
-            // Payment QR Code Section (if UPI ID is available)
-            if (upiPaymentString != null &&
-                upiId != null &&
-                upiId.isNotEmpty) ...[
-              pw.Container(
-                padding: const pw.EdgeInsets.all(16),
-                decoration: pw.BoxDecoration(
-                  color: PdfColors.grey100,
-                  borderRadius: pw.BorderRadius.circular(4),
+            // Terms & Conditions and Scan & Pay Section
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // Left: Terms & Conditions
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'TERMS & CONDITIONS',
+                        style: pw.TextStyle(
+                          fontSize: 10,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.black,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Container(
+                        width: double.infinity,
+                        height: 1,
+                        color: PdfColors.black,
+                      ),
+                      pw.SizedBox(height: 8),
+                      pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            '• ',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              color: PdfColors.black,
+                            ),
+                          ),
+                          pw.Expanded(
+                            child: pw.Text(
+                              'All items must be returned in good condition',
+                              style: pw.TextStyle(
+                                fontSize: 8,
+                                color: PdfColors.black,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            '• ',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              color: PdfColors.black,
+                            ),
+                          ),
+                          pw.Expanded(
+                            child: pw.Text(
+                              'Late returns may incur additional charges as per policy',
+                              style: pw.TextStyle(
+                                fontSize: 8,
+                                color: PdfColors.black,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            '• ',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              color: PdfColors.black,
+                            ),
+                          ),
+                          pw.Expanded(
+                            child: pw.Text(
+                              'Damage or loss of items will be charged at replacement cost',
+                              style: pw.TextStyle(
+                                fontSize: 8,
+                                color: PdfColors.black,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            '• ',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              color: PdfColors.black,
+                            ),
+                          ),
+                          pw.Expanded(
+                            child: pw.Text(
+                              'Rental period must be strictly adhered to',
+                              style: pw.TextStyle(
+                                fontSize: 8,
+                                color: PdfColors.black,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            '• ',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              color: PdfColors.black,
+                            ),
+                          ),
+                          pw.Expanded(
+                            child: pw.Text(
+                              'Please contact us for any queries or concerns',
+                              style: pw.TextStyle(
+                                fontSize: 8,
+                                color: PdfColors.black,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            '• ',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              color: PdfColors.black,
+                            ),
+                          ),
+                          pw.Expanded(
+                            child: pw.Text(
+                              'This invoice is valid for accounting and tax purposes',
+                              style: pw.TextStyle(
+                                fontSize: 8,
+                                color: PdfColors.black,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.center,
-                  children: [
-                    pw.Text(
-                      'Scan to Pay',
-                      style: pw.TextStyle(
-                        fontSize: 10,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.black,
-                      ),
+                pw.SizedBox(width: 24),
+                // Right: Scan & Pay
+                if (upiPaymentString != null &&
+                    upiId != null &&
+                    upiId.isNotEmpty)
+                  pw.Container(
+                    width: 180,
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Text(
+                          'SCAN & PAY',
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.black,
+                          ),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                        pw.SizedBox(height: 8),
+                        pw.BarcodeWidget(
+                          barcode: pw.Barcode.qrCode(),
+                          data: upiPaymentString,
+                          width: 120,
+                          height: 120,
+                          color: PdfColors.black,
+                        ),
+                        pw.SizedBox(height: 8),
+                        pw.Text(
+                          'UPI: $upiId | Amount:',
+                          style: pw.TextStyle(
+                            fontSize: 8,
+                            color: PdfColors.black,
+                          ),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                        pw.Text(
+                          _formatCurrency(order.totalAmount),
+                          style: pw.TextStyle(
+                            fontSize: 9,
+                            color: PdfColors.black,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                      ],
                     ),
-                    pw.SizedBox(height: 12),
-                    pw.BarcodeWidget(
-                      barcode: pw.Barcode.qrCode(),
-                      data: upiPaymentString,
-                      width: 120,
-                      height: 120,
-                      color: PdfColors.black,
-                    ),
-                    pw.SizedBox(height: 10),
-                    pw.Text(
-                      'UPI ID: $upiId',
-                      style: pw.TextStyle(
-                        fontSize: 8,
-                        color: PdfColors.black,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                    pw.SizedBox(height: 4),
-                    pw.Text(
-                      'Amount: ${_formatCurrency(order.totalAmount)}',
-                      style: pw.TextStyle(
-                        fontSize: 9,
-                        color: PdfColors.black,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 16),
-            ],
+                  ),
+              ],
+            ),
 
-            // Footer
+            pw.SizedBox(height: 16),
+
+            // Footer Note
             pw.Container(
-              padding: const pw.EdgeInsets.all(12),
-              decoration: pw.BoxDecoration(
-                color: PdfColors.grey100,
-                borderRadius: pw.BorderRadius.circular(4),
+              padding: const pw.EdgeInsets.only(top: 8),
+              decoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  top: pw.BorderSide(color: PdfColors.grey400, width: 0.5),
+                ),
               ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'Payment Information',
-                    style: pw.TextStyle(
-                      fontSize: 9,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.black,
-                    ),
-                  ),
-                  pw.SizedBox(height: 6),
-                  if (upiId != null && upiId.isNotEmpty) ...[
-                    pw.Text(
-                      'UPI ID: $upiId',
-                      style: pw.TextStyle(fontSize: 8, color: PdfColors.black),
-                    ),
-                    pw.SizedBox(height: 4),
-                  ],
-                  pw.Text(
-                    'Thank you for your business!',
-                    style: pw.TextStyle(
-                      fontSize: 8,
-                      color: PdfColors.black,
-                      fontStyle: pw.FontStyle.italic,
-                    ),
-                  ),
-                ],
+              child: pw.Text(
+                'This is a system-generated invoice. No physical signature required.',
+                style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
+                textAlign: pw.TextAlign.center,
               ),
             ),
           ];
