@@ -14,6 +14,37 @@ import '../core/supabase_client.dart';
 ///
 /// Handles invoice PDF generation, viewing, sharing, and downloading
 class InvoiceService {
+  /// Load product image from URL
+  static Future<pw.MemoryImage?> _loadProductImage(String imageUrl) async {
+    if (imageUrl.isEmpty) return null;
+    
+    try {
+      print('🔄 Loading product image from URL: $imageUrl');
+      final uri = Uri.parse(imageUrl);
+      final client = HttpClient();
+      final request = await client.getUrl(uri);
+      final httpResponse = await request.close();
+      
+      if (httpResponse.statusCode == 200) {
+        final bytes = <int>[];
+        await for (final chunk in httpResponse) {
+          bytes.addAll(chunk);
+        }
+        client.close();
+        
+        if (bytes.isNotEmpty) {
+          print('✅ Successfully loaded product image (${bytes.length} bytes)');
+          return pw.MemoryImage(Uint8List.fromList(bytes));
+        }
+      }
+      client.close();
+    } catch (e) {
+      print('❌ Failed to load product image from URL: $e');
+    }
+    
+    return null;
+  }
+
   /// Load logo image from user profile or assets
   static Future<pw.MemoryImage?> _loadLogoImage() async {
     // First, try to load from user profile company logo URL
@@ -264,6 +295,23 @@ class InvoiceService {
         .where((line) => line.trim().isNotEmpty)
         .toList();
 
+    // Load all product images before building PDF
+    print('🔄 Loading product images for PDF...');
+    final Map<String, pw.MemoryImage?> productImages = {};
+    if (order.items != null && order.items!.isNotEmpty) {
+      await Future.wait(
+        order.items!.map((item) async {
+          if (item.photoUrl.isNotEmpty && item.id != null) {
+            final image = await _loadProductImage(item.photoUrl);
+            productImages[item.id!] = image;
+            if (image != null) {
+              print('✅ Loaded product image for item: ${item.productName ?? item.id}');
+            }
+          }
+        }),
+      );
+    }
+
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
@@ -495,17 +543,30 @@ class InvoiceService {
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
               columnWidths: {
-                0: const pw.FlexColumnWidth(3),
-                1: const pw.FlexColumnWidth(1),
-                2: const pw.FlexColumnWidth(1.5),
-                3: const pw.FlexColumnWidth(1),
-                4: const pw.FlexColumnWidth(1.5),
+                0: const pw.FlexColumnWidth(1), // Image column
+                1: const pw.FlexColumnWidth(3), // Item name
+                2: const pw.FlexColumnWidth(1), // Quantity
+                3: const pw.FlexColumnWidth(1.5), // Price/Day
+                4: const pw.FlexColumnWidth(1), // Days
+                5: const pw.FlexColumnWidth(1.5), // Total
               },
               children: [
                 // Header Row
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.grey100),
                   children: [
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(8),
+                      child: pw.Text(
+                        'Image',
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(
+                          fontSize: 9,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.grey900,
+                        ),
+                      ),
+                    ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(10),
                       child: pw.Text(
@@ -569,8 +630,39 @@ class InvoiceService {
                 ),
                 // Item Rows
                 ...(order.items ?? []).map((item) {
+                  final productImage = item.id != null ? productImages[item.id!] : null;
+                  
                   return pw.TableRow(
                     children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: productImage != null
+                            ? pw.Container(
+                                width: 50,
+                                height: 50,
+                                child: pw.Image(
+                                  productImage,
+                                  fit: pw.BoxFit.cover,
+                                ),
+                              )
+                            : pw.Container(
+                                width: 50,
+                                height: 50,
+                                decoration: pw.BoxDecoration(
+                                  color: PdfColors.grey200,
+                                  borderRadius: pw.BorderRadius.circular(4),
+                                ),
+                                child: pw.Center(
+                                  child: pw.Text(
+                                    'No Image',
+                                    style: pw.TextStyle(
+                                      fontSize: 6,
+                                      color: PdfColors.grey500,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                      ),
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(10),
                         child: pw.Text(

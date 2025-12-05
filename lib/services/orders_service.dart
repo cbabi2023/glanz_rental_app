@@ -8,12 +8,14 @@ class ItemReturn {
   final String returnStatus; // 'returned', 'missing', or 'not_yet_returned' (to unreturn)
   final DateTime? actualReturnDate;
   final String? missingNote;
+  final int? returnedQuantity; // Number of items to return (for partial returns)
   
   ItemReturn({
     required this.itemId,
     required this.returnStatus,
     this.actualReturnDate,
     this.missingNote,
+    this.returnedQuantity,
   });
   
   Map<String, dynamic> toJson() {
@@ -22,6 +24,7 @@ class ItemReturn {
       'return_status': returnStatus,
       'actual_return_date': actualReturnDate?.toIso8601String() ?? DateTime.now().toIso8601String(),
       'missing_note': missingNote,
+      if (returnedQuantity != null) 'returned_quantity': returnedQuantity,
     };
   }
 }

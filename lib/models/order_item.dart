@@ -40,6 +40,7 @@ class OrderItem {
   final DateTime? actualReturnDate;
   final bool? lateReturn;
   final String? missingNote;
+  final int? returnedQuantity; // Number of items returned (for partial returns)
 
   OrderItem({
     this.id,
@@ -54,6 +55,7 @@ class OrderItem {
     this.actualReturnDate,
     this.lateReturn,
     this.missingNote,
+    this.returnedQuantity,
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
@@ -87,6 +89,7 @@ class OrderItem {
       actualReturnDate: safeDateTime(json['actual_return_date']),
       lateReturn: json['late_return'] as bool?,
       missingNote: json['missing_note']?.toString(),
+      returnedQuantity: (json['returned_quantity'] as num?)?.toInt(),
     );
   }
 
@@ -104,6 +107,7 @@ class OrderItem {
       if (actualReturnDate != null) 'actual_return_date': actualReturnDate!.toIso8601String(),
       if (lateReturn != null) 'late_return': lateReturn,
       if (missingNote != null) 'missing_note': missingNote,
+      if (returnedQuantity != null) 'returned_quantity': returnedQuantity,
     };
   }
   
@@ -111,6 +115,21 @@ class OrderItem {
   bool get isReturned => returnStatus == ReturnStatus.returned;
   bool get isMissing => returnStatus == ReturnStatus.missing;
   bool get isPending => returnStatus == null || returnStatus == ReturnStatus.notYetReturned;
+  
+  /// Get the quantity that is still pending return
+  int get pendingQuantity {
+    if (returnStatus == ReturnStatus.returned) {
+      // If fully returned, no pending quantity
+      final returned = returnedQuantity ?? quantity;
+      return (quantity - returned).clamp(0, quantity);
+    }
+    // If not returned or partially returned, calculate pending
+    final alreadyReturned = returnedQuantity ?? 0;
+    return (quantity - alreadyReturned).clamp(0, quantity);
+  }
+  
+  /// Get the quantity that has been returned
+  int get alreadyReturnedQuantity => returnedQuantity ?? (isReturned ? quantity : 0);
 
   /// Calculate line total (quantity * price_per_day * days)
   static double calculateLineTotal({

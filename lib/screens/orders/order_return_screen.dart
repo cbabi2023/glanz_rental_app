@@ -29,8 +29,20 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
   final Set<String> _unselectedReturnedItemIds = {}; // Item IDs that were returned but now unselected
   final Map<String, bool> _missingItems = {}; // Item ID -> is missing
   final Map<String, String> _missingNotes = {}; // Item ID -> missing note
+  final Map<String, int> _returnedQuantities = {}; // Item ID -> quantity to return
+  final Map<String, TextEditingController> _quantityControllers = {}; // Item ID -> quantity controller
   double _lateFee = 0.0;
   bool _isProcessing = false;
+
+  @override
+  void dispose() {
+    // Dispose all quantity controllers
+    for (var controller in _quantityControllers.values) {
+      controller.dispose();
+    }
+    _quantityControllers.clear();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -220,6 +232,8 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                       // This is a pending item - add to selected
                                       _selectedItemIds.add(item.id!);
                                       _missingItems[item.id!] = false;
+                                      // Initialize returned quantity to pending quantity
+                                      _returnedQuantities[item.id!] = item.pendingQuantity;
                                     }
                                   } else {
                                     // Unselecting item
@@ -232,6 +246,7 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                       _selectedItemIds.remove(item.id!);
                                       _missingItems.remove(item.id!);
                                       _missingNotes.remove(item.id!);
+                                      _returnedQuantities.remove(item.id!);
                                     }
                                   }
                                 });
@@ -286,7 +301,7 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Qty: ${item.quantity} × ₹${item.pricePerDay.toStringAsFixed(0)}/day × ${item.days} day${item.days != 1 ? 's' : ''}',
+                                    'Qty: ${item.quantity} × ₹${item.pricePerDay.toStringAsFixed(0)}/day × ${item.days} day${item.days != 1 ? 's' : ''}${item.returnedQuantity != null && item.returnedQuantity! > 0 ? ' (${item.returnedQuantity} returned)' : ''}',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey.shade600,
@@ -336,6 +351,91 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                   if (isSelected &&
                                       !isItemReturned &&
                                       !isItemMissing) ...[
+                                    const SizedBox(height: 8),
+                                    // Quantity selector for partial returns
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: Colors.blue.shade200,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Return Quantity:',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF0F1724),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Row(
+                                            children: [
+                                              // Decrease button
+                                              IconButton(
+                                                icon: const Icon(Icons.remove_circle_outline),
+                                                iconSize: 24,
+                                                color: Colors.blue.shade700,
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    final currentQty = _returnedQuantities[item.id!] ?? item.pendingQuantity;
+                                                    if (currentQty > 1) {
+                                                      _returnedQuantities[item.id!] = currentQty - 1;
+                                                    }
+                                                  });
+                                                },
+                                              ),
+                                              const SizedBox(width: 4),
+                                              // Quantity input field (editable)
+                                              Expanded(
+                                                child: _QuantityInputField(
+                                                  key: ValueKey('qty_${item.id}'),
+                                                  initialValue: _returnedQuantities[item.id!] ?? item.pendingQuantity,
+                                                  maxValue: item.pendingQuantity,
+                                                  onChanged: (value) {
+                                                    // Update state without rebuilding immediately
+                                                    _returnedQuantities[item.id!] = value;
+                                                  },
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              // Increase button
+                                              IconButton(
+                                                icon: const Icon(Icons.add_circle_outline),
+                                                iconSize: 24,
+                                                color: Colors.blue.shade700,
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    final currentQty = _returnedQuantities[item.id!] ?? item.pendingQuantity;
+                                                    final pendingQty = item.pendingQuantity;
+                                                    if (currentQty < pendingQty) {
+                                                      _returnedQuantities[item.id!] = currentQty + 1;
+                                                    }
+                                                  });
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Max: ${item.pendingQuantity}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                     const SizedBox(height: 8),
                                     Row(
                                       children: [
@@ -641,12 +741,14 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
         if (!item.isReturned) {
           final isMissing = _missingItems[itemId] == true;
           final missingNote = _missingNotes[itemId];
+          final returnedQty = _returnedQuantities[itemId] ?? item.pendingQuantity;
 
           itemReturns.add(ItemReturn(
             itemId: itemId,
             returnStatus: isMissing ? 'missing' : 'returned',
             actualReturnDate: isMissing ? null : DateTime.now(),
             missingNote: missingNote?.isEmpty ?? true ? null : missingNote,
+            returnedQuantity: isMissing ? null : returnedQty,
           ));
         }
       }
@@ -714,6 +816,157 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
         });
       }
     }
+  }
+}
+
+/// Quantity Input Field Widget
+/// 
+/// A reusable widget for entering quantity with validation
+class _QuantityInputField extends StatefulWidget {
+  final int initialValue;
+  final int maxValue;
+  final ValueChanged<int> onChanged;
+
+  const _QuantityInputField({
+    super.key,
+    required this.initialValue,
+    required this.maxValue,
+    required this.onChanged,
+  });
+
+  @override
+  State<_QuantityInputField> createState() => _QuantityInputFieldState();
+}
+
+class _QuantityInputFieldState extends State<_QuantityInputField> {
+  late TextEditingController _controller;
+  late FocusNode _focusNode;
+  late int _currentValue;
+  bool _isInternalUpdate = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentValue = widget.initialValue;
+    _controller = TextEditingController(text: _currentValue.toString());
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void didUpdateWidget(_QuantityInputField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Only update if the value changed externally (from +/- buttons) and we're not focused
+    if (widget.initialValue != oldWidget.initialValue && 
+        widget.initialValue != _currentValue &&
+        !_focusNode.hasFocus) {
+      _isInternalUpdate = true;
+      _currentValue = widget.initialValue;
+      _controller.text = _currentValue.toString();
+      _isInternalUpdate = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _updateValue(int newValue, {bool updateController = true}) {
+    int finalValue = newValue;
+    
+    if (newValue > widget.maxValue) {
+      finalValue = widget.maxValue;
+    } else if (newValue < 1) {
+      finalValue = 1;
+    }
+
+    if (finalValue != _currentValue) {
+      _currentValue = finalValue;
+      if (updateController) {
+        _controller.text = finalValue.toString();
+        // Move cursor to end
+        _controller.selection = TextSelection.fromPosition(
+          TextPosition(offset: _controller.text.length),
+        );
+      }
+      widget.onChanged(finalValue);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      focusNode: _focusNode,
+      keyboardType: TextInputType.number,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: Color(0xFF0F1724),
+      ),
+      decoration: InputDecoration(
+        contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: Colors.blue.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: Colors.blue.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.white,
+      ),
+      onChanged: (value) {
+        // Don't update if this is an internal update
+        if (_isInternalUpdate) return;
+        
+        // Allow empty string temporarily while user is typing
+        if (value.isEmpty) {
+          return;
+        }
+        
+        // Parse and validate
+        final intValue = int.tryParse(value);
+        if (intValue != null) {
+          _updateValue(intValue, updateController: false);
+        }
+      },
+      onSubmitted: (value) {
+        // When user presses enter/done, validate and set final value
+        final intValue = int.tryParse(value);
+        if (intValue != null) {
+          _updateValue(intValue);
+        } else if (value.isEmpty) {
+          // If empty, restore to current value
+          _controller.text = _currentValue.toString();
+        } else {
+          // Invalid input, restore to current value
+          _controller.text = _currentValue.toString();
+        }
+        // Remove focus
+        _focusNode.unfocus();
+      },
+      onTapOutside: (event) {
+        // When user taps outside, validate and set final value
+        final intValue = int.tryParse(_controller.text);
+        if (intValue != null) {
+          _updateValue(intValue);
+        } else if (_controller.text.isEmpty) {
+          _controller.text = _currentValue.toString();
+        } else {
+          _controller.text = _currentValue.toString();
+        }
+        _focusNode.unfocus();
+      },
+    );
   }
 }
 
