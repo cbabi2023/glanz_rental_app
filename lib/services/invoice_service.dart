@@ -17,21 +17,21 @@ class InvoiceService {
   /// Load product image from URL
   static Future<pw.MemoryImage?> _loadProductImage(String imageUrl) async {
     if (imageUrl.isEmpty) return null;
-    
+
     try {
       print('🔄 Loading product image from URL: $imageUrl');
       final uri = Uri.parse(imageUrl);
       final client = HttpClient();
       final request = await client.getUrl(uri);
       final httpResponse = await request.close();
-      
+
       if (httpResponse.statusCode == 200) {
         final bytes = <int>[];
         await for (final chunk in httpResponse) {
           bytes.addAll(chunk);
         }
         client.close();
-        
+
         if (bytes.isNotEmpty) {
           print('✅ Successfully loaded product image (${bytes.length} bytes)');
           return pw.MemoryImage(Uint8List.fromList(bytes));
@@ -41,7 +41,7 @@ class InvoiceService {
     } catch (e) {
       print('❌ Failed to load product image from URL: $e');
     }
-    
+
     return null;
   }
 
@@ -56,7 +56,7 @@ class InvoiceService {
             .select('company_logo_url')
             .eq('id', user.id)
             .single();
-        
+
         final logoUrl = response['company_logo_url']?.toString();
         if (logoUrl != null && logoUrl.isNotEmpty) {
           try {
@@ -71,7 +71,9 @@ class InvoiceService {
                 bytes.addAll(chunk);
               }
               if (bytes.isNotEmpty) {
-                print('✅ Successfully loaded logo from profile URL (${bytes.length} bytes)');
+                print(
+                  '✅ Successfully loaded logo from profile URL (${bytes.length} bytes)',
+                );
                 return pw.MemoryImage(Uint8List.fromList(bytes));
               }
             }
@@ -86,7 +88,7 @@ class InvoiceService {
       print('❌ Error fetching logo URL from profile: $e');
       // Continue to fallback
     }
-    
+
     // Fallback to loading from assets
     // Try loading from rootBundle first (for bundled assets)
     // Note: rootBundle.load() requires the path to match pubspec.yaml exactly
@@ -155,16 +157,21 @@ class InvoiceService {
     );
     return 'Rs. $formattedInteger.$decimalPart';
   }
-  
+
   /// Generate UPI payment string for QR code
-  static String? _generateUpiPaymentString(String upiId, double amount, String merchantName, String invoiceNumber) {
+  static String? _generateUpiPaymentString(
+    String upiId,
+    double amount,
+    String merchantName,
+    String invoiceNumber,
+  ) {
     if (upiId.isEmpty) return null;
-    
+
     // UPI payment URL format: upi://pay?pa=<UPI_ID>&pn=<MerchantName>&am=<Amount>&cu=INR&tn=<TransactionNote>
     final encodedMerchantName = Uri.encodeComponent(merchantName);
     final encodedNote = Uri.encodeComponent('Payment for Order $invoiceNumber');
     final amountString = amount.toStringAsFixed(2);
-    
+
     return 'upi://pay?pa=$upiId&pn=$encodedMerchantName&am=$amountString&cu=INR&tn=$encodedNote';
   }
 
@@ -216,7 +223,7 @@ class InvoiceService {
 
     // Get UPI ID
     final upiId = await _getUpiIdForOrder(order);
-    
+
     // Generate UPI payment string for QR code
     String? upiPaymentString;
     if (upiId != null && upiId.isNotEmpty) {
@@ -230,13 +237,15 @@ class InvoiceService {
               .select('company_name')
               .eq('id', user.id)
               .single();
-          merchantName = response['company_name']?.toString() ?? 
-                        order.branch?.name ?? 
-                        order.staff?.fullName ?? 
-                        'GLANZ COSTUMES';
+          merchantName =
+              response['company_name']?.toString() ??
+              order.branch?.name ??
+              order.staff?.fullName ??
+              'GLANZ COSTUMES';
         }
       } catch (e) {
-        merchantName = order.branch?.name ?? order.staff?.fullName ?? 'GLANZ COSTUMES';
+        merchantName =
+            order.branch?.name ?? order.staff?.fullName ?? 'GLANZ COSTUMES';
       }
       upiPaymentString = _generateUpiPaymentString(
         upiId,
@@ -249,7 +258,7 @@ class InvoiceService {
     // Get company details from user profile
     String companyName = 'GLANZ COSTUMES';
     String companyAddress = '';
-    
+
     try {
       final user = SupabaseService.currentUser;
       if (user != null) {
@@ -258,13 +267,15 @@ class InvoiceService {
             .select('company_name, company_address')
             .eq('id', user.id)
             .single();
-        
-        companyName = response['company_name']?.toString() ?? 
-                     order.branch?.name ?? 
-                     'GLANZ COSTUMES';
-        companyAddress = response['company_address']?.toString() ?? 
-                        order.branch?.address ?? 
-                        '';
+
+        companyName =
+            response['company_name']?.toString() ??
+            order.branch?.name ??
+            'GLANZ COSTUMES';
+        companyAddress =
+            response['company_address']?.toString() ??
+            order.branch?.address ??
+            '';
       } else {
         // Fallback to branch info if no user
         companyName = order.branch?.name ?? 'GLANZ COSTUMES';
@@ -305,7 +316,9 @@ class InvoiceService {
             final image = await _loadProductImage(item.photoUrl);
             productImages[item.id!] = image;
             if (image != null) {
-              print('✅ Loaded product image for item: ${item.productName ?? item.id}');
+              print(
+                '✅ Loaded product image for item: ${item.productName ?? item.id}',
+              );
             }
           }
         }),
@@ -357,7 +370,7 @@ class InvoiceService {
                                 'LOGO',
                                 style: pw.TextStyle(
                                   fontSize: 8,
-                                  color: PdfColors.grey600,
+                                  color: PdfColors.black,
                                   fontWeight: pw.FontWeight.bold,
                                 ),
                               ),
@@ -373,7 +386,7 @@ class InvoiceService {
                                 style: pw.TextStyle(
                                   fontSize: 22,
                                   fontWeight: pw.FontWeight.bold,
-                                  color: PdfColors.grey900,
+                                  color: PdfColors.black,
                                   letterSpacing: -0.5,
                                 ),
                               ),
@@ -388,7 +401,7 @@ class InvoiceService {
                                       line,
                                       style: pw.TextStyle(
                                         fontSize: 8.5,
-                                        color: PdfColors.grey600,
+                                        color: PdfColors.black,
                                       ),
                                     ),
                                   ),
@@ -412,7 +425,7 @@ class InvoiceService {
                           style: pw.TextStyle(
                             fontSize: 26,
                             fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.grey900,
+                            color: PdfColors.black,
                             letterSpacing: -0.5,
                           ),
                         ),
@@ -421,7 +434,7 @@ class InvoiceService {
                           order.invoiceNumber,
                           style: pw.TextStyle(
                             fontSize: 9.5,
-                            color: PdfColors.grey700,
+                            color: PdfColors.black,
                             fontWeight: pw.FontWeight.normal,
                           ),
                         ),
@@ -430,7 +443,7 @@ class InvoiceService {
                           _formatDate(bookingDate),
                           style: pw.TextStyle(
                             fontSize: 8.5,
-                            color: PdfColors.grey500,
+                            color: PdfColors.black,
                           ),
                         ),
                       ],
@@ -456,7 +469,7 @@ class InvoiceService {
                     'BILL TO',
                     style: pw.TextStyle(
                       fontSize: 7,
-                      color: PdfColors.grey400,
+                      color: PdfColors.black,
                       fontWeight: pw.FontWeight.bold,
                       letterSpacing: 1.2,
                     ),
@@ -467,7 +480,7 @@ class InvoiceService {
                     style: pw.TextStyle(
                       fontSize: 12,
                       fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.grey900,
+                      color: PdfColors.black,
                     ),
                   ),
                   if (order.customer?.phone != null) ...[
@@ -476,7 +489,7 @@ class InvoiceService {
                       order.customer!.phone,
                       style: pw.TextStyle(
                         fontSize: 8.5,
-                        color: PdfColors.grey600,
+                        color: PdfColors.black,
                       ),
                     ),
                   ],
@@ -486,7 +499,7 @@ class InvoiceService {
                       order.customer!.address!,
                       style: pw.TextStyle(
                         fontSize: 8.5,
-                        color: PdfColors.grey600,
+                        color: PdfColors.black,
                       ),
                     ),
                   ],
@@ -510,7 +523,7 @@ class InvoiceService {
                     'RENTAL PERIOD',
                     style: pw.TextStyle(
                       fontSize: 7,
-                      color: PdfColors.grey400,
+                      color: PdfColors.black,
                       fontWeight: pw.FontWeight.bold,
                       letterSpacing: 1.2,
                     ),
@@ -520,7 +533,7 @@ class InvoiceService {
                     '${_formatDate(startDate)} to ${_formatDate(endDate)} ($rentalDays ${rentalDays == 1 ? 'day' : 'days'})',
                     style: pw.TextStyle(
                       fontSize: 8,
-                      color: PdfColors.grey900,
+                      color: PdfColors.black,
                       fontWeight: pw.FontWeight.normal,
                     ),
                   ),
@@ -534,7 +547,7 @@ class InvoiceService {
               style: pw.TextStyle(
                 fontSize: 16,
                 fontWeight: pw.FontWeight.bold,
-                color: PdfColors.grey900,
+                color: PdfColors.black,
               ),
             ),
             pw.SizedBox(height: 12),
@@ -543,11 +556,11 @@ class InvoiceService {
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
               columnWidths: {
-                0: const pw.FlexColumnWidth(1), // Image column
-                1: const pw.FlexColumnWidth(3), // Item name
-                2: const pw.FlexColumnWidth(1), // Quantity
-                3: const pw.FlexColumnWidth(1.5), // Price/Day
-                4: const pw.FlexColumnWidth(1), // Days
+                0: const pw.FlexColumnWidth(0.8), // Sl No
+                1: const pw.FlexColumnWidth(1), // Image column
+                2: const pw.FlexColumnWidth(3), // Item name
+                3: const pw.FlexColumnWidth(1), // Quantity
+                4: const pw.FlexColumnWidth(1.5), // Price/Day
                 5: const pw.FlexColumnWidth(1.5), // Total
               },
               children: [
@@ -556,6 +569,18 @@ class InvoiceService {
                   decoration: const pw.BoxDecoration(color: PdfColors.grey100),
                   children: [
                     pw.Padding(
+                      padding: const pw.EdgeInsets.all(10),
+                      child: pw.Text(
+                        'Sl No',
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(
+                          fontSize: 9,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.black,
+                        ),
+                      ),
+                    ),
+                    pw.Padding(
                       padding: const pw.EdgeInsets.all(8),
                       child: pw.Text(
                         'Image',
@@ -563,7 +588,7 @@ class InvoiceService {
                         style: pw.TextStyle(
                           fontSize: 9,
                           fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.grey900,
+                          color: PdfColors.black,
                         ),
                       ),
                     ),
@@ -574,7 +599,7 @@ class InvoiceService {
                         style: pw.TextStyle(
                           fontSize: 9,
                           fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.grey900,
+                          color: PdfColors.black,
                         ),
                       ),
                     ),
@@ -586,7 +611,7 @@ class InvoiceService {
                         style: pw.TextStyle(
                           fontSize: 9,
                           fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.grey900,
+                          color: PdfColors.black,
                         ),
                       ),
                     ),
@@ -598,19 +623,7 @@ class InvoiceService {
                         style: pw.TextStyle(
                           fontSize: 9,
                           fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.grey900,
-                        ),
-                      ),
-                    ),
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.all(10),
-                      child: pw.Text(
-                        'Days',
-                        textAlign: pw.TextAlign.center,
-                        style: pw.TextStyle(
-                          fontSize: 9,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.grey900,
+                          color: PdfColors.black,
                         ),
                       ),
                     ),
@@ -622,18 +635,33 @@ class InvoiceService {
                         style: pw.TextStyle(
                           fontSize: 9,
                           fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.grey900,
+                          color: PdfColors.black,
                         ),
                       ),
                     ),
                   ],
                 ),
                 // Item Rows
-                ...(order.items ?? []).map((item) {
-                  final productImage = item.id != null ? productImages[item.id!] : null;
-                  
+                ...(order.items ?? []).asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  final productImage = item.id != null
+                      ? productImages[item.id!]
+                      : null;
+
                   return pw.TableRow(
                     children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(10),
+                        child: pw.Text(
+                          (index + 1).toString(),
+                          textAlign: pw.TextAlign.center,
+                          style: const pw.TextStyle(
+                            fontSize: 9,
+                            color: PdfColors.black,
+                          ),
+                        ),
+                      ),
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(8),
                         child: productImage != null
@@ -657,7 +685,7 @@ class InvoiceService {
                                     'No Image',
                                     style: pw.TextStyle(
                                       fontSize: 6,
-                                      color: PdfColors.grey500,
+                                      color: PdfColors.black,
                                     ),
                                   ),
                                 ),
@@ -669,7 +697,7 @@ class InvoiceService {
                           item.productName ?? 'N/A',
                           style: const pw.TextStyle(
                             fontSize: 9,
-                            color: PdfColors.grey800,
+                            color: PdfColors.black,
                           ),
                         ),
                       ),
@@ -680,7 +708,7 @@ class InvoiceService {
                           textAlign: pw.TextAlign.center,
                           style: const pw.TextStyle(
                             fontSize: 9,
-                            color: PdfColors.grey800,
+                            color: PdfColors.black,
                           ),
                         ),
                       ),
@@ -691,18 +719,7 @@ class InvoiceService {
                           textAlign: pw.TextAlign.right,
                           style: const pw.TextStyle(
                             fontSize: 9,
-                            color: PdfColors.grey800,
-                          ),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(10),
-                        child: pw.Text(
-                          item.days.toString(),
-                          textAlign: pw.TextAlign.center,
-                          style: const pw.TextStyle(
-                            fontSize: 9,
-                            color: PdfColors.grey800,
+                            color: PdfColors.black,
                           ),
                         ),
                       ),
@@ -714,7 +731,7 @@ class InvoiceService {
                           style: pw.TextStyle(
                             fontSize: 9,
                             fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.grey900,
+                            color: PdfColors.black,
                           ),
                         ),
                       ),
@@ -745,14 +762,14 @@ class InvoiceService {
                               'Subtotal',
                               style: pw.TextStyle(
                                 fontSize: 10,
-                                color: PdfColors.grey700,
+                                color: PdfColors.black,
                               ),
                             ),
                             pw.Text(
                               _formatCurrency(order.subtotal!),
                               style: pw.TextStyle(
                                 fontSize: 10,
-                                color: PdfColors.grey900,
+                                color: PdfColors.black,
                                 fontWeight: pw.FontWeight.normal,
                               ),
                             ),
@@ -769,14 +786,14 @@ class InvoiceService {
                               'GST',
                               style: pw.TextStyle(
                                 fontSize: 10,
-                                color: PdfColors.grey700,
+                                color: PdfColors.black,
                               ),
                             ),
                             pw.Text(
                               _formatCurrency(order.gstAmount!),
                               style: pw.TextStyle(
                                 fontSize: 10,
-                                color: PdfColors.grey900,
+                                color: PdfColors.black,
                                 fontWeight: pw.FontWeight.normal,
                               ),
                             ),
@@ -793,14 +810,14 @@ class InvoiceService {
                               'Late Fee',
                               style: pw.TextStyle(
                                 fontSize: 10,
-                                color: PdfColors.grey700,
+                                color: PdfColors.black,
                               ),
                             ),
                             pw.Text(
                               _formatCurrency(order.lateFee!),
                               style: pw.TextStyle(
                                 fontSize: 10,
-                                color: PdfColors.grey900,
+                                color: PdfColors.black,
                                 fontWeight: pw.FontWeight.normal,
                               ),
                             ),
@@ -820,7 +837,7 @@ class InvoiceService {
                             style: pw.TextStyle(
                               fontSize: 12,
                               fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.grey900,
+                              color: PdfColors.black,
                             ),
                           ),
                           pw.Text(
@@ -828,7 +845,7 @@ class InvoiceService {
                             style: pw.TextStyle(
                               fontSize: 12,
                               fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.grey900,
+                              color: PdfColors.black,
                             ),
                           ),
                         ],
@@ -842,7 +859,9 @@ class InvoiceService {
             pw.SizedBox(height: 32),
 
             // Payment QR Code Section (if UPI ID is available)
-            if (upiPaymentString != null && upiId != null && upiId.isNotEmpty) ...[
+            if (upiPaymentString != null &&
+                upiId != null &&
+                upiId.isNotEmpty) ...[
               pw.Container(
                 padding: const pw.EdgeInsets.all(16),
                 decoration: pw.BoxDecoration(
@@ -857,13 +876,13 @@ class InvoiceService {
                       style: pw.TextStyle(
                         fontSize: 10,
                         fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.grey900,
+                        color: PdfColors.black,
                       ),
                     ),
                     pw.SizedBox(height: 12),
                     pw.BarcodeWidget(
                       barcode: pw.Barcode.qrCode(),
-                      data: upiPaymentString ?? '',
+                      data: upiPaymentString,
                       width: 120,
                       height: 120,
                       color: PdfColors.black,
@@ -873,7 +892,7 @@ class InvoiceService {
                       'UPI ID: $upiId',
                       style: pw.TextStyle(
                         fontSize: 8,
-                        color: PdfColors.grey700,
+                        color: PdfColors.black,
                         fontWeight: pw.FontWeight.bold,
                       ),
                     ),
@@ -882,7 +901,7 @@ class InvoiceService {
                       'Amount: ${_formatCurrency(order.totalAmount)}',
                       style: pw.TextStyle(
                         fontSize: 9,
-                        color: PdfColors.grey900,
+                        color: PdfColors.black,
                         fontWeight: pw.FontWeight.bold,
                       ),
                     ),
@@ -907,17 +926,14 @@ class InvoiceService {
                     style: pw.TextStyle(
                       fontSize: 9,
                       fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.grey900,
+                      color: PdfColors.black,
                     ),
                   ),
                   pw.SizedBox(height: 6),
                   if (upiId != null && upiId.isNotEmpty) ...[
                     pw.Text(
                       'UPI ID: $upiId',
-                      style: pw.TextStyle(
-                        fontSize: 8,
-                        color: PdfColors.grey700,
-                      ),
+                      style: pw.TextStyle(fontSize: 8, color: PdfColors.black),
                     ),
                     pw.SizedBox(height: 4),
                   ],
@@ -925,7 +941,7 @@ class InvoiceService {
                     'Thank you for your business!',
                     style: pw.TextStyle(
                       fontSize: 8,
-                      color: PdfColors.grey600,
+                      color: PdfColors.black,
                       fontStyle: pw.FontStyle.italic,
                     ),
                   ),
