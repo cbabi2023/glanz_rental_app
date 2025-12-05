@@ -30,6 +30,8 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
   final Map<String, bool> _missingItems = {}; // Item ID -> is missing
   final Map<String, String> _missingNotes = {}; // Item ID -> missing note
   final Map<String, int> _returnedQuantities = {}; // Item ID -> quantity to return
+  final Map<String, double> _damageCosts = {}; // Item ID -> damage cost
+  final Map<String, String> _damageDescriptions = {}; // Item ID -> damage description
   final Map<String, TextEditingController> _quantityControllers = {}; // Item ID -> quantity controller
   double _lateFee = 0.0;
   bool _isProcessing = false;
@@ -436,35 +438,87 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                         ],
                                       ),
                                     ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: OutlinedButton.icon(
-                                            onPressed: () {
-                                              setState(() {
-                                                _missingItems[item.id!] = true;
-                                              });
-                                              _showMissingNoteDialog(item.id!);
-                                            },
-                                            icon: const Icon(
-                                              Icons.warning_amber_rounded,
-                                              size: 16,
-                                            ),
-                                            label: const Text('Mark Missing'),
-                                            style: OutlinedButton.styleFrom(
-                                              foregroundColor: Colors.red,
-                                              side: const BorderSide(
-                                                color: Colors.red,
+                                    // Show missing quantity info if returned quantity < pending quantity
+                                    Builder(
+                                      builder: (context) {
+                                        final returnedQty = _returnedQuantities[item.id!] ?? item.pendingQuantity;
+                                        final missingQty = item.pendingQuantity - returnedQty;
+                                        
+                                        if (missingQty > 0 && returnedQty < item.pendingQuantity) {
+                                          return Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const SizedBox(height: 12),
+                                              Container(
+                                                padding: const EdgeInsets.all(12),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.orange.shade50,
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  border: Border.all(
+                                                    color: Colors.orange.shade200,
+                                                  ),
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        Icon(
+                                                          Icons.warning_amber_rounded,
+                                                          size: 18,
+                                                          color: Colors.orange.shade700,
+                                                        ),
+                                                        const SizedBox(width: 8),
+                                                        Expanded(
+                                                          child: Text(
+                                                            '$missingQty item${missingQty > 1 ? 's' : ''} will be marked as missing',
+                                                            style: TextStyle(
+                                                              fontSize: 12,
+                                                              fontWeight: FontWeight.w600,
+                                                              color: Colors.orange.shade900,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 12),
+                                                    // Damage Cost Input
+                                                    _DamageCostField(
+                                                      key: ValueKey('damage_cost_${item.id}'),
+                                                      initialValue: _damageCosts[item.id!],
+                                                      onChanged: (value) {
+                                                        setState(() {
+                                                          if (value == null) {
+                                                            _damageCosts.remove(item.id!);
+                                                          } else {
+                                                            _damageCosts[item.id!] = value;
+                                                          }
+                                                        });
+                                                      },
+                                                    ),
+                                                    const SizedBox(height: 8),
+                                                    // Description Input
+                                                    _DamageDescriptionField(
+                                                      key: ValueKey('damage_desc_${item.id}'),
+                                                      initialValue: _damageDescriptions[item.id!],
+                                                      onChanged: (value) {
+                                                        setState(() {
+                                                          if (value.trim().isEmpty) {
+                                                            _damageDescriptions.remove(item.id!);
+                                                          } else {
+                                                            _damageDescriptions[item.id!] = value;
+                                                          }
+                                                        });
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 4,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                                            ],
+                                          );
+                                        }
+                                        return const SizedBox.shrink();
+                                      },
                                     ),
                                     if (_missingNotes[item.id!] != null) ...[
                                       const SizedBox(height: 4),
@@ -647,48 +701,6 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
     });
   }
 
-  void _showMissingNoteDialog(String itemId) {
-    final noteController = TextEditingController(
-      text: _missingNotes[itemId] ?? '',
-    );
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Missing Item Note'),
-        content: TextField(
-          controller: noteController,
-          decoration: const InputDecoration(
-            hintText: 'Enter reason why item is missing...',
-            border: OutlineInputBorder(),
-          ),
-          maxLines: 3,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _missingItems[itemId] = false;
-                _missingNotes.remove(itemId);
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _missingNotes[itemId] = noteController.text.trim();
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _processReturn() async {
     final order = ref.read(orderProvider(widget.orderId)).value;
     final userProfile = ref.read(userProfileProvider).value;
@@ -742,14 +754,41 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
           final isMissing = _missingItems[itemId] == true;
           final missingNote = _missingNotes[itemId];
           final returnedQty = _returnedQuantities[itemId] ?? item.pendingQuantity;
+          final pendingQty = item.pendingQuantity;
 
-          itemReturns.add(ItemReturn(
-            itemId: itemId,
-            returnStatus: isMissing ? 'missing' : 'returned',
-            actualReturnDate: isMissing ? null : DateTime.now(),
-            missingNote: missingNote?.isEmpty ?? true ? null : missingNote,
-            returnedQuantity: isMissing ? null : returnedQty,
-          ));
+          if (isMissing) {
+            // Mark entire item as missing
+            itemReturns.add(ItemReturn(
+              itemId: itemId,
+              returnStatus: 'missing',
+              actualReturnDate: null,
+              missingNote: missingNote?.isEmpty ?? true ? null : missingNote,
+              returnedQuantity: null,
+              damageCost: _damageCosts[itemId],
+              description: _damageDescriptions[itemId]?.trim().isEmpty ?? true ? null : _damageDescriptions[itemId]?.trim(),
+            ));
+          } else {
+            // Partial return - some returned, rest missing
+            if (returnedQty < pendingQty && returnedQty > 0) {
+              // Mark returned items - missing items will be processed separately
+              itemReturns.add(ItemReturn(
+                itemId: itemId,
+                returnStatus: 'returned',
+                actualReturnDate: DateTime.now(),
+                missingNote: null,
+                returnedQuantity: returnedQty,
+              ));
+            } else if (returnedQty == pendingQty) {
+              // Full return
+              itemReturns.add(ItemReturn(
+                itemId: itemId,
+                returnStatus: 'returned',
+                actualReturnDate: DateTime.now(),
+                missingNote: null,
+                returnedQuantity: returnedQty,
+              ));
+            }
+          }
         }
       }
       
@@ -777,18 +816,85 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
         return;
       }
 
+      // Process all returns in a single call
       await ordersService.processOrderReturn(
         orderId: widget.orderId,
         itemReturns: itemReturns,
         userId: userProfile!.id,
         lateFee: _lateFee,
       );
+      
+      // Process missing items separately for partial returns
+      final List<ItemReturn> missingItemReturns = [];
+      
+      for (final itemId in _selectedItemIds) {
+        final item = items.firstWhere((i) => i.id == itemId, orElse: () => items.first);
+        if (!item.isReturned) {
+          final returnedQty = _returnedQuantities[itemId] ?? item.pendingQuantity;
+          final pendingQty = item.pendingQuantity;
+          
+          if (returnedQty < pendingQty && returnedQty > 0) {
+            final missingQty = pendingQty - returnedQty;
+            
+            // Create missing entry with damage cost and description
+            missingItemReturns.add(ItemReturn(
+              itemId: itemId,
+              returnStatus: 'missing',
+              actualReturnDate: null,
+              missingNote: _damageDescriptions[itemId]?.trim().isEmpty ?? true 
+                  ? (_damageCosts[itemId] != null ? 'Missing item - Damage cost: ₹${_damageCosts[itemId]!.toInt()}' : 'Items not returned')
+                  : _damageDescriptions[itemId]?.trim(),
+              returnedQuantity: missingQty,
+              damageCost: _damageCosts[itemId],
+              description: _damageDescriptions[itemId]?.trim().isEmpty ?? true ? null : _damageDescriptions[itemId]?.trim(),
+            ));
+          }
+        }
+      }
+      
+      // Process missing items in a separate call
+      if (missingItemReturns.isNotEmpty) {
+        // Wait for return transaction to complete
+        await Future.delayed(const Duration(milliseconds: 800));
+        
+        // Refresh order to get updated state
+        ref.invalidate(orderProvider(widget.orderId));
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        try {
+          await ordersService.processOrderReturn(
+            orderId: widget.orderId,
+            itemReturns: missingItemReturns,
+            userId: userProfile!.id,
+            lateFee: 0.0, // Don't add late fee again
+          );
+        } catch (e) {
+          print('Error processing missing items: $e');
+          // Show user-friendly error message about database constraint
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'Return processed, but missing items failed. Please run the database migration to fix this. See DATABASE_FIX_REQUIRED.md',
+                ),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 8),
+                action: SnackBarAction(
+                  label: 'Dismiss',
+                  textColor: Colors.white,
+                  onPressed: () {},
+                ),
+              ),
+            );
+          }
+          // Continue - returned items were processed successfully
+        }
+      }
 
       // Refresh order data
       ref.invalidate(orderProvider(widget.orderId));
-      final branchId = userProfile.branchId;
-      if (branchId != null) {
-        ref.invalidate(ordersProvider(OrdersParams(branchId: branchId)));
+      if (userProfile!.branchId != null) {
+        ref.invalidate(ordersProvider(OrdersParams(branchId: userProfile!.branchId!)));
       }
 
       if (mounted) {
@@ -965,6 +1071,155 @@ class _QuantityInputFieldState extends State<_QuantityInputField> {
           _controller.text = _currentValue.toString();
         }
         _focusNode.unfocus();
+      },
+    );
+  }
+}
+
+/// Damage Cost Input Field Widget
+class _DamageCostField extends StatefulWidget {
+  final double? initialValue;
+  final ValueChanged<double?> onChanged;
+
+  const _DamageCostField({
+    super.key,
+    this.initialValue,
+    required this.onChanged,
+  });
+
+  @override
+  State<_DamageCostField> createState() => _DamageCostFieldState();
+}
+
+class _DamageCostFieldState extends State<_DamageCostField> {
+  late TextEditingController _controller;
+  late double? _currentValue;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentValue = widget.initialValue;
+    _controller = TextEditingController(
+      text: _currentValue != null ? _currentValue!.toInt().toString() : '',
+    );
+  }
+
+  @override
+  void didUpdateWidget(_DamageCostField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialValue != oldWidget.initialValue) {
+      _currentValue = widget.initialValue;
+      _controller.text = _currentValue != null ? _currentValue!.toInt().toString() : '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      keyboardType: TextInputType.number,
+      decoration: InputDecoration(
+        labelText: 'Damage Cost (₹)',
+        hintText: '0',
+        prefixText: '₹ ',
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        filled: true,
+        fillColor: Colors.white,
+      ),
+      onChanged: (value) {
+        if (value.isEmpty) {
+          _currentValue = null;
+          widget.onChanged(null);
+        } else {
+          final cost = int.tryParse(value);
+          if (cost != null && cost >= 0) {
+            _currentValue = cost.toDouble();
+            widget.onChanged(cost.toDouble());
+          }
+        }
+      },
+      onSubmitted: (value) {
+        if (value.isEmpty) {
+          _currentValue = null;
+          _controller.text = '';
+          widget.onChanged(null);
+        } else {
+          final cost = int.tryParse(value);
+          if (cost != null && cost >= 0) {
+            _currentValue = cost.toDouble();
+            _controller.text = cost.toString();
+            widget.onChanged(cost.toDouble());
+          } else {
+            _controller.text = _currentValue != null ? _currentValue!.toInt().toString() : '';
+          }
+        }
+      },
+    );
+  }
+}
+
+/// Damage Description Input Field Widget
+class _DamageDescriptionField extends StatefulWidget {
+  final String? initialValue;
+  final ValueChanged<String> onChanged;
+
+  const _DamageDescriptionField({
+    super.key,
+    this.initialValue,
+    required this.onChanged,
+  });
+
+  @override
+  State<_DamageDescriptionField> createState() => _DamageDescriptionFieldState();
+}
+
+class _DamageDescriptionFieldState extends State<_DamageDescriptionField> {
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue ?? '');
+  }
+
+  @override
+  void didUpdateWidget(_DamageDescriptionField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialValue != oldWidget.initialValue) {
+      _controller.text = widget.initialValue ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      maxLines: 3,
+      decoration: InputDecoration(
+        labelText: 'Description (Damage/Missing reason)',
+        hintText: 'Enter description...',
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        filled: true,
+        fillColor: Colors.white,
+      ),
+      onChanged: (value) {
+        widget.onChanged(value);
       },
     );
   }

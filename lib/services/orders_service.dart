@@ -9,6 +9,8 @@ class ItemReturn {
   final DateTime? actualReturnDate;
   final String? missingNote;
   final int? returnedQuantity; // Number of items to return (for partial returns)
+  final double? damageCost; // Cost for damaged/missing items
+  final String? description; // Description for missing/damaged items
   
   ItemReturn({
     required this.itemId,
@@ -16,6 +18,8 @@ class ItemReturn {
     this.actualReturnDate,
     this.missingNote,
     this.returnedQuantity,
+    this.damageCost,
+    this.description,
   });
   
   Map<String, dynamic> toJson() {
@@ -25,6 +29,8 @@ class ItemReturn {
       'actual_return_date': actualReturnDate?.toIso8601String() ?? DateTime.now().toIso8601String(),
       'missing_note': missingNote,
       if (returnedQuantity != null) 'returned_quantity': returnedQuantity,
+      if (damageCost != null) 'damage_cost': damageCost,
+      if (description != null) 'description': description,
     };
   }
 }
