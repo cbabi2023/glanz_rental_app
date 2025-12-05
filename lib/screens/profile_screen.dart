@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../providers/auth_provider.dart';
 import '../providers/branches_provider.dart';
 import '../models/user_profile.dart';
+import '../core/supabase_client.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 /// Profile Screen
 /// 
@@ -22,13 +26,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _gstNumberController = TextEditingController();
   final _gstRateController = TextEditingController();
   final _upiIdController = TextEditingController();
+  final _companyNameController = TextEditingController();
+  final _companyAddressController = TextEditingController();
 
   bool _gstEnabled = false;
   bool _gstIncluded = false;
   bool _isLoadingPassword = false;
   bool _isLoadingGst = false;
   bool _isLoadingBranch = false;
+  bool _isLoadingCompany = false;
+  bool _isUploadingLogo = false;
   bool _fieldsInitialized = false;
+  File? _logoFile;
+  String? _logoPreviewUrl;
 
   @override
   void dispose() {
@@ -38,6 +48,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _gstNumberController.dispose();
     _gstRateController.dispose();
     _upiIdController.dispose();
+    _companyNameController.dispose();
+    _companyAddressController.dispose();
     super.dispose();
   }
 
@@ -47,6 +59,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _gstRateController.text = profile.gstRate?.toString() ?? '5.00';
     _gstIncluded = profile.gstIncluded ?? false;
     _upiIdController.text = profile.upiId ?? '';
+    _companyNameController.text = profile.companyName ?? '';
+    _companyAddressController.text = profile.companyAddress ?? '';
+    _logoPreviewUrl = profile.companyLogoUrl;
     _fieldsInitialized = true;
   }
 
@@ -175,6 +190,171 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  Future<void> _pickLogoImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final image = await picker.pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+
+      if (image != null) {
+        setState(() {
+          _logoFile = File(image.path);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<String?> _uploadLogo(File imageFile) async {
+    try {
+      setState(() {
+        _isUploadingLogo = true;
+      });
+
+      final supabase = SupabaseService.client;
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final random = DateTime.now().microsecondsSinceEpoch.toString().substring(0, 6);
+      final uniqueFileName = 'company-logo-$timestamp-$random.jpg';
+      final filePath = 'company-logos/$uniqueFileName';
+
+      await supabase.storage.from('company-logos').upload(
+        filePath,
+        imageFile,
+      );
+
+      final url = supabase.storage
+          .from('company-logos')
+          .getPublicUrl(filePath);
+
+      setState(() {
+        _isUploadingLogo = false;
+        _logoPreviewUrl = url;
+        _logoFile = null;
+      });
+
+      return url;
+    } catch (e) {
+      setState(() {
+        _isUploadingLogo = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading logo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      rethrow;
+    }
+  }
+
+  void _showLogoSourceDialog() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Camera'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickLogoImage(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Gallery'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickLogoImage(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleSaveCompanyDetails() async {
+    String? logoUrl = _logoPreviewUrl;
+
+    // Upload logo if a new one was selected
+    if (_logoFile != null) {
+      try {
+        logoUrl = await _uploadLogo(_logoFile!);
+      } catch (e) {
+        // Error already shown in _uploadLogo
+        return;
+      }
+    }
+
+    setState(() {
+      _isLoadingCompany = true;
+    });
+
+    try {
+      final authService = ref.read(authServiceProvider);
+      await authService.updateCompanyDetails(
+        companyName: _companyNameController.text,
+        companyAddress: _companyAddressController.text,
+        companyLogoUrl: logoUrl,
+      );
+
+      // Invalidate to refresh profile data
+      // Store current values before invalidating
+      final savedCompanyName = _companyNameController.text;
+      final savedCompanyAddress = _companyAddressController.text;
+      final savedLogoUrl = logoUrl;
+      
+      ref.invalidate(userProfileProvider);
+      
+      // Preserve the saved values in controllers while profile refreshes
+      _companyNameController.text = savedCompanyName;
+      _companyAddressController.text = savedCompanyAddress;
+      _logoPreviewUrl = savedLogoUrl;
+      _logoFile = null; // Clear file reference since it's now uploaded
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Company details saved successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save company details: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingCompany = false;
+        });
+      }
+    }
+  }
+
   Future<void> _handleBranchSwitch(String? branchId) async {
     setState(() {
       _isLoadingBranch = true;
@@ -212,6 +392,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         });
       }
     }
+  }
+
+  Widget _buildLogoFallback() {
+    return Center(
+      child: Icon(
+        Icons.business,
+        size: 48,
+        color: Colors.grey.shade400,
+      ),
+    );
   }
 
   Future<void> _handleLogout() async {
@@ -286,19 +476,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               );
             }
 
-            if (!_fieldsInitialized || 
+            // Initialize fields immediately if not initialized or if they don't match
+            final wasInitialized = _fieldsInitialized;
+            final needsInitialization = !_fieldsInitialized ||
                 _gstNumberController.text != (profile.gstNumber ?? '') ||
                 _gstEnabled != (profile.gstEnabled ?? false) ||
                 _gstRateController.text != (profile.gstRate?.toString() ?? '5.00') ||
                 _gstIncluded != (profile.gstIncluded ?? false) ||
-                _upiIdController.text != (profile.upiId ?? '')) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  setState(() {
-                    _initializeFields(profile);
-                  });
-                }
-              });
+                _upiIdController.text != (profile.upiId ?? '') ||
+                _companyNameController.text != (profile.companyName ?? '') ||
+                _companyAddressController.text != (profile.companyAddress ?? '') ||
+                _logoPreviewUrl != profile.companyLogoUrl;
+            
+            if (needsInitialization) {
+              // Initialize immediately (synchronously) to ensure fields are ready
+              _initializeFields(profile);
+              // Trigger a rebuild if this is the first initialization
+              if (!wasInitialized) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    setState(() {
+                      // Fields already initialized, just trigger rebuild
+                    });
+                  }
+                });
+              }
             }
 
             return CustomScrollView(
@@ -441,6 +643,153 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 label: 'Role',
                                 value: _formatRole(profile.role),
                                 valueColor: _getRoleColor(profile.role),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Company Details Card
+                        _SectionCard(
+                          icon: Icons.business_outlined,
+                          title: 'Company Details',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Company Logo
+                              Center(
+                                child: GestureDetector(
+                                  onTap: _isUploadingLogo ? null : _showLogoSourceDialog,
+                                  child: Stack(
+                                    children: [
+                                      Container(
+                                        width: 100,
+                                        height: 100,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade100,
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: Colors.grey.shade300,
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: _isUploadingLogo
+                                              ? const Center(
+                                                  child: CircularProgressIndicator(),
+                                                )
+                                              : (_logoFile != null
+                                                  ? Image.file(
+                                                      _logoFile!,
+                                                      fit: BoxFit.contain,
+                                                      errorBuilder: (context, error, stackTrace) {
+                                                        return _buildLogoFallback();
+                                                      },
+                                                    )
+                                                  : (_logoPreviewUrl != null && _logoPreviewUrl!.isNotEmpty
+                                                      ? CachedNetworkImage(
+                                                          imageUrl: _logoPreviewUrl!,
+                                                          fit: BoxFit.contain,
+                                                          errorWidget: (context, url, error) => _buildLogoFallback(),
+                                                          placeholder: (context, url) => const Center(
+                                                            child: CircularProgressIndicator(),
+                                                          ),
+                                                        )
+                                                      : Image.asset(
+                                                          'lib/assets/png/glanz.png',
+                                                          fit: BoxFit.contain,
+                                                          errorBuilder: (context, error, stackTrace) {
+                                                            return _buildLogoFallback();
+                                                          },
+                                                        ))),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        bottom: 0,
+                                        right: 0,
+                                        child: Container(
+                                          width: 32,
+                                          height: 32,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF0B63FF),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: Colors.white,
+                                              width: 2,
+                                            ),
+                                          ),
+                                          child: const Icon(
+                                            Icons.camera_alt,
+                                            color: Colors.white,
+                                            size: 16,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Center(
+                                child: Text(
+                                  'Tap to change logo',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              // Company Name
+                              _ModernTextField(
+                                controller: _companyNameController,
+                                label: 'Company Name',
+                                hint: 'Enter company name',
+                                icon: Icons.business,
+                              ),
+                              const SizedBox(height: 16),
+                              // Company Address
+                              _ModernTextField(
+                                controller: _companyAddressController,
+                                label: 'Address / Location',
+                                hint: 'Enter company address',
+                                icon: Icons.location_on,
+                                keyboardType: TextInputType.multiline,
+                                maxLines: 3,
+                              ),
+                              const SizedBox(height: 24),
+                              // Save Button
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: _isLoadingCompany ? null : _handleSaveCompanyDetails,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0B63FF),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: 0,
+                                  ),
+                                  child: _isLoadingCompany
+                                      ? const SizedBox(
+                                          height: 24,
+                                          width: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Save Company Details',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                ),
                               ),
                             ],
                           ),
@@ -932,6 +1281,7 @@ class _ModernTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final String? helperText;
   final int? maxLength;
+  final int? maxLines;
 
   const _ModernTextField({
     required this.controller,
@@ -942,6 +1292,7 @@ class _ModernTextField extends StatelessWidget {
     this.keyboardType,
     this.helperText,
     this.maxLength,
+    this.maxLines,
   });
 
   @override
@@ -954,6 +1305,7 @@ class _ModernTextField extends StatelessWidget {
           obscureText: obscureText,
           keyboardType: keyboardType,
           maxLength: maxLength,
+          maxLines: obscureText ? 1 : (maxLines ?? 1),
           decoration: InputDecoration(
             labelText: label,
             hintText: hint,

@@ -13,6 +13,9 @@ class UserProfile {
   final double? gstRate;
   final bool? gstIncluded;
   final String? upiId;
+  final String? companyName;
+  final String? companyAddress;
+  final String? companyLogoUrl;
 
   UserProfile({
     required this.id,
@@ -26,6 +29,9 @@ class UserProfile {
     this.gstRate,
     this.gstIncluded,
     this.upiId,
+    this.companyName,
+    this.companyAddress,
+    this.companyLogoUrl,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -47,6 +53,9 @@ class UserProfile {
       gstRate: (json['gst_rate'] as num?)?.toDouble(),
       gstIncluded: json['gst_included'] as bool?,
       upiId: json['upi_id']?.toString(),
+      companyName: json['company_name']?.toString(),
+      companyAddress: json['company_address']?.toString(),
+      companyLogoUrl: json['company_logo_url']?.toString(),
     );
   }
 
@@ -63,6 +72,9 @@ class UserProfile {
       'gst_rate': gstRate,
       'gst_included': gstIncluded,
       'upi_id': upiId,
+      'company_name': companyName,
+      'company_address': companyAddress,
+      'company_logo_url': companyLogoUrl,
     };
   }
 

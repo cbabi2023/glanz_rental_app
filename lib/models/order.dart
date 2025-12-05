@@ -11,7 +11,8 @@ enum OrderStatus {
   completed('completed'),
   completedWithIssues('completed_with_issues'),
   cancelled('cancelled'),
-  partiallyReturned('partially_returned');
+  partiallyReturned('partially_returned'),
+  flagged('flagged');
 
   final String value;
   const OrderStatus(this.value);
@@ -32,6 +33,8 @@ enum OrderStatus {
         return OrderStatus.cancelled;
       case 'partially_returned':
         return OrderStatus.partiallyReturned;
+      case 'flagged':
+        return OrderStatus.flagged;
       default:
         throw ArgumentError('Unknown order status: $value');
     }
@@ -210,6 +213,7 @@ class Order {
   bool get isCompletedWithIssues => status == OrderStatus.completedWithIssues;
   bool get isCancelled => status == OrderStatus.cancelled;
   bool get isPartiallyReturned => status == OrderStatus.partiallyReturned;
+  bool get isFlagged => status == OrderStatus.flagged;
   
   // Check if order is in any completed state (completed or completed_with_issues)
   bool get isAnyCompleted => isCompleted || isCompletedWithIssues;

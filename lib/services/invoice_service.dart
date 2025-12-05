@@ -14,8 +14,49 @@ import '../core/supabase_client.dart';
 ///
 /// Handles invoice PDF generation, viewing, sharing, and downloading
 class InvoiceService {
-  /// Load logo image from assets
+  /// Load logo image from user profile or assets
   static Future<pw.MemoryImage?> _loadLogoImage() async {
+    // First, try to load from user profile company logo URL
+    try {
+      final user = SupabaseService.currentUser;
+      if (user != null) {
+        final response = await SupabaseService.client
+            .from('profiles')
+            .select('company_logo_url')
+            .eq('id', user.id)
+            .single();
+        
+        final logoUrl = response['company_logo_url']?.toString();
+        if (logoUrl != null && logoUrl.isNotEmpty) {
+          try {
+            print('🔄 Loading logo from profile URL: $logoUrl');
+            final uri = Uri.parse(logoUrl);
+            final client = HttpClient();
+            final request = await client.getUrl(uri);
+            final httpResponse = await request.close();
+            if (httpResponse.statusCode == 200) {
+              final bytes = <int>[];
+              await for (final chunk in httpResponse) {
+                bytes.addAll(chunk);
+              }
+              if (bytes.isNotEmpty) {
+                print('✅ Successfully loaded logo from profile URL (${bytes.length} bytes)');
+                return pw.MemoryImage(Uint8List.fromList(bytes));
+              }
+            }
+            client.close();
+          } catch (e) {
+            print('❌ Failed to load logo from URL: $e');
+            // Continue to fallback
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ Error fetching logo URL from profile: $e');
+      // Continue to fallback
+    }
+    
+    // Fallback to loading from assets
     // Try loading from rootBundle first (for bundled assets)
     // Note: rootBundle.load() requires the path to match pubspec.yaml exactly
     final possibleAssetPaths = [
@@ -148,7 +189,24 @@ class InvoiceService {
     // Generate UPI payment string for QR code
     String? upiPaymentString;
     if (upiId != null && upiId.isNotEmpty) {
-      final merchantName = order.branch?.name ?? order.staff?.fullName ?? 'GLANZ COSTUMES';
+      // Get company name for merchant name in UPI
+      String merchantName = 'GLANZ COSTUMES';
+      try {
+        final user = SupabaseService.currentUser;
+        if (user != null) {
+          final response = await SupabaseService.client
+              .from('profiles')
+              .select('company_name')
+              .eq('id', user.id)
+              .single();
+          merchantName = response['company_name']?.toString() ?? 
+                        order.branch?.name ?? 
+                        order.staff?.fullName ?? 
+                        'GLANZ COSTUMES';
+        }
+      } catch (e) {
+        merchantName = order.branch?.name ?? order.staff?.fullName ?? 'GLANZ COSTUMES';
+      }
       upiPaymentString = _generateUpiPaymentString(
         upiId,
         order.totalAmount,
@@ -157,11 +215,36 @@ class InvoiceService {
       );
     }
 
-    // Get branch info
-    final branchName = order.branch?.name ?? 'GLANZ COSTUMES';
-    final branchAddress = order.branch?.address ?? '';
-    final branchPhone = order.branch?.phone ?? '';
-    final branchGstin = order.staff?.gstNumber ?? '';
+    // Get company details from user profile
+    String companyName = 'GLANZ COSTUMES';
+    String companyAddress = '';
+    
+    try {
+      final user = SupabaseService.currentUser;
+      if (user != null) {
+        final response = await SupabaseService.client
+            .from('profiles')
+            .select('company_name, company_address')
+            .eq('id', user.id)
+            .single();
+        
+        companyName = response['company_name']?.toString() ?? 
+                     order.branch?.name ?? 
+                     'GLANZ COSTUMES';
+        companyAddress = response['company_address']?.toString() ?? 
+                        order.branch?.address ?? 
+                        '';
+      } else {
+        // Fallback to branch info if no user
+        companyName = order.branch?.name ?? 'GLANZ COSTUMES';
+        companyAddress = order.branch?.address ?? '';
+      }
+    } catch (e) {
+      print('Error getting company details: $e');
+      // Fallback to branch info
+      companyName = order.branch?.name ?? 'GLANZ COSTUMES';
+      companyAddress = order.branch?.address ?? '';
+    }
 
     // Get dates
     final bookingDate = order.createdAt;
@@ -176,11 +259,10 @@ class InvoiceService {
     final rentalDays = endDate.difference(startDate).inDays + 1;
 
     // Parse address lines
-    final addressLines = branchAddress
+    final addressLines = companyAddress
         .split('\n')
         .where((line) => line.trim().isNotEmpty)
         .toList();
-    final phoneNumbers = branchPhone.split(',').map((p) => p.trim()).toList();
 
     pdf.addPage(
       pw.MultiPage(
@@ -239,7 +321,7 @@ class InvoiceService {
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
                               pw.Text(
-                                branchName,
+                                companyName,
                                 style: pw.TextStyle(
                                   fontSize: 22,
                                   fontWeight: pw.FontWeight.bold,
@@ -261,27 +343,6 @@ class InvoiceService {
                                         color: PdfColors.grey600,
                                       ),
                                     ),
-                                  ),
-                                ),
-                              ],
-                              if (phoneNumbers.isNotEmpty) ...[
-                                pw.SizedBox(height: 4),
-                                pw.Text(
-                                  phoneNumbers.join(', '),
-                                  style: pw.TextStyle(
-                                    fontSize: 8.5,
-                                    color: PdfColors.grey600,
-                                  ),
-                                ),
-                              ],
-                              if (branchGstin.isNotEmpty) ...[
-                                pw.SizedBox(height: 2),
-                                pw.Text(
-                                  'GSTIN: $branchGstin',
-                                  style: pw.TextStyle(
-                                    fontSize: 8,
-                                    color: PdfColors.grey600,
-                                    fontWeight: pw.FontWeight.bold,
                                   ),
                                 ),
                               ],

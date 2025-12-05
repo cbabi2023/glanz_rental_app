@@ -158,5 +158,48 @@ class AuthService {
       rethrow;
     }
   }
+
+  /// Update company details
+  Future<UserProfile> updateCompanyDetails({
+    String? companyName,
+    String? companyAddress,
+    String? companyLogoUrl,
+  }) async {
+    final user = currentUser;
+    if (user == null) {
+      throw Exception('User not authenticated');
+    }
+
+    try {
+      final updateData = <String, dynamic>{};
+
+      if (companyName != null) {
+        updateData['company_name'] = companyName.trim().isEmpty ? null : companyName.trim();
+      }
+
+      if (companyAddress != null) {
+        updateData['company_address'] = companyAddress.trim().isEmpty ? null : companyAddress.trim();
+      }
+
+      if (companyLogoUrl != null) {
+        updateData['company_logo_url'] = companyLogoUrl.trim().isEmpty ? null : companyLogoUrl.trim();
+      }
+
+      await _supabase
+          .from('profiles')
+          .update(updateData)
+          .eq('id', user.id);
+
+      // Return updated profile
+      final updatedProfile = await getUserProfile();
+      if (updatedProfile == null) {
+        throw Exception('Failed to retrieve updated profile');
+      }
+      return updatedProfile;
+    } catch (e) {
+      print('Error updating company details: $e');
+      rethrow;
+    }
+  }
 }
 

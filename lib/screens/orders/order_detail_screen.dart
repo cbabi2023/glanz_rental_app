@@ -235,7 +235,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     // Fast path: Check status first
     if (status == OrderStatus.cancelled) return _OrderCategory.cancelled;
     if (status == OrderStatus.partiallyReturned) return _OrderCategory.partiallyReturned;
-    if (status == OrderStatus.completed || status == OrderStatus.completedWithIssues) {
+    if (status == OrderStatus.completed || 
+        status == OrderStatus.completedWithIssues ||
+        status == OrderStatus.flagged) {
       return _OrderCategory.returned;
     }
     
@@ -271,6 +273,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     final isLate = DateTime.now().isAfter(endDate) && 
                    status != OrderStatus.completed &&
                    status != OrderStatus.completedWithIssues &&
+                   status != OrderStatus.flagged &&
                    status != OrderStatus.cancelled &&
                    status != OrderStatus.partiallyReturned;
     

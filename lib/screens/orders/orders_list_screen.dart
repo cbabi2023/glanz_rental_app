@@ -617,7 +617,9 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
     if (status == OrderStatus.cancelled) return _OrderCategory.cancelled;
     if (status == OrderStatus.partiallyReturned)
       return _OrderCategory.partiallyReturned;
-    if (status == OrderStatus.completed || status == OrderStatus.completedWithIssues) {
+    if (status == OrderStatus.completed || 
+        status == OrderStatus.completedWithIssues ||
+        status == OrderStatus.flagged) {
       return _OrderCategory.returned;
     }
 
@@ -654,6 +656,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
         DateTime.now().isAfter(endDate) &&
         status != OrderStatus.completed &&
         status != OrderStatus.completedWithIssues &&
+        status != OrderStatus.flagged &&
         status != OrderStatus.cancelled &&
         status != OrderStatus.partiallyReturned;
 
@@ -1068,7 +1071,9 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
     if (status == OrderStatus.cancelled) return _OrderCategory.cancelled;
     if (status == OrderStatus.partiallyReturned)
       return _OrderCategory.partiallyReturned;
-    if (status == OrderStatus.completed || status == OrderStatus.completedWithIssues) {
+    if (status == OrderStatus.completed || 
+        status == OrderStatus.completedWithIssues ||
+        status == OrderStatus.flagged) {
       return _OrderCategory.returned;
     }
 
@@ -1105,6 +1110,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
         DateTime.now().isAfter(endDate) &&
         status != OrderStatus.completed &&
         status != OrderStatus.completedWithIssues &&
+        status != OrderStatus.flagged &&
         status != OrderStatus.cancelled &&
         status != OrderStatus.partiallyReturned;
 

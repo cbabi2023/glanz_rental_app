@@ -1008,6 +1008,8 @@ class _OrderCard extends StatelessWidget {
         return Colors.red;
       case OrderStatus.partiallyReturned:
         return Colors.blue;
+      case OrderStatus.flagged:
+        return Colors.orange;
     }
   }
 
@@ -1027,6 +1029,8 @@ class _OrderCard extends StatelessWidget {
         return Icons.cancel;
       case OrderStatus.partiallyReturned:
         return Icons.history;
+      case OrderStatus.flagged:
+        return Icons.flag;
     }
   }
 
@@ -1046,6 +1050,8 @@ class _OrderCard extends StatelessWidget {
         return 'Cancelled';
       case OrderStatus.partiallyReturned:
         return 'Partially Returned';
+      case OrderStatus.flagged:
+        return 'Flagged';
     }
   }
 
