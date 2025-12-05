@@ -930,7 +930,7 @@ class InvoiceService {
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
                           pw.Text(
-                            '• ',
+                            '- ',
                             style: pw.TextStyle(
                               fontSize: 8,
                               color: PdfColors.black,
@@ -952,7 +952,7 @@ class InvoiceService {
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
                           pw.Text(
-                            '• ',
+                            '- ',
                             style: pw.TextStyle(
                               fontSize: 8,
                               color: PdfColors.black,
@@ -974,7 +974,7 @@ class InvoiceService {
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
                           pw.Text(
-                            '• ',
+                            '- ',
                             style: pw.TextStyle(
                               fontSize: 8,
                               color: PdfColors.black,
@@ -996,7 +996,7 @@ class InvoiceService {
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
                           pw.Text(
-                            '• ',
+                            '- ',
                             style: pw.TextStyle(
                               fontSize: 8,
                               color: PdfColors.black,
@@ -1018,7 +1018,7 @@ class InvoiceService {
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
                           pw.Text(
-                            '• ',
+                            '- ',
                             style: pw.TextStyle(
                               fontSize: 8,
                               color: PdfColors.black,
@@ -1040,7 +1040,7 @@ class InvoiceService {
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
                           pw.Text(
-                            '• ',
+                            '- ',
                             style: pw.TextStyle(
                               fontSize: 8,
                               color: PdfColors.black,
