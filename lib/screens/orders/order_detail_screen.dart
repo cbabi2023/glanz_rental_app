@@ -1590,62 +1590,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       const SizedBox(height: 16),
                     ],
 
-                    // Flagged Order Warning Section (only for flagged orders)
-                    if (order.isFlagged) ...[
-                      Card(
-                        elevation: 0,
-                        color: Colors.purple.shade50,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: Colors.purple.shade200, width: 1.5),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.purple.shade100,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  Icons.flag,
-                                  size: 24,
-                                  color: Colors.purple.shade700,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Flagged Order',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.purple.shade700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'This order has been flagged and requires attention.',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.purple.shade600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
                     // Late Fee Section Card (hide for flagged orders)
                     if (!order.isFlagged && (_isOrderLate(order) || (order.lateFee != null && order.lateFee! > 0)))
                       Card(
