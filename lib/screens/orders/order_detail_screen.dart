@@ -450,6 +450,197 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
   }
 
+  Future<void> _handleSaveChanges() async {
+    final order = ref.read(orderProvider(widget.orderId)).value;
+    final userProfile = ref.read(userProfileProvider).value;
+
+    if (order == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Order not found'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (userProfile?.id == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('User information missing'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Check if there are any changes
+    bool hasChanges = false;
+    final items = order.items ?? [];
+    
+    for (final item in items) {
+      if (item.id == null) continue;
+      
+      final isChecked = _itemCheckboxes[item.id!] ?? false;
+      final returnedQty = _returnedQuantities[item.id!];
+      final damageCost = _damageCosts[item.id!];
+      final damageDesc = _damageDescriptions[item.id!];
+      
+      // Check if item state differs from current state
+      if (isChecked) {
+        final currentReturnedQty = item.returnedQuantity ?? 0;
+        final currentDamageCost = item.damageCost;
+        final currentDamageDesc = item.missingNote;
+        
+        if (returnedQty != null && returnedQty != currentReturnedQty) {
+          hasChanges = true;
+          break;
+        }
+        if (damageCost != null && damageCost != (currentDamageCost ?? 0)) {
+          hasChanges = true;
+          break;
+        }
+        if (damageDesc != null && damageDesc != (currentDamageDesc ?? '')) {
+          hasChanges = true;
+          break;
+        }
+      } else if (item.isReturned || (item.returnedQuantity ?? 0) > 0) {
+        // Item was returned but now unchecked (unreturn)
+        hasChanges = true;
+        break;
+      }
+    }
+
+    if (!hasChanges) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No changes to save'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _isUpdating = true;
+    });
+
+    try {
+      final ordersService = ref.read(ordersServiceProvider);
+      final List<ItemReturn> itemReturns = [];
+
+      // Process checked items (returns)
+      for (final item in items) {
+        if (item.id == null) continue;
+        
+        final isChecked = _itemCheckboxes[item.id!] ?? false;
+        final returnedQty = _returnedQuantities[item.id!];
+        final damageCost = _damageCosts[item.id!];
+        final damageDesc = _damageDescriptions[item.id!];
+
+        if (isChecked && returnedQty != null && returnedQty > 0) {
+          // Item is being returned
+          final currentReturnedQty = item.returnedQuantity ?? 0;
+          final pendingQty = item.quantity - currentReturnedQty;
+          
+          if (returnedQty <= pendingQty) {
+            // Valid return quantity
+            itemReturns.add(ItemReturn(
+              itemId: item.id!,
+              returnStatus: returnedQty >= item.quantity ? 'returned' : 'returned',
+              actualReturnDate: DateTime.now(),
+              returnedQuantity: returnedQty,
+              damageCost: damageCost,
+              description: damageDesc?.trim().isEmpty ?? true ? null : damageDesc?.trim(),
+            ));
+          }
+        } else if (!isChecked && (item.isReturned || (item.returnedQuantity ?? 0) > 0)) {
+          // Item was returned but now unchecked (unreturn)
+          itemReturns.add(ItemReturn(
+            itemId: item.id!,
+            returnStatus: 'not_yet_returned',
+            actualReturnDate: null,
+            missingNote: null,
+          ));
+        }
+      }
+
+      // Also update damage for items that have damage but may not be returned
+      for (final item in items) {
+        if (item.id == null) continue;
+        
+        final damageCost = _damageCosts[item.id!];
+        final damageDesc = _damageDescriptions[item.id!];
+        final currentDamageCost = item.damageCost;
+        final currentDamageDesc = item.missingNote;
+        
+        // Update damage if changed
+        if ((damageCost != null && damageCost != (currentDamageCost ?? 0)) ||
+            (damageDesc != null && damageDesc != (currentDamageDesc ?? ''))) {
+          await ordersService.updateItemDamage(
+            itemId: item.id!,
+            damageCost: damageCost,
+            damageDescription: damageDesc,
+          );
+        }
+      }
+
+      if (itemReturns.isNotEmpty) {
+        await ordersService.processOrderReturn(
+          orderId: widget.orderId,
+          itemReturns: itemReturns,
+          userId: userProfile!.id,
+          lateFee: 0.0,
+        );
+      }
+
+      // Refresh order data
+      final branchId = ref.read(userProfileProvider).value?.branchId;
+      ref.invalidate(orderProvider(widget.orderId));
+      if (branchId != null) {
+        ref.invalidate(ordersProvider(OrdersParams(branchId: branchId)));
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Changes saved successfully'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(8)),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving changes: ${e.toString()}'),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(8)),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+        });
+      }
+    }
+  }
+
   Future<void> _handleStartRental(Order order) async {
     final shouldStart = await showDialog<bool>(
       context: context,
@@ -1241,183 +1432,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       const SizedBox(height: 16),
                     ],
 
-                    // Order Timeline Card
-                    Card(
-                      elevation: 0,
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(color: Colors.grey.shade200),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.timeline_outlined,
-                                  size: 20,
-                                  color: Colors.indigo.shade600,
-                                ),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'Order Timeline',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF0F1724),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-                            _OrderTimelineWidget(order: order),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Items Card
-                    if (order.items != null && order.items!.isNotEmpty) ...[
-                      Card(
-                        elevation: 0,
-                        color: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: Colors.grey.shade200),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.inventory_2_outlined,
-                                    size: 20,
-                                    color: Colors.indigo.shade600,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'Items & Return Details',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF0F1724),
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  // Mark All as Returned button (only for non-scheduled, non-cancelled orders)
-                                  if (!order.isScheduled && !order.isCancelled && canMarkReturned)
-                                    OutlinedButton(
-                                      onPressed: () {
-                                        setState(() {
-                                          for (final item in order.items!) {
-                                            if (item.id != null) {
-                                              _itemCheckboxes[item.id!] = true;
-                                              _returnedQuantities[item.id!] = item.quantity;
-                                            }
-                                          }
-                                        });
-                                      },
-                                      style: OutlinedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                        side: BorderSide(color: Colors.grey.shade300),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                      ),
-                                      child: const Text(
-                                        'Mark All as Returned',
-                                        style: TextStyle(fontSize: 12),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              ...order.items!.asMap().entries.map((entry) {
-                                final index = entry.key;
-                                final item = entry.value;
-                                // Auto-check if item is already returned
-                                final isItemReturned = item.isReturned || 
-                                    (item.returnedQuantity != null && item.returnedQuantity! > 0);
-                                final shouldBeChecked = _itemCheckboxes[item.id] ?? isItemReturned;
-                                
-                                // Initialize returned quantity if item is returned but not in state
-                                if (isItemReturned && item.id != null && !_itemCheckboxes.containsKey(item.id)) {
-                                  _returnedQuantities[item.id!] = item.returnedQuantity ?? item.quantity;
-                                  _itemCheckboxes[item.id!] = true;
-                                }
-                                
-                                return _OrderItemCard(
-                                  item: item,
-                                  index: index + 1,
-                                  isLast: index == order.items!.length - 1,
-                                  orderId: order.id,
-                                  isChecked: shouldBeChecked,
-                                  returnedQuantity: _returnedQuantities[item.id] ?? item.returnedQuantity,
-                                  damageCost: _damageCosts[item.id] ?? item.damageCost,
-                                  damageDescription: _damageDescriptions[item.id] ?? item.missingNote,
-                                  onCheckboxChanged: (checked) {
-                                    setState(() {
-                                      if (item.id != null) {
-                                        _itemCheckboxes[item.id!] = checked;
-                                        if (checked) {
-                                          _returnedQuantities[item.id!] = item.returnedQuantity ?? 0;
-                                        } else {
-                                          _returnedQuantities.remove(item.id!);
-                                          _damageCosts.remove(item.id!);
-                                          _damageDescriptions.remove(item.id!);
-                                        }
-                                      }
-                                    });
-                                  },
-                                  onReturnedQuantityChanged: (quantity) {
-                                    setState(() {
-                                      if (item.id != null) {
-                                        _returnedQuantities[item.id!] = quantity;
-                                      }
-                                    });
-                                  },
-                                  onDamageCostChanged: (cost) {
-                                    setState(() {
-                                      if (item.id != null) {
-                                        if (cost != null && cost > 0) {
-                                          _damageCosts[item.id!] = cost;
-                                        } else {
-                                          _damageCosts.remove(item.id!);
-                                        }
-                                      }
-                                    });
-                                  },
-                                  onDamageDescriptionChanged: (description) {
-                                    setState(() {
-                                      if (item.id != null) {
-                                        if (description != null && description.isNotEmpty) {
-                                          _damageDescriptions[item.id!] = description;
-                                        } else {
-                                          _damageDescriptions.remove(item.id!);
-                                        }
-                                      }
-                                    });
-                                  },
-                                  onUpdated: () {
-                                    // Refresh order data
-                                    ref.invalidate(orderProvider(order.id));
-                                  },
-                                );
-                              }),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
                     // Return Status Section (only show if order has items and is not scheduled)
                     if (order.items != null && 
                         order.items!.isNotEmpty && 
@@ -1637,7 +1651,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                             child: _ReturnStatusBox(
                                               label: 'PENDING',
                                               value: '$pendingQuantity',
-                                              detail: '$pendingCount ${pendingCount == 1 ? 'item' : 'items'}',
+                                              detail: '$pendingCount items',
                                               backgroundColor: Colors.orange.shade50,
                                               valueColor: Colors.orange.shade700,
                                             ),
@@ -1665,6 +1679,239 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
+
+                    // Items Card
+                    if (order.items != null && order.items!.isNotEmpty) ...[
+                      Card(
+                        elevation: 0,
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.inventory_2_outlined,
+                                    size: 20,
+                                    color: Colors.indigo.shade600,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      'Items & Return Details',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF0F1724),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Mark All as Returned button (only for non-scheduled, non-cancelled orders)
+                                  if (!order.isScheduled && !order.isCancelled && canMarkReturned)
+                                    Flexible(
+                                      child: OutlinedButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            for (final item in order.items!) {
+                                              if (item.id != null) {
+                                                _itemCheckboxes[item.id!] = true;
+                                                _returnedQuantities[item.id!] = item.quantity;
+                                              }
+                                            }
+                                          });
+                                        },
+                                        style: OutlinedButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          side: BorderSide(color: Colors.grey.shade300),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'Mark All as Returned',
+                                          style: TextStyle(fontSize: 12),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              ...order.items!.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final item = entry.value;
+                                // Auto-check if item is already returned
+                                final isItemReturned = item.isReturned || 
+                                    (item.returnedQuantity != null && item.returnedQuantity! > 0);
+                                final shouldBeChecked = _itemCheckboxes[item.id] ?? isItemReturned;
+                                
+                                // Initialize returned quantity if item is returned but not in state
+                                if (isItemReturned && item.id != null && !_itemCheckboxes.containsKey(item.id)) {
+                                  _returnedQuantities[item.id!] = item.returnedQuantity ?? item.quantity;
+                                  _itemCheckboxes[item.id!] = true;
+                                }
+                                
+                                return _OrderItemCard(
+                                  item: item,
+                                  index: index + 1,
+                                  isLast: index == order.items!.length - 1,
+                                  orderId: order.id,
+                                  isChecked: shouldBeChecked,
+                                  returnedQuantity: _returnedQuantities[item.id] ?? item.returnedQuantity,
+                                  damageCost: _damageCosts[item.id] ?? item.damageCost,
+                                  damageDescription: _damageDescriptions[item.id] ?? item.missingNote,
+                                  onCheckboxChanged: (checked) {
+                                    setState(() {
+                                      if (item.id != null) {
+                                        _itemCheckboxes[item.id!] = checked;
+                                        if (checked) {
+                                          _returnedQuantities[item.id!] = item.returnedQuantity ?? 0;
+                                        } else {
+                                          _returnedQuantities.remove(item.id!);
+                                          _damageCosts.remove(item.id!);
+                                          _damageDescriptions.remove(item.id!);
+                                        }
+                                      }
+                                    });
+                                  },
+                                  onReturnedQuantityChanged: (quantity) {
+                                    setState(() {
+                                      if (item.id != null) {
+                                        _returnedQuantities[item.id!] = quantity;
+                                      }
+                                    });
+                                  },
+                                  onDamageCostChanged: (cost) {
+                                    setState(() {
+                                      if (item.id != null) {
+                                        if (cost != null && cost > 0) {
+                                          _damageCosts[item.id!] = cost;
+                                        } else {
+                                          _damageCosts.remove(item.id!);
+                                        }
+                                      }
+                                    });
+                                  },
+                                  onDamageDescriptionChanged: (description) {
+                                    setState(() {
+                                      if (item.id != null) {
+                                        if (description != null && description.isNotEmpty) {
+                                          _damageDescriptions[item.id!] = description;
+                                        } else {
+                                          _damageDescriptions.remove(item.id!);
+                                        }
+                                      }
+                                    });
+                                  },
+                                  onUpdated: () {
+                                    // Refresh order data
+                                    ref.invalidate(orderProvider(order.id));
+                                  },
+                                );
+                              }),
+                              // Save Changes Button (only show when at least one checkbox is checked)
+                              Builder(
+                                builder: (context) {
+                                  // Check if any checkbox is checked
+                                  final hasCheckedItems = _itemCheckboxes.values.any((checked) => checked);
+                                  
+                                  if (!order.isScheduled && !order.isCancelled && canMarkReturned && hasCheckedItems) {
+                                    return Column(
+                                      children: [
+                                        const SizedBox(height: 20),
+                                        Divider(color: Colors.grey.shade200, height: 1),
+                                        const SizedBox(height: 16),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: ElevatedButton.icon(
+                                            onPressed: _isUpdating ? null : _handleSaveChanges,
+                                            icon: _isUpdating
+                                                ? const SizedBox(
+                                                    width: 20,
+                                                    height: 20,
+                                                    child: CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                                    ),
+                                                  )
+                                                : const Icon(Icons.save_outlined, size: 20),
+                                            label: Text(
+                                              _isUpdating ? 'Saving Changes...' : 'Save Changes',
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            style: ElevatedButton.styleFrom(
+                                              padding: const EdgeInsets.symmetric(vertical: 16),
+                                              backgroundColor: Colors.green.shade600,
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              elevation: 0,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }
+                                  return const SizedBox.shrink();
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Order Timeline Card (placed after Return Status)
+                    Card(
+                      elevation: 0,
+                      color: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: Colors.grey.shade200),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.timeline_outlined,
+                                  size: 20,
+                                  color: Colors.indigo.shade600,
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Order Timeline',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F1724),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            _OrderTimelineWidget(order: order),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
 
                     // Late Fee Section Card (hide for flagged orders)
                     if (!order.isFlagged && (_isOrderLate(order) || (order.lateFee != null && order.lateFee! > 0)))
@@ -1819,7 +2066,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     if (_isOrderLate(order) || (order.lateFee != null && order.lateFee! > 0))
                       const SizedBox(height: 16),
 
-                    // Pricing Breakdown Card
+                    // Summary Card (matching website design)
                     Card(
                       elevation: 0,
                       color: Colors.white,
@@ -1835,13 +2082,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                             Row(
                               children: [
                                 Icon(
-                                  Icons.receipt_long_outlined,
+                                  Icons.description_outlined,
                                   size: 20,
-                                  color: Colors.teal.shade600,
+                                  color: Colors.indigo.shade600,
                                 ),
                                 const SizedBox(width: 8),
                                 const Text(
-                                  'Pricing Breakdown',
+                                  'Summary',
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -1851,38 +2098,287 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               ],
                             ),
                             const SizedBox(height: 20),
+                            // Subtotal
                             if (order.subtotal != null) ...[
-                              _PricingRow(
-                                label: 'Subtotal',
-                                amount: order.subtotal!,
-                                isTotal: false,
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Subtotal',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade700,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Text(
+                                    '₹${NumberFormat('#,##0.00').format(order.subtotal!)}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade900,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 12),
+                              Divider(color: Colors.grey.shade200, height: 24),
                             ],
-                            if (order.gstAmount != null &&
-                                order.gstAmount! > 0) ...[
-                              _PricingRow(
-                                label: 'GST',
-                                amount: order.gstAmount!,
-                                isTotal: false,
+                            // GST
+                            if (order.gstAmount != null && order.gstAmount! > 0) ...[
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'GST (5%)',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade700,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Text(
+                                    '₹${NumberFormat('#,##0.00').format(order.gstAmount!)}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade900,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 12),
+                              Divider(color: Colors.grey.shade200, height: 24),
                             ],
-                            if (order.lateFee != null &&
-                                order.lateFee! > 0) ...[
-                              _PricingRow(
-                                label: 'Late Fee',
-                                amount: order.lateFee!,
-                                isTotal: false,
-                                isLateFee: true,
+                            // Damage Fees (itemized breakdown)
+                            Builder(
+                              builder: (context) {
+                                final itemsWithDamage = order.items?.where((item) => 
+                                  item.damageCost != null && item.damageCost! > 0
+                                ).toList() ?? [];
+                                
+                                if (itemsWithDamage.isNotEmpty) {
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            'Damage Fees',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.grey.shade700,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          const SizedBox(),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      ...itemsWithDamage.map((item) {
+                                        return Padding(
+                                          padding: const EdgeInsets.only(left: 16, bottom: 6),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  '- ${item.productName ?? 'Item'} (${item.quantity} qty)${item.missingNote != null && item.missingNote!.isNotEmpty ? ' - ${item.missingNote}' : ''}',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey.shade600,
+                                                  ),
+                                                ),
+                                              ),
+                                              Text(
+                                                '₹${NumberFormat('#,##0.00').format(item.damageCost!)}',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.grey.shade900,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            'Total Damage Fee',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.grey.shade700,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          Text(
+                                            '₹${NumberFormat('#,##0.00').format(order.damageFeeTotal ?? 0.0)}',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.red.shade700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Divider(color: Colors.grey.shade200, height: 24),
+                                    ],
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                            // Return Status Section
+                            if (order.items != null && order.items!.isNotEmpty && !order.isScheduled) ...[
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'RETURN STATUS',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey.shade700,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Builder(
+                                      builder: (context) {
+                                        final totalQuantity = order.items!.fold<int>(
+                                          0, 
+                                          (sum, item) => sum + item.quantity,
+                                        );
+                                        final returnedQuantity = order.items!.fold<int>(
+                                          0,
+                                          (sum, item) {
+                                            int returnedQty;
+                                            if (item.isReturned) {
+                                              returnedQty = item.returnedQuantity ?? item.quantity;
+                                            } else {
+                                              returnedQty = item.returnedQuantity ?? 0;
+                                            }
+                                            return sum + returnedQty;
+                                          },
+                                        );
+                                        final missingQuantity = totalQuantity - returnedQuantity;
+                                        
+                                        return Column(
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Text(
+                                                  'Total Quantity',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey.shade600,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  '$totalQuantity',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.grey.shade700,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Text(
+                                                  'Returned',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.green.shade700,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  '$returnedQuantity',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.green.shade700,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            if (missingQuantity > 0) ...[
+                                              const SizedBox(height: 8),
+                                              Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: [
+                                                  Text(
+                                                    'Missing',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.red.shade700,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    '$missingQuantity',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Colors.red.shade700,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 16),
                             ],
-                            Divider(color: Colors.grey.shade300, height: 24),
-                            _PricingRow(
-                              label: 'Total Amount',
-                              amount: order.totalAmount,
-                              isTotal: true,
+                            // Total
+                            Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [Colors.grey.shade50, Colors.grey.shade100],
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Total',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade900,
+                                    ),
+                                  ),
+                                  Text(
+                                    '₹${NumberFormat('#,##0.00').format(order.totalAmount)}',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -1951,34 +2447,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                 ),
                               ),
                             ),
-                          if (canMarkReturned) ...[
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () => context.push('/orders/${order.id}/return'),
-                                icon: const Icon(
-                                  Icons.check_circle_outline,
-                                  size: 20,
-                                ),
-                                label: const Text(
-                                  'Process Return',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  backgroundColor: Colors.green.shade600,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  elevation: 0,
-                                ),
-                              ),
-                            ),
-                          ],
                           if (canEdit) ...[
                             if (canMarkReturned || canStartRental) const SizedBox(height: 8),
                             SizedBox(
@@ -3526,6 +3994,8 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
   List<Map<String, dynamic>>? _timelineEvents;
   bool _isLoading = true;
   String? _error;
+  bool _isExpanded = false;
+  static const int _initialItemCount = 3; // Show first 3 items initially
 
   @override
   void initState() {
@@ -3728,33 +4198,75 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
       );
     }
 
-    return Column(
-      children: _timelineEvents!.asMap().entries.map((entry) {
-        final index = entry.key;
-        final event = entry.value;
-        final isLast = index == _timelineEvents!.length - 1;
-        final action = event['action'] as String;
-        final color = _getActionColor(action);
-        final icon = _getActionIcon(action);
-        final label = _getActionLabel(action, event);
-        final userName = event['user_name'] as String? ?? 'Unknown';
-        final notes = event['notes'] as String?;
-        final createdAt = event['created_at'] as String;
+    // Determine which items to show
+    final itemsToShow = _isExpanded 
+        ? _timelineEvents! 
+        : _timelineEvents!.take(_initialItemCount).toList();
+    final hasMoreItems = _timelineEvents!.length > _initialItemCount;
 
-        return _TimelineItemWidget(
-          event: _TimelineEvent(
-            icon: icon,
-            title: label,
-            description: notes ?? '',
-            date: DateTime.parse(createdAt),
-            color: color,
-            isCompleted: true,
-            userName: userName,
+    return Column(
+      children: [
+        ...itemsToShow.asMap().entries.map((entry) {
+          final index = entry.key;
+          final event = entry.value;
+          final isLast = _isExpanded 
+              ? (index == itemsToShow.length - 1)
+              : (index == itemsToShow.length - 1 && !hasMoreItems);
+          final action = event['action'] as String;
+          final color = _getActionColor(action);
+          final icon = _getActionIcon(action);
+          final label = _getActionLabel(action, event);
+          final userName = event['user_name'] as String? ?? 'Unknown';
+          final notes = event['notes'] as String?;
+          final createdAt = event['created_at'] as String;
+
+          return _TimelineItemWidget(
+            event: _TimelineEvent(
+              icon: icon,
+              title: label,
+              description: notes ?? '',
+              date: DateTime.parse(createdAt),
+              color: color,
+              isCompleted: true,
+              userName: userName,
+            ),
+            isLast: isLast,
+            formatDateTime: _formatDateTime12Hour,
+          );
+        }).toList(),
+        // View All / View Less button
+        if (hasMoreItems)
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: OutlinedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _isExpanded = !_isExpanded;
+                });
+              },
+              icon: Icon(
+                _isExpanded ? Icons.expand_less : Icons.expand_more,
+                size: 18,
+              ),
+              label: Text(
+                _isExpanded 
+                    ? 'View Less' 
+                    : 'View All (${_timelineEvents!.length - _initialItemCount} more)',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                side: BorderSide(color: Colors.indigo.shade300),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
           ),
-          isLast: isLast,
-          formatDateTime: _formatDateTime12Hour,
-        );
-      }).toList(),
+      ],
     );
   }
 }
