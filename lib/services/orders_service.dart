@@ -413,4 +413,83 @@ class OrdersService {
         .map((json) => Order.fromJson(json as Map<String, dynamic>))
         .toList();
   }
+
+  /// Get order timeline events from audit logs
+  Future<List<Map<String, dynamic>>> getOrderTimeline(String orderId) async {
+    try {
+      // Fetch audit logs for this order
+      final auditResponse = await _supabase
+          .from('order_return_audit')
+          .select(
+            'id, order_id, order_item_id, action, previous_status, new_status, '
+            'user_id, notes, created_at, '
+            'user:profiles!order_return_audit_user_id_fkey(full_name, username)',
+          )
+          .eq('order_id', orderId)
+          .order('created_at', ascending: true);
+
+      final auditLogs = (auditResponse as List).cast<Map<String, dynamic>>();
+
+      // Also get order creation info from orders table
+      final orderResponse = await _supabase
+          .from('orders')
+          .select(
+            'id, created_at, status, staff_id, '
+            'staff:profiles!orders_staff_id_fkey(full_name, username)',
+          )
+          .eq('id', orderId)
+          .single();
+
+      final events = <Map<String, dynamic>>[];
+
+      // Add audit log events
+      for (final log in auditLogs) {
+        final user = log['user'] as Map<String, dynamic>?;
+        events.add({
+          'id': log['id'],
+          'order_id': log['order_id'],
+          'order_item_id': log['order_item_id'],
+          'action': log['action'],
+          'previous_status': log['previous_status'],
+          'new_status': log['new_status'],
+          'user_id': log['user_id'],
+          'user_name': user?['full_name'] ?? user?['username'] ?? 'Unknown',
+          'notes': log['notes'],
+          'created_at': log['created_at'],
+        });
+      }
+
+      // Check if order_created event already exists in audit logs
+      final hasOrderCreatedEvent = auditLogs.any(
+        (log) => log['action'] == 'order_created',
+      );
+
+      // Add order creation event only if not already in audit logs
+      if (!hasOrderCreatedEvent) {
+        final orderData = orderResponse;
+        final staff = orderData['staff'] as Map<String, dynamic>?;
+        events.add({
+          'id': 'created-${orderData['id']}',
+          'order_id': orderData['id'],
+          'action': 'order_created',
+          'new_status': orderData['status'],
+          'user_id': orderData['staff_id'],
+          'user_name': staff?['full_name'] ?? staff?['username'] ?? 'Unknown',
+          'created_at': orderData['created_at'],
+        });
+      }
+
+      // Sort by created_at ascending (oldest first for timeline flow)
+      events.sort((a, b) {
+        final dateA = DateTime.parse(a['created_at'] as String);
+        final dateB = DateTime.parse(b['created_at'] as String);
+        return dateA.compareTo(dateB);
+      });
+
+      return events;
+    } catch (e) {
+      print('Error fetching order timeline: $e');
+      return [];
+    }
+  }
 }

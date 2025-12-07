@@ -8,6 +8,7 @@ import '../../providers/auth_provider.dart';
 import '../../models/order.dart';
 import '../../models/order_item.dart';
 import '../../services/invoice_service.dart';
+import '../../services/orders_service.dart';
 
 /// Order Detail Screen
 ///
@@ -3146,186 +3147,211 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
 /// Order Timeline Widget
 /// 
 /// Displays the order's journey from creation to completion
-class _OrderTimelineWidget extends StatelessWidget {
+/// Uses real audit log data from order_return_audit table (matching website)
+class _OrderTimelineWidget extends StatefulWidget {
   final Order order;
 
   const _OrderTimelineWidget({required this.order});
 
-  String _formatDateTime12Hour(DateTime date) {
-    final hour = date.hour;
-    final minute = date.minute;
-    final period = hour >= 12 ? 'PM' : 'AM';
-    final hour12 = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-    final minuteStr = minute.toString().padLeft(2, '0');
-    
-    final dateStr = DateFormat('dd MMM yyyy').format(date);
-    return '$dateStr, $hour12:$minuteStr $period';
+  @override
+  State<_OrderTimelineWidget> createState() => _OrderTimelineWidgetState();
+}
+
+class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
+  List<Map<String, dynamic>>? _timelineEvents;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTimeline();
   }
 
-  List<_TimelineEvent> _buildTimelineEvents() {
-    final events = <_TimelineEvent>[];
-    final now = DateTime.now();
-
-    // 1. Order Created
-    events.add(_TimelineEvent(
-      icon: Icons.add_circle_outline,
-      title: 'Order Created',
-      description: 'Invoice #${order.invoiceNumber}',
-      date: order.createdAt,
-      color: Colors.blue,
-      isCompleted: true,
-      role: order.staff?.role.value ?? 'staff',
-      staffName: order.staff?.fullName,
-    ));
-
-    // 2. Booking Date (if different from created)
-    if (order.bookingDate != null) {
-      try {
-        final bookingDate = DateTime.parse(order.bookingDate!);
-        if (bookingDate.difference(order.createdAt).inMinutes.abs() > 1) {
-          events.add(_TimelineEvent(
-            icon: Icons.calendar_today_outlined,
-            title: 'Booking Confirmed',
-            description: 'Order booked',
-            date: bookingDate,
-            color: Colors.purple,
-            isCompleted: true,
-          ));
-        }
-      } catch (e) {
-        // Skip if date parsing fails
-      }
-    }
-
-    // 3. Scheduled Status
-    if (order.isScheduled) {
-      events.add(_TimelineEvent(
-        icon: Icons.schedule_outlined,
-        title: 'Scheduled',
-        description: 'Rental scheduled to start',
-        date: order.startDatetime != null 
-            ? DateTime.parse(order.startDatetime!) 
-            : DateTime.parse(order.startDate),
-        color: Colors.orange,
-        isCompleted: false,
-        isPending: true,
-      ));
-    }
-
-    // 4. Start Rental
-    if (order.startDatetime != null) {
-      try {
-        final startDate = DateTime.parse(order.startDatetime!);
-        events.add(_TimelineEvent(
-          icon: Icons.play_circle_outline,
-          title: 'Rental Started',
-          description: 'Rental period began',
-          date: startDate,
-          color: Colors.green,
-          isCompleted: !order.isScheduled,
-          isPending: order.isScheduled,
-        ));
-      } catch (e) {
-        // Skip if date parsing fails
-      }
-    } else if (!order.isScheduled) {
-      // If no start_datetime but order is active, use start_date
-      try {
-        final startDate = DateTime.parse(order.startDate);
-        events.add(_TimelineEvent(
-          icon: Icons.play_circle_outline,
-          title: 'Rental Started',
-          description: 'Rental period began',
-          date: startDate,
-          color: Colors.green,
-          isCompleted: order.isActive || order.isPendingReturn || order.isPartiallyReturned || order.isCompleted,
-        ));
-      } catch (e) {
-        // Skip if date parsing fails
-      }
-    }
-
-    // 5. End Rental Date
+  Future<void> _loadTimeline() async {
     try {
-      final endDate = order.endDatetime != null 
-          ? DateTime.parse(order.endDatetime!) 
-          : DateTime.parse(order.endDate);
-      events.add(_TimelineEvent(
-        icon: Icons.event_outlined,
-        title: 'Rental End Date',
-        description: 'Scheduled return date',
-        date: endDate,
-        color: Colors.teal,
-        isCompleted: order.isCompleted || order.isCancelled,
-        isLate: now.isAfter(endDate) && !order.isCompleted && !order.isCancelled,
-      ));
+      final events = await OrdersService().getOrderTimeline(widget.order.id);
+      if (mounted) {
+        setState(() {
+          _timelineEvents = events;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      // Skip if date parsing fails
-    }
-
-    // 6. Partially Returned
-    if (order.isPartiallyReturned) {
-      final returnedItems = order.items?.where((item) => item.isReturned).toList() ?? [];
-      if (returnedItems.isNotEmpty) {
-        final latestReturn = returnedItems
-            .where((item) => item.actualReturnDate != null)
-            .map((item) => item.actualReturnDate!)
-            .fold<DateTime?>(null, (latest, current) {
-              return latest == null || current.isAfter(latest) ? current : latest;
-            });
-        
-        if (latestReturn != null) {
-          events.add(_TimelineEvent(
-            icon: Icons.assignment_return_outlined,
-            title: 'Partially Returned',
-            description: '${returnedItems.length} item(s) returned',
-            date: latestReturn,
-            color: Colors.blue,
-            isCompleted: true,
-          ));
-        }
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
       }
     }
+  }
 
-    // 7. Completed
-    if (order.isCompleted) {
-      events.add(_TimelineEvent(
-        icon: Icons.check_circle_outline,
-        title: 'Order Completed',
-        description: 'All items returned',
-        date: now, // Use current time as placeholder, ideally from audit log
-        color: Colors.green,
-        isCompleted: true,
-        role: order.staff?.role.value,
-        staffName: order.staff?.fullName,
-      ));
+  String _formatDateTime12Hour(String dateString) {
+    try {
+      final date = DateTime.parse(dateString);
+      final hour = date.hour;
+      final minute = date.minute;
+      final period = hour >= 12 ? 'PM' : 'AM';
+      final hour12 = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+      final minuteStr = minute.toString().padLeft(2, '0');
+      
+      final dateStr = DateFormat('dd MMM yyyy').format(date);
+      return '$dateStr, $hour12:$minuteStr $period';
+    } catch (e) {
+      return dateString;
     }
+  }
 
-    // 8. Cancelled
-    if (order.isCancelled) {
-      events.add(_TimelineEvent(
-        icon: Icons.cancel_outlined,
-        title: 'Order Cancelled',
-        description: 'Order was cancelled',
-        date: now, // Use current time as placeholder, ideally from audit log
-        color: Colors.red,
-        isCompleted: true,
-        role: order.staff?.role.value,
-        staffName: order.staff?.fullName,
-      ));
+  IconData _getActionIcon(String action) {
+    switch (action) {
+      case 'order_created':
+        return Icons.description_outlined;
+      case 'order_scheduled':
+        return Icons.calendar_today_outlined;
+      case 'rental_started':
+        return Icons.play_circle_outlined;
+      case 'order_edited':
+        return Icons.edit_outlined;
+      case 'billing_updated':
+        return Icons.attach_money_outlined;
+      case 'status_changed':
+        return Icons.arrow_forward_outlined;
+      case 'marked_returned':
+      case 'item_returned':
+      case 'all_items_returned':
+        return Icons.check_circle_outlined;
+      case 'item_reverted':
+        return Icons.rotate_left_outlined;
+      case 'marked_missing':
+        return Icons.cancel_outlined;
+      case 'partial_return':
+        return Icons.check_circle_outline;
+      case 'order_completed':
+        return Icons.check_circle_outlined;
+      case 'order_cancelled':
+        return Icons.block_outlined;
+      case 'order_pending_return':
+        return Icons.schedule_outlined;
+      case 'updated_return_date':
+        return Icons.access_time_outlined;
+      case 'flagged':
+        return Icons.flag_outlined;
+      default:
+        return Icons.access_time_outlined;
     }
+  }
 
-    // Sort events by date
-    events.sort((a, b) => a.date.compareTo(b.date));
+  String _getActionLabel(String action, Map<String, dynamic> event) {
+    switch (action) {
+      case 'order_created':
+        return 'Order Created';
+      case 'order_scheduled':
+        return 'Scheduled';
+      case 'rental_started':
+        return 'Rental Started';
+      case 'order_edited':
+        return 'Order Updated';
+      case 'billing_updated':
+        return 'Billing Updated';
+      case 'status_changed':
+        final newStatus = event['new_status'] as String?;
+        if (newStatus == 'completed') {
+          return 'Completed';
+        } else if (newStatus == 'cancelled') {
+          return 'Cancelled';
+        } else if (newStatus == 'partially_returned') {
+          return 'Partial Return';
+        } else if (newStatus == 'flagged') {
+          return 'Flagged';
+        }
+        return 'Status Changed';
+      case 'marked_returned':
+      case 'item_returned':
+      case 'all_items_returned':
+        return 'Items Returned';
+      case 'partial_return':
+        return 'Partial Return';
+      case 'order_completed':
+        return 'Completed';
+      case 'items_reverted':
+        return 'Items Reverted';
+      case 'items_marked_missing':
+        return 'Items Missing';
+      case 'items_updated':
+        return 'Items Updated';
+      case 'order_cancelled':
+        return 'Cancelled';
+      case 'order_pending_return':
+        return 'Pending Return';
+      case 'updated_return_date':
+        return 'Return Date Updated';
+      default:
+        return action.replaceAll('_', ' ').split(' ').map((word) {
+          if (word.isEmpty) return word;
+          return word[0].toUpperCase() + word.substring(1);
+        }).join(' ');
+    }
+  }
 
-    return events;
+  Color _getActionColor(String action) {
+    switch (action) {
+      case 'order_created':
+        return Colors.blue;
+      case 'order_scheduled':
+        return Colors.indigo;
+      case 'rental_started':
+        return Colors.green;
+      case 'order_edited':
+        return Colors.amber;
+      case 'billing_updated':
+        return Colors.purple;
+      case 'status_changed':
+        return Colors.purple;
+      case 'marked_returned':
+      case 'item_returned':
+        return Colors.green;
+      case 'item_reverted':
+        return Colors.orange;
+      case 'marked_missing':
+        return Colors.red;
+      case 'partial_return':
+        return Colors.yellow;
+      case 'order_completed':
+        return Colors.green;
+      case 'order_cancelled':
+        return Colors.red;
+      case 'order_pending_return':
+        return Colors.yellow;
+      default:
+        return Colors.grey;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final events = _buildTimelineEvents();
+    if (_isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
-    if (events.isEmpty) {
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Text(
+            'Failed to load timeline: $_error',
+            style: const TextStyle(color: Colors.red),
+          ),
+        ),
+      );
+    }
+
+    if (_timelineEvents == null || _timelineEvents!.isEmpty) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(20),
@@ -3338,13 +3364,28 @@ class _OrderTimelineWidget extends StatelessWidget {
     }
 
     return Column(
-      children: events.asMap().entries.map((entry) {
+      children: _timelineEvents!.asMap().entries.map((entry) {
         final index = entry.key;
         final event = entry.value;
-        final isLast = index == events.length - 1;
+        final isLast = index == _timelineEvents!.length - 1;
+        final action = event['action'] as String;
+        final color = _getActionColor(action);
+        final icon = _getActionIcon(action);
+        final label = _getActionLabel(action, event);
+        final userName = event['user_name'] as String? ?? 'Unknown';
+        final notes = event['notes'] as String?;
+        final createdAt = event['created_at'] as String;
 
         return _TimelineItemWidget(
-          event: event,
+          event: _TimelineEvent(
+            icon: icon,
+            title: label,
+            description: notes ?? '',
+            date: DateTime.parse(createdAt),
+            color: color,
+            isCompleted: true,
+            userName: userName,
+          ),
           isLast: isLast,
           formatDateTime: _formatDateTime12Hour,
         );
@@ -3360,10 +3401,7 @@ class _TimelineEvent {
   final DateTime date;
   final Color color;
   final bool isCompleted;
-  final bool isPending;
-  final bool isLate;
-  final String? role;
-  final String? staffName;
+  final String? userName;
 
   _TimelineEvent({
     required this.icon,
@@ -3372,17 +3410,14 @@ class _TimelineEvent {
     required this.date,
     required this.color,
     this.isCompleted = false,
-    this.isPending = false,
-    this.isLate = false,
-    this.role,
-    this.staffName,
+    this.userName,
   });
 }
 
 class _TimelineItemWidget extends StatelessWidget {
   final _TimelineEvent event;
   final bool isLast;
-  final String Function(DateTime) formatDateTime;
+  final String Function(String) formatDateTime;
 
   const _TimelineItemWidget({
     required this.event,
@@ -3404,9 +3439,7 @@ class _TimelineItemWidget extends StatelessWidget {
               decoration: BoxDecoration(
                 color: event.isCompleted 
                     ? event.color 
-                    : (event.isPending 
-                        ? event.color.withOpacity(0.3)
-                        : Colors.grey.shade300),
+                    : Colors.grey.shade300,
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: event.isCompleted 
@@ -3419,9 +3452,7 @@ class _TimelineItemWidget extends StatelessWidget {
                 event.icon,
                 color: event.isCompleted 
                     ? Colors.white 
-                    : (event.isPending 
-                        ? event.color 
-                        : Colors.grey.shade600),
+                    : Colors.grey.shade600,
                 size: 20,
               ),
             ),
@@ -3443,100 +3474,76 @@ class _TimelineItemWidget extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Badge with title
                 Row(
                   children: [
-                    Expanded(
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: event.color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: event.color.withOpacity(0.3)),
+                      ),
                       child: Text(
                         event.title,
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: event.isLate ? Colors.red.shade700 : const Color(0xFF0F1724),
+                          color: event.color,
                         ),
                       ),
                     ),
-                    if (event.isPending)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.orange.shade300),
-                        ),
+                    if (event.description.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
                         child: Text(
-                          'Pending',
+                          event.description,
                           style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.orange.shade700,
-                          ),
-                        ),
-                      ),
-                    if (event.isLate)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.red.shade300),
-                        ),
-                        child: Text(
-                          'Late',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.red.shade700,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  event.description,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  formatDateTime(event.date),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                if (event.role != null || event.staffName != null) ...[
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.badge_outlined,
-                        size: 12,
-                        color: Colors.grey.shade500,
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          [
-                            if (event.staffName != null) event.staffName,
-                            if (event.role != null) 
-                              '(${event.role!.replaceAll('_', ' ').split(' ').map((word) => word.isEmpty ? '' : word[0].toUpperCase() + word.substring(1)).join(' ')})'
-                          ].where((s) => s != null && s.isNotEmpty).join(' - '),
-                          style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 12,
                             color: Colors.grey.shade600,
-                            fontStyle: FontStyle.italic,
                           ),
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
-                  ),
-                ],
+                  ],
+                ),
+                const SizedBox(height: 6),
+                // User name and date
+                Row(
+                  children: [
+                    Icon(
+                      Icons.person_outline,
+                      size: 14,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      event.userName ?? 'Unknown',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '•',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade400,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      formatDateTime(event.date.toIso8601String()),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
