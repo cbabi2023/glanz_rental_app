@@ -28,6 +28,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   bool _isSharingInvoice = false;
   bool _isDownloadingInvoice = false;
   bool _isPrintingInvoice = false;
+  
+  // State for item return management
+  final Map<String, bool> _itemCheckboxes = {}; // itemId -> isChecked
+  final Map<String, int> _returnedQuantities = {}; // itemId -> returned quantity
+  final Map<String, double> _damageCosts = {}; // itemId -> damage cost
+  final Map<String, String> _damageDescriptions = {}; // itemId -> damage description
 
   Future<void> _handleInvoiceAction(String action, Order order) async {
     // Set loading state for specific action
@@ -1297,7 +1303,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   ),
                                   const SizedBox(width: 8),
                                   const Text(
-                                    'Order Items',
+                                    'Items & Return Details',
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
@@ -1305,34 +1311,104 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     ),
                                   ),
                                   const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.indigo.shade50,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      '${order.items!.length} ${order.items!.length == 1 ? 'item' : 'items'}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.indigo.shade700,
+                                  // Mark All as Returned button (only for non-scheduled, non-cancelled orders)
+                                  if (!order.isScheduled && !order.isCancelled && canMarkReturned)
+                                    OutlinedButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          for (final item in order.items!) {
+                                            if (item.id != null) {
+                                              _itemCheckboxes[item.id!] = true;
+                                              _returnedQuantities[item.id!] = item.quantity;
+                                            }
+                                          }
+                                        });
+                                      },
+                                      style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        side: BorderSide(color: Colors.grey.shade300),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Mark All as Returned',
+                                        style: TextStyle(fontSize: 12),
                                       ),
                                     ),
-                                  ),
                                 ],
                               ),
                               const SizedBox(height: 16),
                               ...order.items!.asMap().entries.map((entry) {
                                 final index = entry.key;
                                 final item = entry.value;
+                                // Auto-check if item is already returned
+                                final isItemReturned = item.isReturned || 
+                                    (item.returnedQuantity != null && item.returnedQuantity! > 0);
+                                final shouldBeChecked = _itemCheckboxes[item.id] ?? isItemReturned;
+                                
+                                // Initialize returned quantity if item is returned but not in state
+                                if (isItemReturned && item.id != null && !_itemCheckboxes.containsKey(item.id)) {
+                                  _returnedQuantities[item.id!] = item.returnedQuantity ?? item.quantity;
+                                  _itemCheckboxes[item.id!] = true;
+                                }
+                                
                                 return _OrderItemCard(
                                   item: item,
                                   index: index + 1,
                                   isLast: index == order.items!.length - 1,
+                                  orderId: order.id,
+                                  isChecked: shouldBeChecked,
+                                  returnedQuantity: _returnedQuantities[item.id] ?? item.returnedQuantity,
+                                  damageCost: _damageCosts[item.id] ?? item.damageCost,
+                                  damageDescription: _damageDescriptions[item.id] ?? item.missingNote,
+                                  onCheckboxChanged: (checked) {
+                                    setState(() {
+                                      if (item.id != null) {
+                                        _itemCheckboxes[item.id!] = checked;
+                                        if (checked) {
+                                          _returnedQuantities[item.id!] = item.returnedQuantity ?? 0;
+                                        } else {
+                                          _returnedQuantities.remove(item.id!);
+                                          _damageCosts.remove(item.id!);
+                                          _damageDescriptions.remove(item.id!);
+                                        }
+                                      }
+                                    });
+                                  },
+                                  onReturnedQuantityChanged: (quantity) {
+                                    setState(() {
+                                      if (item.id != null) {
+                                        _returnedQuantities[item.id!] = quantity;
+                                      }
+                                    });
+                                  },
+                                  onDamageCostChanged: (cost) {
+                                    setState(() {
+                                      if (item.id != null) {
+                                        if (cost != null && cost > 0) {
+                                          _damageCosts[item.id!] = cost;
+                                        } else {
+                                          _damageCosts.remove(item.id!);
+                                        }
+                                      }
+                                    });
+                                  },
+                                  onDamageDescriptionChanged: (description) {
+                                    setState(() {
+                                      if (item.id != null) {
+                                        if (description != null && description.isNotEmpty) {
+                                          _damageDescriptions[item.id!] = description;
+                                        } else {
+                                          _damageDescriptions.remove(item.id!);
+                                        }
+                                      }
+                                    });
+                                  },
+                                  onUpdated: () {
+                                    // Refresh order data
+                                    ref.invalidate(orderProvider(order.id));
+                                  },
                                 );
                               }),
                             ],
@@ -2071,16 +2147,42 @@ class _DateInfoWidget extends StatelessWidget {
   }
 }
 
-class _OrderItemCard extends StatelessWidget {
+class _OrderItemCard extends StatefulWidget {
   final OrderItem item;
   final int index;
   final bool isLast;
+  final String orderId;
+  final bool isChecked;
+  final int? returnedQuantity;
+  final double? damageCost;
+  final String? damageDescription;
+  final ValueChanged<bool>? onCheckboxChanged;
+  final ValueChanged<int>? onReturnedQuantityChanged;
+  final ValueChanged<double?>? onDamageCostChanged;
+  final ValueChanged<String?>? onDamageDescriptionChanged;
+  final VoidCallback? onUpdated;
 
   const _OrderItemCard({
     required this.item,
     required this.index,
     required this.isLast,
+    required this.orderId,
+    this.isChecked = false,
+    this.returnedQuantity,
+    this.damageCost,
+    this.damageDescription,
+    this.onCheckboxChanged,
+    this.onReturnedQuantityChanged,
+    this.onDamageCostChanged,
+    this.onDamageDescriptionChanged,
+    this.onUpdated,
   });
+
+  @override
+  State<_OrderItemCard> createState() => _OrderItemCardState();
+}
+
+class _OrderItemCardState extends State<_OrderItemCard> {
 
   void _showImagePreview(
     BuildContext context,
@@ -2096,7 +2198,7 @@ class _OrderItemCard extends StatelessWidget {
       pageBuilder: (context, animation, secondaryAnimation) {
         return _ImagePreviewModal(
           imageUrl: imageUrl,
-          productName: productName ?? 'Item ${index + 1}',
+          productName: productName ?? 'Item ${widget.index}',
         );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
@@ -2122,144 +2224,463 @@ class _OrderItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Item Image
-            InkWell(
-              onTap: item.photoUrl.isNotEmpty
-                  ? () => _showImagePreview(
-                      context,
-                      item.photoUrl,
-                      item.productName,
-                    )
-                  : null,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: item.photoUrl.isNotEmpty
-                        ? Colors.blue.shade200
-                        : Colors.grey.shade200,
-                    width: item.photoUrl.isNotEmpty ? 1.5 : 1,
-                  ),
-                  color: Colors.grey.shade50,
-                ),
-                child: item.photoUrl.isNotEmpty
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          item.photoUrl,
-                          width: 70,
-                          height: 70,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Icon(
-                              Icons.image_outlined,
-                              size: 32,
-                              color: Colors.grey.shade400,
-                            );
-                          },
-                        ),
-                      )
-                    : Icon(
-                        Icons.image_outlined,
-                        size: 32,
-                        color: Colors.grey.shade400,
-                      ),
-              ),
+    // Use state values if checkbox is checked, otherwise use item values
+    final currentReturnedQty = widget.isChecked 
+        ? (widget.returnedQuantity ?? widget.item.returnedQuantity ?? 0)
+        : (widget.item.returnedQuantity ?? 0);
+    final currentDamageCost = widget.isChecked && widget.damageCost != null
+        ? widget.damageCost
+        : widget.item.damageCost;
+    final currentDamageDescription = widget.isChecked && widget.damageDescription != null
+        ? widget.damageDescription
+        : widget.item.missingNote;
+    
+    final isReturned = widget.item.isReturned;
+    final isFullyReturned = currentReturnedQty >= widget.item.quantity;
+    final isPartiallyReturned = currentReturnedQty > 0 && currentReturnedQty < widget.item.quantity;
+    final isLate = widget.item.lateReturn == true;
+    final hasDamage = currentDamageCost != null && currentDamageCost > 0;
+    final pendingQty = widget.item.quantity - currentReturnedQty;
+
+    // Determine card background color based on status
+    Color cardBgColor = Colors.white;
+    Color borderColor = Colors.grey.shade200;
+    if (isFullyReturned) {
+      cardBgColor = Colors.green.shade50;
+      borderColor = Colors.green.shade200;
+    } else if (isPartiallyReturned) {
+      cardBgColor = Colors.yellow.shade50;
+      borderColor = Colors.yellow.shade200;
+    } else if (isLate && !isReturned) {
+      cardBgColor = Colors.orange.shade50;
+      borderColor = Colors.orange.shade200;
+    } else if (hasDamage) {
+      cardBgColor = Colors.red.shade50;
+      borderColor = Colors.red.shade200;
+    }
+
+    // Check if order is scheduled or cancelled (disable editing)
+    // Note: We'll pass this as a prop or check via widget properties
+    final isDisabled = false; // Will be set based on order status from parent
+
+    return Container(
+      margin: EdgeInsets.only(bottom: widget.isLast ? 0 : 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardBgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor, width: 2),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Checkbox
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Checkbox(
+              value: widget.isChecked,
+              onChanged: isDisabled 
+                  ? null 
+                  : widget.onCheckboxChanged != null
+                      ? (value) => widget.onCheckboxChanged!(value ?? false)
+                      : null,
             ),
-            const SizedBox(width: 16),
-            // Item Details
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.productName ?? 'Item $index',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF0F1724),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          'Qty: ${item.quantity}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.blue.shade700,
-                          ),
-                        ),
+          ),
+          const SizedBox(width: 12),
+          // Product Image
+          InkWell(
+            onTap: widget.item.photoUrl.isNotEmpty
+                ? () => _showImagePreview(
+                    context,
+                    widget.item.photoUrl,
+                    widget.item.productName,
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: widget.item.photoUrl.isNotEmpty
+                      ? Colors.grey.shade300
+                      : Colors.grey.shade200,
+                  width: 2,
+                ),
+                color: Colors.grey.shade50,
+              ),
+              child: widget.item.photoUrl.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        widget.item.photoUrl,
+                        width: 64,
+                        height: 64,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            Icons.image_outlined,
+                            size: 24,
+                            color: Colors.grey.shade400,
+                          );
+                        },
                       ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
+                    )
+                  : Icon(
+                      Icons.image_outlined,
+                      size: 24,
+                      color: Colors.grey.shade400,
+                    ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Product Details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Product name with status badges
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        widget.item.productName ?? 'Item ${widget.index}',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF0F1724),
                         ),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          '${item.days} day${item.days != 1 ? 's' : ''}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.orange.shade700,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                      ),
+                    ),
+                    // Status badges only show when checkbox is checked
+                    if (widget.isChecked) ...[
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            if (isFullyReturned)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade500,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle, size: 11, color: Colors.white),
+                                const SizedBox(width: 2),
+                                Flexible(
+                                  child: Text(
+                                    'Fully Returned',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
+                        if (isPartiallyReturned)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.yellow.shade500,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.inventory_2, size: 11, color: Colors.white),
+                                const SizedBox(width: 2),
+                                Flexible(
+                                  child: Text(
+                                    'Partial Return',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (isLate && !isReturned)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade500,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.access_time, size: 11, color: Colors.white),
+                                const SizedBox(width: 2),
+                                Flexible(
+                                  child: Text(
+                                    'Late',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (hasDamage)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade500,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.warning, size: 11, color: Colors.white),
+                                const SizedBox(width: 2),
+                                Flexible(
+                                  child: Text(
+                                    'Damage',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          ],
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '₹${item.pricePerDay.toStringAsFixed(2)}/day',
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                // Qty, Price, Total
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
+                  children: [
+                    Text(
+                      'Qty: ${widget.item.quantity}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    Text(
+                      'Price: ₹${widget.item.pricePerDay.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    Text(
+                      'Total: ₹${widget.item.lineTotal.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+                // Returned Quantity Section (shown when checkbox is checked)
+                if (widget.isChecked) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Returned Quantity *',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 100,
+                              child: TextField(
+                                controller: TextEditingController(
+                                  text: currentReturnedQty.toString(),
+                                )..selection = TextSelection.collapsed(
+                                    offset: currentReturnedQty.toString().length,
+                                  ),
+                                keyboardType: TextInputType.number,
+                                enabled: !isDisabled,
+                                onChanged: (value) {
+                                  final qty = int.tryParse(value);
+                                  if (qty != null && qty >= 0 && qty <= widget.item.quantity) {
+                                    widget.onReturnedQuantityChanged?.call(qty);
+                                  }
+                                },
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              'of ${widget.item.quantity}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                            if (isFullyReturned)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade500,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.check_circle, size: 12, color: Colors.white),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      'Fully Returned',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (isPartiallyReturned)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.yellow.shade700,
+                                  border: Border.all(color: Colors.yellow.shade300),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  '$pendingQty missing',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.yellow.shade900,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        // Damage Fee & Description (only show when quantity is missing - partial return)
+                        if (isPartiallyReturned) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            'Damage Fee (₹)',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          TextField(
+                            controller: TextEditingController(
+                              text: currentDamageCost != null && currentDamageCost > 0
+                                  ? currentDamageCost.toStringAsFixed(0)
+                                  : '',
+                            ),
+                            keyboardType: TextInputType.number,
+                            enabled: !isDisabled,
+                            onChanged: (value) {
+                              final cost = value.isEmpty ? null : double.tryParse(value);
+                              widget.onDamageCostChanged?.call(cost);
+                            },
+                            decoration: InputDecoration(
+                              hintText: '0.00',
+                              prefixText: '₹ ',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Damage Description / Issues',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          TextField(
+                            controller: TextEditingController(
+                              text: currentDamageDescription ?? '',
+                            ),
+                            maxLines: 3,
+                            enabled: !isDisabled,
+                            onChanged: (value) {
+                              widget.onDamageDescriptionChanged?.call(value.isEmpty ? null : value);
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Describe any damage, missing parts, or issues...',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ],
-              ),
-            ),
-            // Item Total
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '₹${item.lineTotal.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F1724),
-                  ),
-                ),
               ],
             ),
-          ],
-        ),
-        if (!isLast) ...[
-          const SizedBox(height: 16),
-          Divider(color: Colors.grey.shade200, height: 1),
-          const SizedBox(height: 16),
+          ),
         ],
-      ],
+      ),
     );
   }
 }

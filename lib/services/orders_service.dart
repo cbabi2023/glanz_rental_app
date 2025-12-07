@@ -70,7 +70,7 @@ class OrdersService {
           'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, created_at, '
           'customer:customers(id, name, phone, customer_number), '
           'branch:branches(id, name), '
-          'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity)',
+          'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity, damage_fee)',
         );
 
     // Apply filters
@@ -120,7 +120,7 @@ class OrdersService {
             'customer:customers(*), '
             'staff:profiles(id, full_name, upi_id), '
             'branch:branches(*), '
-            'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity)',
+            'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity, damage_fee)',
           )
           .eq('id', orderId)
           .single();
@@ -404,7 +404,7 @@ class OrdersService {
           'customer:customers(*), '
           'branch:branches(*), '
           'staff:profiles(id, full_name, upi_id), '
-          'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity)',
+          'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity, damage_fee)',
         )
         .eq('customer_id', customerId)
         .order('created_at', ascending: false);
@@ -490,6 +490,138 @@ class OrdersService {
     } catch (e) {
       print('Error fetching order timeline: $e');
       return [];
+    }
+  }
+
+  /// Update order item quantity
+  Future<void> updateItemQuantity({
+    required String itemId,
+    required int quantity,
+  }) async {
+    try {
+      // Get the item to calculate new line_total
+      final itemResponse = await _supabase
+          .from('order_items')
+          .select('order_id, price_per_day, days')
+          .eq('id', itemId)
+          .single();
+      
+      final orderId = itemResponse['order_id'] as String;
+      final pricePerDay = (itemResponse['price_per_day'] as num).toDouble();
+      final days = (itemResponse['days'] as num).toInt();
+      
+      // Calculate new line_total
+      final newLineTotal = quantity * pricePerDay * days;
+      
+      // Update the item
+      await _supabase
+          .from('order_items')
+          .update({
+            'quantity': quantity,
+            'line_total': newLineTotal,
+          })
+          .eq('id', itemId);
+      
+      // Recalculate order totals
+      final allItemsResponse = await _supabase
+          .from('order_items')
+          .select('line_total')
+          .eq('order_id', orderId);
+      
+      final subtotal = (allItemsResponse as List)
+          .map((item) => (item['line_total'] as num).toDouble())
+          .fold<double>(0.0, (sum, total) => sum + total);
+      
+      // Get order to calculate GST
+      final orderResponse = await _supabase
+          .from('orders')
+          .select('gst_amount, late_fee, damage_fee_total')
+          .eq('id', orderId)
+          .single();
+      
+      final previousGstAmount = (orderResponse['gst_amount'] as num?)?.toDouble() ?? 0.0;
+      final previousSubtotal = subtotal - previousGstAmount; // Approximate previous subtotal
+      
+      // Calculate GST if it was applied before (maintain same rate)
+      double gstAmount = 0.0;
+      if (previousGstAmount > 0 && previousSubtotal > 0) {
+        final gstRate = (previousGstAmount / previousSubtotal) * 100;
+        gstAmount = subtotal * (gstRate / 100);
+      }
+      
+      final lateFee = (orderResponse['late_fee'] as num?)?.toDouble() ?? 0.0;
+      final damageFeeTotal = (orderResponse['damage_fee_total'] as num?)?.toDouble() ?? 0.0;
+      final totalAmount = subtotal + gstAmount + lateFee + damageFeeTotal;
+      
+      // Update order totals
+      await _supabase
+          .from('orders')
+          .update({
+            'subtotal': subtotal,
+            'gst_amount': gstAmount,
+            'total_amount': totalAmount,
+          })
+          .eq('id', orderId);
+    } catch (e) {
+      print('Error updating item quantity: $e');
+      rethrow;
+    }
+  }
+
+  /// Update order item damage cost and description
+  Future<void> updateItemDamage({
+    required String itemId,
+    double? damageCost,
+    String? damageDescription,
+  }) async {
+    try {
+      // First get the order_id for this item
+      final itemResponse = await _supabase
+          .from('order_items')
+          .select('order_id')
+          .eq('id', itemId)
+          .single();
+      
+      final orderId = itemResponse['order_id'] as String;
+      
+      final updateData = <String, dynamic>{};
+      
+      if (damageCost != null && damageCost > 0) {
+        updateData['damage_fee'] = damageCost;
+      } else {
+        updateData['damage_fee'] = null;
+      }
+      
+      // Store damage description in missing_note if provided
+      if (damageDescription != null && damageDescription.trim().isNotEmpty) {
+        updateData['missing_note'] = damageDescription.trim();
+      } else if (damageCost == null || damageCost == 0) {
+        // Clear missing_note if no damage
+        updateData['missing_note'] = null;
+      }
+      
+      await _supabase
+          .from('order_items')
+          .update(updateData)
+          .eq('id', itemId);
+      
+      // Recalculate order damage_fee_total
+      final allItemsResponse = await _supabase
+          .from('order_items')
+          .select('damage_fee')
+          .eq('order_id', orderId);
+      
+      final totalDamage = (allItemsResponse as List)
+          .map((item) => (item['damage_fee'] as num?)?.toDouble() ?? 0.0)
+          .fold<double>(0.0, (sum, cost) => sum + cost);
+      
+      await _supabase
+          .from('orders')
+          .update({'damage_fee_total': totalDamage})
+          .eq('id', orderId);
+    } catch (e) {
+      print('Error updating item damage: $e');
+      rethrow;
     }
   }
 }

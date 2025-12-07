@@ -92,7 +92,7 @@ class OrderItem {
       lateReturn: json['late_return'] as bool?,
       missingNote: json['missing_note']?.toString(),
       returnedQuantity: (json['returned_quantity'] as num?)?.toInt(),
-      damageCost: (json['damage_cost'] as num?)?.toDouble(),
+      damageCost: (json['damage_fee'] as num?)?.toDouble(),
     );
   }
 
@@ -111,7 +111,7 @@ class OrderItem {
       if (lateReturn != null) 'late_return': lateReturn,
       if (missingNote != null) 'missing_note': missingNote,
       if (returnedQuantity != null) 'returned_quantity': returnedQuantity,
-      if (damageCost != null) 'damage_cost': damageCost,
+      if (damageCost != null) 'damage_fee': damageCost,
     };
   }
   
