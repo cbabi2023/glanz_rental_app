@@ -119,7 +119,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'order-detail',
         builder: (context, state) {
           final orderId = state.pathParameters['id']!;
-          return OrderDetailScreen(orderId: orderId);
+          final scrollToItems = state.uri.queryParameters['scrollToItems'] == 'true';
+          return OrderDetailScreen(
+            orderId: orderId,
+            scrollToItems: scrollToItems,
+          );
         },
       ),
       GoRoute(

@@ -15,8 +15,13 @@ import '../../services/orders_service.dart';
 /// Displays detailed information about a specific order with modern design
 class OrderDetailScreen extends ConsumerStatefulWidget {
   final String orderId;
+  final bool scrollToItems;
 
-  const OrderDetailScreen({super.key, required this.orderId});
+  const OrderDetailScreen({
+    super.key, 
+    required this.orderId,
+    this.scrollToItems = false,
+  });
 
   @override
   ConsumerState<OrderDetailScreen> createState() => _OrderDetailScreenState();
@@ -29,11 +34,18 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   bool _isDownloadingInvoice = false;
   bool _isPrintingInvoice = false;
   
+  // Scroll controller for scrolling to items section
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _itemsSectionKey = GlobalKey();
+  
   // State for item return management
   final Map<String, bool> _itemCheckboxes = {}; // itemId -> isChecked
   final Map<String, int> _returnedQuantities = {}; // itemId -> returned quantity
   final Map<String, double> _damageCosts = {}; // itemId -> damage cost
   final Map<String, String> _damageDescriptions = {}; // itemId -> damage description
+  
+  // Late fee controller
+  final TextEditingController _lateFeeController = TextEditingController();
 
   Future<void> _handleInvoiceAction(String action, Order order) async {
     // Set loading state for specific action
@@ -304,6 +316,25 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     } catch (e) {
       return false;
     }
+  }
+
+  @override
+  void dispose() {
+    _lateFeeController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToItemsSection() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_itemsSectionKey.currentContext != null) {
+        Scrollable.ensureVisible(
+          _itemsSectionKey.currentContext!,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
   }
 
   /// Calculate days overdue for a late order
@@ -591,12 +622,37 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         }
       }
 
+      // Update late fee if order is late or has late fee set
+      if (_isOrderLate(order) || (order.lateFee != null && order.lateFee! > 0)) {
+        final lateFeeText = _lateFeeController.text.trim();
+        if (lateFeeText.isNotEmpty) {
+          try {
+            final lateFee = double.parse(lateFeeText);
+            if (lateFee >= 0 && lateFee != (order.lateFee ?? 0)) {
+              await ordersService.updateLateFee(
+                orderId: widget.orderId,
+                lateFee: lateFee,
+              );
+            }
+          } catch (e) {
+            print('Error parsing late fee: $e');
+            // Continue with other updates even if late fee parsing fails
+          }
+        } else if ((order.lateFee ?? 0) > 0) {
+          // Clear late fee if field is empty but order has late fee
+          await ordersService.updateLateFee(
+            orderId: widget.orderId,
+            lateFee: 0.0,
+          );
+        }
+      }
+
       if (itemReturns.isNotEmpty) {
         await ordersService.processOrderReturn(
           orderId: widget.orderId,
           itemReturns: itemReturns,
           userId: userProfile!.id,
-          lateFee: 0.0,
+          lateFee: 0.0, // Late fee is handled separately above
         );
       }
 
@@ -713,6 +769,24 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final orderAsync = ref.watch(orderProvider(widget.orderId));
+
+    // Initialize late fee controller when order data is available
+    orderAsync.whenData((order) {
+      if (order != null) {
+        if (order.lateFee != null && order.lateFee! > 0) {
+          if (_lateFeeController.text.isEmpty || 
+              _lateFeeController.text != order.lateFee!.toStringAsFixed(2)) {
+            _lateFeeController.text = order.lateFee!.toStringAsFixed(2);
+          }
+        } else if (_isOrderLate(order)) {
+          // If order is late but no late fee set, keep controller empty
+          if (_lateFeeController.text.isNotEmpty && 
+              (order.lateFee == null || order.lateFee! == 0)) {
+            // Don't clear if user has entered a value
+          }
+        }
+      }
+    });
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F9FB),
@@ -860,9 +934,17 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
               ? (buttonCount * 56.0) + ((buttonCount - 1) * 8.0) + 32.0 + 34.0 + 20.0
               : 16.0;
 
+          // Scroll to items section if requested
+          if (widget.scrollToItems) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _scrollToItemsSection();
+            });
+          }
+
           return Stack(
             children: [
               SingleChildScrollView(
+                controller: _scrollController,
                 padding: EdgeInsets.only(
                   left: 16,
                   right: 16,
@@ -1432,10 +1514,11 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       const SizedBox(height: 16),
                     ],
 
-                    // Return Status Section (only show if order has items and is not scheduled)
+                    // Return Status Section (only show if order has items, is not scheduled, and is not cancelled)
                     if (order.items != null && 
                         order.items!.isNotEmpty && 
-                        !order.isScheduled) ...[
+                        !order.isScheduled &&
+                        !order.isCancelled) ...[
                       Card(
                         elevation: 0,
                         color: Colors.white,
@@ -1680,8 +1763,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       const SizedBox(height: 16),
                     ],
 
-                    // Items Card
-                    if (order.items != null && order.items!.isNotEmpty) ...[
+                    // Items Card (hide for cancelled orders)
+                    if (order.items != null && order.items!.isNotEmpty && !order.isCancelled) ...[
                       Card(
                         elevation: 0,
                         color: Colors.white,
@@ -1695,6 +1778,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
+                                key: _itemsSectionKey,
                                 children: [
                                   Icon(
                                     Icons.inventory_2_outlined,
@@ -1995,39 +2079,91 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                 ),
                                 const SizedBox(height: 12),
                               ],
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    order.lateFee != null && order.lateFee! > 0
-                                        ? 'Late Fee Amount'
-                                        : 'No Late Fee Applied',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.grey.shade700,
-                                    ),
-                                  ),
-                                  if (order.lateFee != null && order.lateFee! > 0)
+                              // Late Fee Input Field (when order is late or has late fee)
+                              if (_isOrderLate(order) || (order.lateFee != null && order.lateFee! > 0)) ...[
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
                                     Text(
-                                      '₹${NumberFormat('#,##0.00').format(order.lateFee!)}',
+                                      'Enter Late Fee Amount',
                                       style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.red.shade700,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade700,
                                       ),
-                                    )
-                                  else
-                                    Text(
-                                      '₹0.00',
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextField(
+                                      controller: _lateFeeController,
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      decoration: InputDecoration(
+                                        hintText: '0.00',
+                                        prefixText: '₹ ',
+                                        prefixStyle: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: BorderSide(color: Colors.red.shade600, width: 2),
+                                        ),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                      ),
                                       style: TextStyle(
                                         fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                        color: Colors.grey.shade600,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade900,
                                       ),
                                     ),
-                                ],
-                              ),
+                                  ],
+                                ),
+                              ] else ...[
+                                // Display late fee if already set
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      order.lateFee != null && order.lateFee! > 0
+                                          ? 'Late Fee Amount'
+                                          : 'No Late Fee Applied',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                    if (order.lateFee != null && order.lateFee! > 0)
+                                      Text(
+                                        '₹${NumberFormat('#,##0.00').format(order.lateFee!)}',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.red.shade700,
+                                        ),
+                                      )
+                                    else
+                                      Text(
+                                        '₹0.00',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
                               if (_isOrderLate(order) && (order.lateFee == null || order.lateFee! == 0)) ...[
                                 const SizedBox(height: 12),
                                 Container(
@@ -2047,7 +2183,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                       const SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
-                                          'Late fee will be applied when processing return',
+                                          'Please enter the late fee amount',
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: Colors.orange.shade700,
@@ -2231,7 +2367,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               },
                             ),
                             // Return Status Section
-                            if (order.items != null && order.items!.isNotEmpty && !order.isScheduled) ...[
+                            if (order.items != null && order.items!.isNotEmpty && !order.isScheduled && !order.isCancelled) ...[
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(

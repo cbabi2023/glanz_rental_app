@@ -359,6 +359,41 @@ class OrdersService {
     }
     return updatedOrder;
   }
+
+  /// Update late fee for an order
+  Future<Order> updateLateFee({
+    required String orderId,
+    required double lateFee,
+  }) async {
+    try {
+      // Get current order to calculate new total
+      final currentOrder = await getOrder(orderId);
+      if (currentOrder == null) {
+        throw Exception('Order not found');
+      }
+
+      final originalTotal =
+          currentOrder.totalAmount - (currentOrder.lateFee ?? 0);
+      final newTotal = originalTotal + lateFee;
+
+      await _supabase
+          .from('orders')
+          .update({
+            'late_fee': lateFee,
+            'total_amount': newTotal,
+          })
+          .eq('id', orderId);
+
+      final updatedOrder = await getOrder(orderId);
+      if (updatedOrder == null) {
+        throw Exception('Failed to retrieve updated order');
+      }
+      return updatedOrder;
+    } catch (e) {
+      print('Error updating late fee: $e');
+      rethrow;
+    }
+  }
   
   /// Process order return with item-wise tracking
   /// Uses RPC function process_order_return_optimized

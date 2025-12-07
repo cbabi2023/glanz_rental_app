@@ -1212,8 +1212,8 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
   }
 
   Future<void> _handleMarkReturned(Order order) async {
-    // Navigate to return screen for item-wise returns
-    context.push('/orders/${order.id}/return');
+    // Navigate to order details screen and scroll to items section
+    context.push('/orders/${order.id}?scrollToItems=true');
   }
 
   Future<void> _markAsReturned(Order order, double lateFee) async {
@@ -1661,7 +1661,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: () =>
-                          context.push('/orders/${order.id}/return'),
+                          context.push('/orders/${order.id}?scrollToItems=true'),
                       icon: const Icon(Icons.check_circle_outline, size: 18),
                       label: const Text(
                         'Process Return',
