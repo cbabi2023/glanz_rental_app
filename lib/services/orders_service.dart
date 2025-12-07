@@ -67,10 +67,10 @@ class OrdersService {
         .select(
           'id, invoice_number, branch_id, staff_id, customer_id, '
           'booking_date, start_date, end_date, start_datetime, end_datetime, '
-          'status, total_amount, subtotal, gst_amount, late_fee, created_at, '
+          'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, created_at, '
           'customer:customers(id, name, phone, customer_number), '
           'branch:branches(id, name), '
-          'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note)',
+          'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity)',
         );
 
     // Apply filters
@@ -116,11 +116,11 @@ class OrdersService {
           .select(
             'id, invoice_number, branch_id, staff_id, customer_id, '
             'booking_date, start_date, end_date, start_datetime, end_datetime, '
-            'status, total_amount, subtotal, gst_amount, late_fee, created_at, '
+            'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, created_at, '
             'customer:customers(*), '
             'staff:profiles(id, full_name, upi_id), '
             'branch:branches(*), '
-            'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note)',
+            'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity)',
           )
           .eq('id', orderId)
           .single();
@@ -134,6 +134,13 @@ class OrdersService {
   }
 
   /// Stream orders in real-time
+  /// 
+  /// ⚠️ IMPORTANT: This watches the 'orders' table.
+  /// Note: Order items changes (return status) also affect order categorization.
+  /// The provider layer should invalidate/refetch when order_items change via RPC calls.
+  /// 
+  /// For complete real-time updates including order_items, consider using
+  /// a combination of this stream + manual invalidation after return processing.
   Stream<List<Order>> watchOrders({String? branchId}) {
     var query = _supabase.from('orders').stream(primaryKey: ['id']);
 
@@ -390,7 +397,15 @@ class OrdersService {
   Future<List<Order>> getCustomerOrders(String customerId) async {
     final response = await _supabase
         .from('orders')
-        .select('*, branch:branches(*), staff:profiles(id, full_name, upi_id)')
+        .select(
+          'id, invoice_number, branch_id, staff_id, customer_id, '
+          'booking_date, start_date, end_date, start_datetime, end_datetime, '
+          'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, created_at, '
+          'customer:customers(*), '
+          'branch:branches(*), '
+          'staff:profiles(id, full_name, upi_id), '
+          'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity)',
+        )
         .eq('customer_id', customerId)
         .order('created_at', ascending: false);
 

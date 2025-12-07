@@ -234,10 +234,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     
     // Fast path: Check status first
     if (status == OrderStatus.cancelled) return _OrderCategory.cancelled;
+    if (status == OrderStatus.flagged) return _OrderCategory.flagged;
     if (status == OrderStatus.partiallyReturned) return _OrderCategory.partiallyReturned;
     if (status == OrderStatus.completed || 
-        status == OrderStatus.completedWithIssues ||
-        status == OrderStatus.flagged) {
+        status == OrderStatus.completedWithIssues) {
       return _OrderCategory.returned;
     }
     
@@ -328,6 +328,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         return Colors.blue.shade600;
       case _OrderCategory.cancelled:
         return Colors.grey.shade500;
+      case _OrderCategory.flagged:
+        return Colors.purple.shade600;
     }
   }
 
@@ -345,6 +347,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         return 'Partially Returned';
       case _OrderCategory.cancelled:
         return 'Cancelled';
+      case _OrderCategory.flagged:
+        return 'Flagged';
     }
   }
   
@@ -634,9 +638,11 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           final categoryColor = _getCategoryColor(category);
           final categoryText = _getCategoryText(category);
           final dateInfo = _getDateInfo(order);
-          // Show return button if order has pending items to return (not scheduled or completed)
+          // Show return button if order has pending items to return (not scheduled, completed, cancelled, or flagged)
           final canMarkReturned = !order.isScheduled && 
                                   !order.isCompleted && 
+                                  !order.isCancelled &&
+                                  !order.isFlagged &&
                                   order.hasPendingReturnItems;
           final canStartRental = order.isScheduled;
           final canCancel = order.canCancel();
@@ -677,8 +683,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         side: BorderSide(
                           color: category == _OrderCategory.late
                               ? Colors.red.shade200
-                              : Colors.grey.shade200,
-                          width: category == _OrderCategory.late ? 1.5 : 1,
+                              : category == _OrderCategory.flagged
+                                  ? Colors.purple.shade200
+                                  : Colors.grey.shade200,
+                          width: (category == _OrderCategory.late || category == _OrderCategory.flagged) ? 1.5 : 1,
                         ),
                       ),
                       child: Padding(
@@ -1333,8 +1341,312 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       const SizedBox(height: 16),
                     ],
 
-                    // Late Fee Section Card
-                    if (_isOrderLate(order) || (order.lateFee != null && order.lateFee! > 0))
+                    // Return Status Section (only show if order has items and is not scheduled)
+                    if (order.items != null && 
+                        order.items!.isNotEmpty && 
+                        !order.isScheduled) ...[
+                      Card(
+                        elevation: 0,
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Header with icon
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color: Colors.indigo.shade100,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.assignment_return_outlined,
+                                      size: 18,
+                                      color: Colors.indigo.shade700,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Text(
+                                    'Return Status',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0F1724),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Divider(color: Colors.grey.shade200, height: 1),
+                              const SizedBox(height: 16),
+                              
+                              // Calculate return statistics
+                              Builder(
+                                builder: (context) {
+                                  final items = order.items!;
+                                  final totalItems = items.length;
+                                  final totalQuantity = items.fold<int>(
+                                    0, 
+                                    (sum, item) => sum + item.quantity,
+                                  );
+                                  
+                                  // Website logic (matching exact behavior):
+                                  // - RETURNED quantity: Sum of returnedQuantity from ALL items
+                                  //   For items with returnStatus = 'returned', if returnedQuantity is null, use item.quantity
+                                  //   For items without returnStatus = 'returned', use returnedQuantity (for partial returns)
+                                  // - Full/Partial: Count items with returnStatus = 'returned', then check if full or partial
+                                  // - PENDING: Items that are not marked as returned (returnStatus != 'returned')
+                                  
+                                  // Calculate total returned quantity from ALL items
+                                  final returnedQuantity = items.fold<int>(
+                                    0,
+                                    (sum, item) {
+                                      int returnedQty;
+                                      if (item.isReturned) {
+                                        // Item is marked as returned: use returnedQuantity if available, otherwise item.quantity
+                                        returnedQty = item.returnedQuantity ?? item.quantity;
+                                      } else {
+                                        // Item is not marked as returned: use returnedQuantity (could be partial return)
+                                        returnedQty = item.returnedQuantity ?? 0;
+                                      }
+                                      return sum + returnedQty;
+                                    },
+                                  );
+                                  
+                                  // Get items that are marked as returned (returnStatus = 'returned') for full/partial count
+                                  final returnedItems = items.where((item) => item.isReturned).toList();
+                                  
+                                  // Count items with full returns (returned quantity >= item quantity) among returned items
+                                  final fullReturns = returnedItems.where((item) {
+                                    // If returnedQuantity is null and status is returned, it's fully returned
+                                    final returnedQty = item.returnedQuantity ?? item.quantity;
+                                    return returnedQty >= item.quantity;
+                                  }).length;
+                                  
+                                  // Count items with partial returns (returned quantity > 0 but < item quantity) among returned items
+                                  final partialReturns = returnedItems.where((item) {
+                                    // Partial if returnedQuantity exists, is > 0, and is less than quantity
+                                    final returnedQty = item.returnedQuantity;
+                                    if (returnedQty == null) return false; // null means full return
+                                    return returnedQty > 0 && returnedQty < item.quantity;
+                                  }).length;
+                                  
+                                  // Calculate pending items - Website logic:
+                                  // PENDING count = items where returnStatus != 'returned' (not marked as returned)
+                                  // PENDING quantity = sum of remaining quantity for ALL items where returnedQuantity < quantity
+                                  final pendingItems = items.where((item) => !item.isReturned).toList();
+                                  final pendingCount = pendingItems.length;
+                                  
+                                  // Calculate total pending quantity from ALL items (not just pending items)
+                                  // This includes items that are marked as returned but have partial returns
+                                  final pendingQuantity = items.fold<int>(
+                                    0,
+                                    (sum, item) {
+                                      final returnedQty = item.returnedQuantity ?? 0;
+                                      // If item is marked as returned and returnedQuantity is null, assume fully returned
+                                      if (item.isReturned && item.returnedQuantity == null) {
+                                        return sum; // Fully returned, no pending quantity
+                                      }
+                                      // Calculate remaining quantity
+                                      final remaining = item.quantity - returnedQty;
+                                      // Only add if there's remaining quantity
+                                      return sum + (remaining > 0 ? remaining : 0);
+                                    },
+                                  );
+                                  
+                                  // Get total damage cost from order (damage_fee_total)
+                                  final totalDamage = order.damageFeeTotal ?? 0.0;
+                                  
+                                  // Debug: Check damage fee total value
+                                  print('🔍 Order Damage Fee Total: ${order.damageFeeTotal}');
+                                  print('🔍 Total Damage: $totalDamage');
+                                  
+                                  // Determine overall status
+                                  String overallStatus;
+                                  Color statusBgColor;
+                                  Color statusValueColor;
+                                  String statusDetail = '';
+                                  Color statusDetailColor = Colors.grey.shade600;
+                                  
+                                  // Determine status based on website logic
+                                  // Check if all items are fully returned (returnedQuantity >= item quantity for all)
+                                  final allItemsReturned = items.every((item) {
+                                    // If item is marked as returned and returnedQuantity is null, it's fully returned
+                                    // Otherwise check if returnedQuantity >= quantity
+                                    final returnedQty = item.isReturned && item.returnedQuantity == null
+                                        ? item.quantity
+                                        : (item.returnedQuantity ?? 0);
+                                    return returnedQty >= item.quantity;
+                                  });
+                                  
+                                  // Check if some items have returns but not all are fully returned
+                                  final hasSomeReturns = returnedQuantity > 0;
+                                  final hasPendingQuantity = pendingQuantity > 0; // Check pending quantity, not just count
+                                  
+                                  // Website logic: Show "Partial" if there's pending quantity, even if all items are marked as returned
+                                  if (allItemsReturned && !hasPendingQuantity && returnedQuantity > 0) {
+                                    // All items fully returned with no pending quantity
+                                    overallStatus = 'Returned';
+                                    statusBgColor = Colors.green.shade50;
+                                    statusValueColor = Colors.green.shade700;
+                                  } else if (hasSomeReturns && hasPendingQuantity) {
+                                    // Partial: Some items returned but there's still pending quantity
+                                    overallStatus = 'Partial';
+                                    statusBgColor = Colors.blue.shade50;
+                                    statusValueColor = Colors.blue.shade700;
+                                  } else if (hasSomeReturns && !hasPendingQuantity) {
+                                    // All items fully returned (no pending quantity)
+                                    overallStatus = 'Returned';
+                                    statusBgColor = Colors.green.shade50;
+                                    statusValueColor = Colors.green.shade700;
+                                  } else {
+                                    // No returns yet
+                                    overallStatus = 'Pending';
+                                    // Use indigo/purple for STATUS to differentiate from orange PENDING box
+                                    statusBgColor = Colors.indigo.shade50;
+                                    statusValueColor = Colors.indigo.shade700;
+                                  }
+                                  
+                                  // Add damage information to status detail if there's damage
+                                  // Always show damage if damage_fee_total exists and is greater than 0
+                                  if (order.damageFeeTotal != null && order.damageFeeTotal! > 0) {
+                                    statusDetail = 'Damage: ₹${order.damageFeeTotal!.toStringAsFixed(2)}';
+                                    statusDetailColor = Colors.red.shade700;
+                                    print('✅ Setting damage detail: $statusDetail');
+                                  } else {
+                                    print('⚠️ Damage not shown - damageFeeTotal: ${order.damageFeeTotal}, totalDamage: $totalDamage');
+                                  }
+                                  
+                                  // 2x2 Grid Layout for symmetric design
+                                  return Column(
+                                    children: [
+                                      // First Row: TOTAL ITEMS and RETURNED
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: _ReturnStatusBox(
+                                              label: 'TOTAL ITEMS',
+                                              value: '$totalItems',
+                                              detail: '($totalQuantity qty)',
+                                              backgroundColor: Colors.white,
+                                              valueColor: Colors.black,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: _ReturnStatusBox(
+                                              label: 'RETURNED',
+                                              value: '$returnedQuantity',
+                                              detail: '$fullReturns full, $partialReturns partial',
+                                              backgroundColor: Colors.green.shade50,
+                                              valueColor: Colors.green.shade700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      // Second Row: PENDING and STATUS
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: _ReturnStatusBox(
+                                              label: 'PENDING',
+                                              value: '$pendingQuantity',
+                                              detail: '$pendingCount ${pendingCount == 1 ? 'item' : 'items'}',
+                                              backgroundColor: Colors.orange.shade50,
+                                              valueColor: Colors.orange.shade700,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: _ReturnStatusBox(
+                                              label: 'STATUS',
+                                              value: overallStatus,
+                                              detail: statusDetail,
+                                              backgroundColor: statusBgColor,
+                                              valueColor: statusValueColor,
+                                              detailColor: statusDetailColor,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Flagged Order Warning Section (only for flagged orders)
+                    if (order.isFlagged) ...[
+                      Card(
+                        elevation: 0,
+                        color: Colors.purple.shade50,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: Colors.purple.shade200, width: 1.5),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.shade100,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  Icons.flag,
+                                  size: 24,
+                                  color: Colors.purple.shade700,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Flagged Order',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.purple.shade700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'This order has been flagged and requires attention.',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.purple.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Late Fee Section Card (hide for flagged orders)
+                    if (!order.isFlagged && (_isOrderLate(order) || (order.lateFee != null && order.lateFee! > 0)))
                       Card(
                         elevation: 0,
                         color: Colors.red.shade50,
@@ -1767,7 +2079,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   }
 }
 
-enum _OrderCategory { scheduled, ongoing, late, returned, partiallyReturned, cancelled }
+enum _OrderCategory { scheduled, ongoing, late, returned, partiallyReturned, cancelled, flagged }
 
 class _DateInfoWidget extends StatelessWidget {
   final String label;
@@ -2007,6 +2319,82 @@ class _OrderItemCard extends StatelessWidget {
   }
 }
 
+/// Return Status Box Widget (symmetric design)
+class _ReturnStatusBox extends StatelessWidget {
+  final String label;
+  final String value;
+  final String detail;
+  final Color backgroundColor;
+  final Color valueColor;
+  final Color? detailColor;
+
+  const _ReturnStatusBox({
+    required this.label,
+    required this.value,
+    required this.detail,
+    required this.backgroundColor,
+    required this.valueColor,
+    this.detailColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 110, // Fixed height for symmetry
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.grey.shade200,
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade700,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: valueColor,
+              height: 1.2,
+            ),
+          ),
+          const Spacer(),
+          if (detail.isNotEmpty)
+            Text(
+              detail,
+              style: TextStyle(
+                fontSize: 11,
+                color: detailColor ?? Colors.grey.shade600,
+                height: 1.3,
+                fontWeight: detailColor != null ? FontWeight.w600 : FontWeight.normal,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            )
+          else
+            const SizedBox(height: 16), // Spacer to maintain symmetry when no detail
+        ],
+      ),
+    );
+  }
+}
+
+/// Item Return Status Row Widget
 class _PricingRow extends StatelessWidget {
   final String label;
   final double amount;

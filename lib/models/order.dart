@@ -67,6 +67,7 @@ class Order {
   final double? subtotal; // Subtotal before GST
   final double? gstAmount; // GST amount
   final double? lateFee; // Late fee amount
+  final double? damageFeeTotal; // Total damage fee for the order
   final DateTime createdAt;
   
   // Relations
@@ -91,6 +92,7 @@ class Order {
     this.subtotal,
     this.gstAmount,
     this.lateFee,
+    this.damageFeeTotal,
     required this.createdAt,
     this.customer,
     this.staff,
@@ -171,6 +173,7 @@ class Order {
       subtotal: (json['subtotal'] as num?)?.toDouble(),
       gstAmount: (json['gst_amount'] as num?)?.toDouble(),
       lateFee: (json['late_fee'] as num?)?.toDouble(),
+      damageFeeTotal: (json['damage_fee_total'] as num?)?.toDouble(),
       createdAt: safeDateTime(json['created_at']),
       customer: customer,
       staff: staff,

@@ -24,6 +24,7 @@ enum _OrdersTab {
   returned,
   partiallyReturned,
   cancelled,
+  flagged,
 }
 
 enum _DateFilter {
@@ -615,11 +616,11 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
 
     // Fast path: Check status first
     if (status == OrderStatus.cancelled) return _OrderCategory.cancelled;
+    if (status == OrderStatus.flagged) return _OrderCategory.flagged;
     if (status == OrderStatus.partiallyReturned)
       return _OrderCategory.partiallyReturned;
     if (status == OrderStatus.completed || 
-        status == OrderStatus.completedWithIssues ||
-        status == OrderStatus.flagged) {
+        status == OrderStatus.completedWithIssues) {
       return _OrderCategory.returned;
     }
 
@@ -691,6 +692,9 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
           case _OrdersTab.cancelled:
             if (category != _OrderCategory.cancelled) return false;
             break;
+          case _OrdersTab.flagged:
+            if (category != _OrderCategory.flagged) return false;
+            break;
           case _OrdersTab.all:
             break;
         }
@@ -741,6 +745,10 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
         case _OrderCategory.cancelled:
           cancelled++;
           break;
+        case _OrderCategory.flagged:
+          // Count flagged orders in returned stats for now
+          returned++;
+          break;
       }
     }
 
@@ -763,6 +771,7 @@ enum _OrderCategory {
   returned,
   partiallyReturned,
   cancelled,
+  flagged,
 }
 
 class _OrdersStats {
@@ -878,6 +887,14 @@ class _OrdersTabs extends StatelessWidget {
             icon: Icons.cancel_outlined,
             selected: selected == _OrdersTab.cancelled,
             onTap: () => onChanged(_OrdersTab.cancelled),
+          ),
+          const SizedBox(width: 8),
+          _OrdersTabChip(
+            label: 'Flagged',
+            icon: Icons.flag_outlined,
+            selected: selected == _OrdersTab.flagged,
+            onTap: () => onChanged(_OrdersTab.flagged),
+            isWarning: true,
           ),
         ],
       ),
@@ -1069,11 +1086,11 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
 
     // Fast path: Check status first
     if (status == OrderStatus.cancelled) return _OrderCategory.cancelled;
+    if (status == OrderStatus.flagged) return _OrderCategory.flagged;
     if (status == OrderStatus.partiallyReturned)
       return _OrderCategory.partiallyReturned;
     if (status == OrderStatus.completed || 
-        status == OrderStatus.completedWithIssues ||
-        status == OrderStatus.flagged) {
+        status == OrderStatus.completedWithIssues) {
       return _OrderCategory.returned;
     }
 
@@ -1105,7 +1122,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
       return _OrderCategory.ongoing;
     }
 
-    // Check if late (end date passed and not completed/cancelled)
+    // Check if late (end date passed and not completed/cancelled/flagged)
     final isLate =
         DateTime.now().isAfter(endDate) &&
         status != OrderStatus.completed &&
@@ -1324,6 +1341,8 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
         return Colors.blue.shade600;
       case _OrderCategory.cancelled:
         return Colors.grey.shade500;
+      case _OrderCategory.flagged:
+        return Colors.purple.shade600;
     }
   }
 
@@ -1341,6 +1360,8 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
         return 'Partial';
       case _OrderCategory.cancelled:
         return 'Cancelled';
+      case _OrderCategory.flagged:
+        return 'Flagged';
     }
   }
 
@@ -1352,9 +1373,12 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
     final customerName = order.customer?.name ?? 'Unknown';
     final phone = order.customer?.phone ?? '';
     final dateInfo = _getDateInfo(order);
-    // Show return button if order has pending items to return
+    // Show return button if order has pending items to return (not scheduled, completed, or cancelled)
     final canMarkReturned =
-        order.hasPendingReturnItems && !order.isScheduled && !order.isCompleted;
+        order.hasPendingReturnItems && 
+        !order.isScheduled && 
+        !order.isCompleted && 
+        !order.isCancelled;
     final canCancel = order.canCancel();
     final itemsCount = order.items?.length ?? 0;
 
