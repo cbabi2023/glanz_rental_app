@@ -201,5 +201,52 @@ class AuthService {
       rethrow;
     }
   }
+
+  /// Update invoice settings
+  Future<UserProfile> updateInvoiceSettings({
+    required bool showInvoiceTerms,
+    required bool showInvoiceQr,
+  }) async {
+    final user = currentUser;
+    if (user == null) {
+      throw Exception('User not authenticated');
+    }
+
+    try {
+      // First try updating with current DB column names (show_terms/show_qr_code)
+      try {
+        await _supabase
+            .from('profiles')
+            .update({
+              'show_terms': showInvoiceTerms,
+              'show_qr_code': showInvoiceQr,
+            })
+            .eq('id', user.id);
+      } on PostgrestException catch (e) {
+        // If columns not found, fallback to old names
+        if (e.code == 'PGRST204' || e.message.contains('Could not find') || e.message.contains('column')) {
+          await _supabase
+              .from('profiles')
+              .update({
+                'show_invoice_terms': showInvoiceTerms,
+                'show_invoice_qr': showInvoiceQr,
+              })
+              .eq('id', user.id);
+        } else {
+          rethrow;
+        }
+      }
+
+      // Return updated profile
+      final updatedProfile = await getUserProfile();
+      if (updatedProfile == null) {
+        throw Exception('Failed to retrieve updated profile');
+      }
+      return updatedProfile;
+    } catch (e) {
+      print('Error updating invoice settings: $e');
+      rethrow;
+    }
+  }
 }
 

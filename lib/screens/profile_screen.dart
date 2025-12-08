@@ -31,10 +31,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   bool _gstEnabled = false;
   bool _gstIncluded = false;
+  bool _showInvoiceTerms = true; // Show terms & conditions in invoice
+  bool _showInvoiceQr = true; // Show QR code in invoice
   bool _isLoadingPassword = false;
   bool _isLoadingGst = false;
   bool _isLoadingBranch = false;
   bool _isLoadingCompany = false;
+  bool _isLoadingInvoiceSettings = false;
   bool _isUploadingLogo = false;
   bool _fieldsInitialized = false;
   File? _logoFile;
@@ -62,6 +65,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _companyNameController.text = profile.companyName ?? '';
     _companyAddressController.text = profile.companyAddress ?? '';
     _logoPreviewUrl = profile.companyLogoUrl;
+    // Read invoice settings from profile (null means not set, default to true for backward compatibility)
+    // But if explicitly false, use false
+    _showInvoiceTerms = profile.showInvoiceTerms ?? true;
+    _showInvoiceQr = profile.showInvoiceQr ?? true;
     _fieldsInitialized = true;
   }
 
@@ -290,6 +297,47 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  Future<void> _handleSaveInvoiceSettings() async {
+    setState(() {
+      _isLoadingInvoiceSettings = true;
+    });
+
+    try {
+      final authService = ref.read(authServiceProvider);
+      await authService.updateInvoiceSettings(
+        showInvoiceTerms: _showInvoiceTerms,
+        showInvoiceQr: _showInvoiceQr,
+      );
+
+      ref.invalidate(userProfileProvider);
+      _fieldsInitialized = false;
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invoice settings saved successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save invoice settings: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingInvoiceSettings = false;
+        });
+      }
+    }
+  }
+
   Future<void> _handleSaveCompanyDetails() async {
     String? logoUrl = _logoPreviewUrl;
 
@@ -476,31 +524,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               );
             }
 
-            // Initialize fields immediately if not initialized or if they don't match
-            final wasInitialized = _fieldsInitialized;
-            final needsInitialization = !_fieldsInitialized ||
-                _gstNumberController.text != (profile.gstNumber ?? '') ||
-                _gstEnabled != (profile.gstEnabled ?? false) ||
-                _gstRateController.text != (profile.gstRate?.toString() ?? '5.00') ||
-                _gstIncluded != (profile.gstIncluded ?? false) ||
-                _upiIdController.text != (profile.upiId ?? '') ||
-                _companyNameController.text != (profile.companyName ?? '') ||
-                _companyAddressController.text != (profile.companyAddress ?? '') ||
-                _logoPreviewUrl != profile.companyLogoUrl;
-            
-            if (needsInitialization) {
-              // Initialize immediately (synchronously) to ensure fields are ready
+            // Initialize fields only once when screen first loads
+            // Don't re-initialize when user changes values (like toggles)
+            if (!_fieldsInitialized) {
               _initializeFields(profile);
-              // Trigger a rebuild if this is the first initialization
-              if (!wasInitialized) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) {
-                    setState(() {
-                      // Fields already initialized, just trigger rebuild
-                    });
-                  }
-                });
-              }
+              // Trigger a rebuild after initialization
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    // Fields initialized, trigger rebuild
+                  });
+                }
+              });
             }
 
             return CustomScrollView(
@@ -981,6 +1016,77 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                         )
                                       : const Text(
                                           'Save GST Settings',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Invoice Settings Card
+                        _SectionCard(
+                          icon: Icons.receipt_long_outlined,
+                          title: 'Invoice Settings',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _ModernSwitch(
+                                value: _showInvoiceTerms,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _showInvoiceTerms = value;
+                                  });
+                                },
+                                title: 'Show Terms & Conditions',
+                                subtitle: _showInvoiceTerms
+                                    ? 'Terms & conditions will be displayed in invoice PDF'
+                                    : 'Terms & conditions will be hidden in invoice PDF',
+                                icon: Icons.description_outlined,
+                              ),
+                              const SizedBox(height: 24),
+                              _ModernSwitch(
+                                value: _showInvoiceQr,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _showInvoiceQr = value;
+                                  });
+                                },
+                                title: 'Show QR Code',
+                                subtitle: _showInvoiceQr
+                                    ? 'Payment QR code will be displayed in invoice PDF'
+                                    : 'Payment QR code will be hidden in invoice PDF',
+                                icon: Icons.qr_code_outlined,
+                              ),
+                              const SizedBox(height: 24),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: _isLoadingInvoiceSettings ? null : _handleSaveInvoiceSettings,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0B63FF),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: 0,
+                                  ),
+                                  child: _isLoadingInvoiceSettings
+                                      ? const SizedBox(
+                                          height: 24,
+                                          width: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Save Invoice Settings',
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
