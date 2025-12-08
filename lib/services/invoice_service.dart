@@ -869,6 +869,30 @@ class InvoiceService {
                         ),
                         pw.SizedBox(height: 8),
                       ],
+                      // Security Deposit
+                      if (order.securityDeposit != null && order.securityDeposit! > 0) ...[
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text(
+                              'Security Deposit',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.black,
+                              ),
+                            ),
+                            pw.Text(
+                              _formatCurrency(order.securityDeposit!),
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.black,
+                                fontWeight: pw.FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                        pw.SizedBox(height: 8),
+                      ],
                       // Divider
                       pw.Divider(color: PdfColors.black, height: 1.5),
                       pw.SizedBox(height: 8),

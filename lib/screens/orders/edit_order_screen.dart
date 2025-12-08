@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/customer.dart';
@@ -179,6 +180,7 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
         totalAmount: grandTotal,
         subtotal: subtotal,
         gstAmount: userProfile?.gstEnabled == true ? gstAmount : 0,
+        securityDeposit: draft.securityDeposit,
         items: itemsForDb,
       );
 
@@ -482,6 +484,20 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
 
                       const SizedBox(height: 20),
 
+                      // Security Deposit Card
+                      _SectionCard(
+                        title: 'Security Deposit',
+                        icon: Icons.security_outlined,
+                        child: _SecurityDepositField(
+                          value: draft.securityDeposit,
+                          onChanged: (value) {
+                            ref.read(orderDraftProvider.notifier).setSecurityDeposit(value);
+                          },
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
                       // Order Summary Card
                       _SectionCard(
                         title: 'Order Summary',
@@ -493,6 +509,7 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
                           gstEnabled: userProfile?.gstEnabled,
                           gstRate: userProfile?.gstRate,
                           gstIncluded: userProfile?.gstIncluded,
+                          securityDeposit: draft.securityDeposit,
                         ),
                       ),
 
@@ -739,6 +756,109 @@ class _ModernTextField extends StatelessWidget {
           borderSide: BorderSide(color: Colors.red.shade500, width: 2),
         ),
       ),
+    );
+  }
+}
+
+class _SecurityDepositField extends StatefulWidget {
+  final double? value;
+  final ValueChanged<double?> onChanged;
+
+  const _SecurityDepositField({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  State<_SecurityDepositField> createState() => _SecurityDepositFieldState();
+}
+
+class _SecurityDepositFieldState extends State<_SecurityDepositField> {
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: widget.value != null && widget.value! > 0
+          ? widget.value!.toInt().toString()
+          : '',
+    );
+  }
+
+  @override
+  void didUpdateWidget(_SecurityDepositField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != oldWidget.value) {
+      _controller.text = widget.value != null && widget.value! > 0
+          ? widget.value!.toInt().toString()
+          : '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: _controller,
+      keyboardType: TextInputType.number,
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+      ],
+      style: const TextStyle(
+        fontSize: 15,
+        color: Color(0xFF0F1724),
+      ),
+      decoration: InputDecoration(
+        labelText: 'Security Deposit Amount',
+        hintText: 'Enter security deposit (optional)',
+        prefixIcon: const Icon(Icons.security_outlined, color: Color(0xFF0B63FF)),
+        prefixText: '₹ ',
+        prefixStyle: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF0F1724),
+        ),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.red.shade300),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.red.shade500, width: 2),
+        ),
+      ),
+      onChanged: (value) {
+        if (value.isEmpty) {
+          widget.onChanged(null);
+          return;
+        }
+        final amount = int.tryParse(value);
+        widget.onChanged(amount != null && amount > 0 ? amount.toDouble() : null);
+      },
     );
   }
 }

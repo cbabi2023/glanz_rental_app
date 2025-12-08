@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// Order Summary Widget
 /// 
-/// Displays order totals including subtotal, GST, and grand total
+/// Displays order totals including subtotal, GST, grand total, and security deposit
 class OrderSummaryWidget extends StatelessWidget {
   final double subtotal;
   final double gstAmount;
@@ -10,6 +10,7 @@ class OrderSummaryWidget extends StatelessWidget {
   final bool? gstEnabled;
   final double? gstRate;
   final bool? gstIncluded;
+  final double? securityDeposit;
 
   const OrderSummaryWidget({
     super.key,
@@ -19,6 +20,7 @@ class OrderSummaryWidget extends StatelessWidget {
     this.gstEnabled,
     this.gstRate,
     this.gstIncluded,
+    this.securityDeposit,
   });
 
   @override
@@ -90,6 +92,33 @@ class OrderSummaryWidget extends StatelessWidget {
                 ),
               ],
             ),
+            
+            // Security Deposit (if provided)
+            if (securityDeposit != null && securityDeposit! > 0) ...[
+              const SizedBox(height: 16),
+              const Divider(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Security Deposit',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.blue,
+                    ),
+                  ),
+                  Text(
+                    '₹${securityDeposit!.toInt()}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

@@ -68,7 +68,16 @@ class Order {
   final double? gstAmount; // GST amount
   final double? lateFee; // Late fee amount
   final double? damageFeeTotal; // Total damage fee for the order
+  final double? securityDepositAmount; // Security deposit amount
+  final bool? securityDepositCollected; // Security deposit collected flag (boolean - indicates if collected)
+  final bool? securityDepositRefunded; // Security deposit refunded flag (boolean)
+  final double? securityDepositRefundedAmount; // Security deposit refunded amount
+  final DateTime? securityDepositRefundDate; // Security deposit refund date
   final DateTime createdAt;
+  
+  // Computed property for backward compatibility
+  // Returns the security deposit amount (not the boolean flags)
+  double? get securityDeposit => securityDepositAmount;
   
   // Relations
   final Customer? customer;
@@ -93,6 +102,11 @@ class Order {
     this.gstAmount,
     this.lateFee,
     this.damageFeeTotal,
+    this.securityDepositAmount,
+    this.securityDepositCollected, // Boolean flag (indicates if collected)
+    this.securityDepositRefunded, // Boolean flag (indicates if refunded)
+    this.securityDepositRefundedAmount,
+    this.securityDepositRefundDate,
     required this.createdAt,
     this.customer,
     this.staff,
@@ -116,6 +130,18 @@ class Order {
       } catch (e) {
         return DateTime.now();
       }
+    }
+
+    // Helper function to safely convert to double (handles num, string, bool, null)
+    double? safeToDouble(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value.toDouble();
+      if (value is bool) return null; // Skip boolean values
+      if (value is String) {
+        final parsed = double.tryParse(value);
+        return parsed;
+      }
+      return null;
     }
 
     // Handle customer relation - might be a list, object, or null
@@ -174,6 +200,17 @@ class Order {
       gstAmount: (json['gst_amount'] as num?)?.toDouble(),
       lateFee: (json['late_fee'] as num?)?.toDouble(),
       damageFeeTotal: (json['damage_fee_total'] as num?)?.toDouble(),
+      securityDepositAmount: safeToDouble(json['security_deposit_amount']),
+      securityDepositCollected: json['security_deposit_collected'] is bool 
+          ? json['security_deposit_collected'] as bool?
+          : (json['security_deposit_collected'] == true || json['security_deposit_collected'] == 'true' || json['security_deposit_collected'] == 1),
+      securityDepositRefunded: json['security_deposit_refunded'] is bool 
+          ? json['security_deposit_refunded'] as bool?
+          : (json['security_deposit_refunded'] == true || json['security_deposit_refunded'] == 'true' || json['security_deposit_refunded'] == 1),
+      securityDepositRefundedAmount: safeToDouble(json['security_deposit_refunded_amount']),
+      securityDepositRefundDate: json['security_deposit_refund_date'] != null 
+          ? safeDateTime(json['security_deposit_refund_date'])
+          : null,
       createdAt: safeDateTime(json['created_at']),
       customer: customer,
       staff: staff,
@@ -199,6 +236,11 @@ class Order {
       'subtotal': subtotal,
       'gst_amount': gstAmount,
       'late_fee': lateFee,
+      'security_deposit_amount': securityDepositAmount,
+      'security_deposit_collected': securityDepositCollected,
+      'security_deposit_refunded': securityDepositRefunded, // Boolean flag
+      'security_deposit_refunded_amount': securityDepositRefundedAmount,
+      'security_deposit_refund_date': securityDepositRefundDate?.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
       if (customer != null) 'customer': customer!.toJson(),
       if (staff != null) 'staff': staff!.toJson(),

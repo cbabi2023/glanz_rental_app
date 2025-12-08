@@ -57,11 +57,7 @@ class StaffService {
     final authResponse = await _supabase.auth.signUp(
       email: email,
       password: password,
-      data: {
-        'username': username,
-        'full_name': fullName,
-        'role': role.value,
-      },
+      data: {'username': username, 'full_name': fullName, 'role': role.value},
     );
 
     if (authResponse.user == null) {
@@ -131,9 +127,8 @@ class StaffService {
   Future<void> deleteStaff(String staffId) async {
     // Delete profile from profiles table
     await _supabase.from('profiles').delete().eq('id', staffId);
-    
+
     // Note: Auth user deletion requires admin/service role key
     // This should be handled by a backend function or admin panel
   }
 }
-

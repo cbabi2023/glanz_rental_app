@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -2485,6 +2486,32 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               ),
                               const SizedBox(height: 16),
                             ],
+                            // Security Deposit (if provided)
+                            if (order.securityDeposit != null && order.securityDeposit! > 0) ...[
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Security Deposit',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue.shade700,
+                                    ),
+                                  ),
+                                  Text(
+                                    '₹${NumberFormat('#,##0').format(order.securityDeposit!.toInt())}',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                            ],
                             // Total
                             Container(
                               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
@@ -2520,6 +2547,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         ),
                       ),
                     ),
+
+                    // Security Deposit Refund Section (only show if security deposit exists)
+                    if (order.securityDeposit != null && order.securityDeposit! > 0) ...[
+                      const SizedBox(height: 16),
+                      _SecurityDepositRefundSection(order: order),
+                    ],
                   ],
                 ),
               ),
@@ -3360,6 +3393,893 @@ class _ReturnStatusBox extends StatelessWidget {
             const SizedBox(height: 16), // Spacer to maintain symmetry when no detail
         ],
       ),
+    );
+  }
+}
+
+/// Security Deposit Refund Section Widget
+/// 
+/// Displays security deposit refund details matching website design
+class _SecurityDepositRefundSection extends ConsumerStatefulWidget {
+  final Order order;
+
+  const _SecurityDepositRefundSection({
+    required this.order,
+  });
+
+  @override
+  ConsumerState<_SecurityDepositRefundSection> createState() =>
+      _SecurityDepositRefundSectionState();
+}
+
+class _SecurityDepositRefundSectionState
+    extends ConsumerState<_SecurityDepositRefundSection> {
+  bool _isRefunding = false;
+
+  bool _shouldShowRefundButton() {
+    // Show refund button when:
+    // 1. Order has returned items (completed, completed_with_issues, or has returned items)
+    // 2. There's an amount available to refund
+    // 3. Not already fully refunded
+    
+    final order = widget.order;
+    final securityDeposit = order.securityDepositAmount ?? 0.0;
+    final rentalAmount = order.subtotal ?? 0.0;
+    final gstAmount = order.gstAmount ?? 0.0;
+    final damageFees = order.damageFeeTotal ?? 0.0;
+    final lateFee = order.lateFee ?? 0.0;
+    final totalDeductions = rentalAmount + gstAmount + damageFees + lateFee;
+    final alreadyRefunded = order.securityDepositRefundedAmount ?? 0.0;
+    final availableToRefund = (securityDeposit - totalDeductions - alreadyRefunded).clamp(0.0, securityDeposit);
+    
+    // Check if order has returned items
+    final hasReturnedItems = order.isAnyCompleted || 
+                            (order.items != null && order.items!.any((item) => item.isReturned || (item.returnedQuantity ?? 0) > 0));
+    
+    // Show button if items are returned and there's amount to refund
+    return hasReturnedItems && availableToRefund > 0;
+  }
+
+  Future<void> _handleRefundDeposit() async {
+    if (_isRefunding) return;
+
+    final order = widget.order;
+    final securityDeposit = order.securityDepositAmount ?? 0.0;
+    final rentalAmount = order.subtotal ?? 0.0;
+    final gstAmount = order.gstAmount ?? 0.0;
+    final damageFees = order.damageFeeTotal ?? 0.0;
+    final lateFee = order.lateFee ?? 0.0;
+    final totalDeductions = rentalAmount + gstAmount + damageFees + lateFee;
+    final alreadyRefunded = order.securityDepositRefundedAmount ?? 0.0;
+    final availableToRefund = (securityDeposit - totalDeductions - alreadyRefunded).clamp(0.0, securityDeposit);
+
+    if (availableToRefund <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No amount available to refund'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isRefunding = true;
+    });
+
+    try {
+      final ordersService = ref.read(ordersServiceProvider);
+      await ordersService.refundSecurityDeposit(
+        orderId: order.id,
+        amount: availableToRefund,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Successfully refunded ₹${NumberFormat('#,##0.00').format(availableToRefund)}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Refresh the order to get updated data
+        ref.invalidate(orderProvider(order.id));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error refunding deposit: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRefunding = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final order = widget.order;
+    // Calculate refund amounts using actual database fields
+    // Security deposit amount (what was initially collected)
+    final securityDeposit = order.securityDepositAmount ?? 0.0;
+    final rentalAmount = order.subtotal ?? 0.0;
+    final gstAmount = order.gstAmount ?? 0.0;
+    final damageFees = order.damageFeeTotal ?? 0.0;
+    final lateFee = order.lateFee ?? 0.0;
+    
+    // Total deductions (rental + GST + damage + late fee)
+    final totalDeductions = rentalAmount + gstAmount + damageFees + lateFee;
+    
+    // Get already refunded amount from database
+    // securityDepositRefunded is a boolean flag, use securityDepositRefundedAmount for the amount
+    final alreadyRefunded = order.securityDepositRefundedAmount ?? 0.0;
+    
+    // Calculate outstanding amount (what needs to be collected)
+    // Outstanding = (Rental + GST) - Security Deposit
+    // This is the amount customer still needs to pay beyond the security deposit
+    final rentalAndGst = rentalAmount + gstAmount;
+    final outstandingAmount = (rentalAndGst - securityDeposit).clamp(0.0, double.infinity);
+    
+    // Available to refund = Security Deposit - Total Deductions - Already Refunded
+    final availableToRefund = (securityDeposit - totalDeductions - alreadyRefunded).clamp(0.0, securityDeposit);
+    
+    // Amount to refund (what can be refunded now)
+    final amountToRefund = availableToRefund;
+    
+    // Determine status based on actual refund data
+    String refundStatus;
+    MaterialColor statusColor;
+    final totalRefundable = securityDeposit - totalDeductions;
+    if (totalRefundable <= 0) {
+      refundStatus = 'No Refund Available';
+      statusColor = Colors.grey;
+    } else if (alreadyRefunded >= totalRefundable) {
+      refundStatus = 'Fully Refunded';
+      statusColor = Colors.green;
+    } else if (alreadyRefunded > 0) {
+      refundStatus = 'Partially Refunded';
+      statusColor = Colors.orange;
+    } else {
+      refundStatus = 'Not Refunded';
+      statusColor = Colors.grey;
+    }
+
+    return Column(
+      children: [
+        // Summary Card with Payment Accounting
+        Card(
+          elevation: 0,
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.description_outlined,
+                      size: 20,
+                      color: Colors.indigo.shade600,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Summary',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F1724),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'PAYMENT ACCOUNTING',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade600,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Security Deposit (positive, green)
+                _RefundRow(
+                  label: 'Security Deposit',
+                  amount: securityDeposit,
+                  isPositive: true,
+                ),
+                const SizedBox(height: 12),
+                // Rental Amount (negative, red)
+                if (rentalAmount > 0)
+                  _RefundRow(
+                    label: 'Rental Amount',
+                    amount: -rentalAmount,
+                    isPositive: false,
+                  ),
+                if (rentalAmount > 0) const SizedBox(height: 12),
+                // GST (negative, red)
+                if (gstAmount > 0)
+                  _RefundRow(
+                    label: 'GST',
+                    amount: -gstAmount,
+                    isPositive: false,
+                  ),
+                if (gstAmount > 0) const SizedBox(height: 12),
+                // Damage Fees (negative, red)
+                if (damageFees > 0)
+                  _RefundRow(
+                    label: 'Damage Fees',
+                    amount: -damageFees,
+                    isPositive: false,
+                  ),
+                if (damageFees > 0) const SizedBox(height: 12),
+                // Late Fee (negative, red)
+                if (lateFee > 0)
+                  _RefundRow(
+                    label: 'Late Fee',
+                    amount: -lateFee,
+                    isPositive: false,
+                  ),
+                if (lateFee > 0) const SizedBox(height: 12),
+                // Already Refunded (negative, blue)
+                if (alreadyRefunded > 0)
+                  _RefundRow(
+                    label: 'Already Refunded',
+                    amount: -alreadyRefunded,
+                    isPositive: false,
+                    isBlue: true,
+                  ),
+                if (alreadyRefunded > 0) const SizedBox(height: 12),
+                // Amount to Collect or Amount to Refund
+                if (outstandingAmount > 0) ...[
+                  // Amount to Collect (highlighted, pink/red) - when security deposit doesn't cover rental + GST
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.pink.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Amount to Collect',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey.shade900,
+                          ),
+                        ),
+                        Text(
+                          '₹${NumberFormat('#,##0.00').format(outstandingAmount)}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (amountToRefund > 0) ...[
+                  // Amount to Refund (highlighted, green) - when security deposit covers everything
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Amount to Refund',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey.shade900,
+                          ),
+                        ),
+                        Text(
+                          '₹${NumberFormat('#,##0.00').format(amountToRefund)}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        // Collect Outstanding Amount Section (only show if there's outstanding amount)
+        if (outstandingAmount > 0) ...[
+          const SizedBox(height: 16),
+          _CollectOutstandingAmountSection(
+            order: order,
+            outstandingAmount: outstandingAmount,
+          ),
+        ],
+        const SizedBox(height: 16),
+        // Security Deposit Details Card
+        Card(
+          elevation: 0,
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.security_outlined,
+                      size: 20,
+                      color: Colors.indigo.shade600,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Security Deposit',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F1724),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                // Deposit Amount
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Deposit Amount',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      '₹${NumberFormat('#,##0.00').format(securityDeposit)}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey.shade900,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Available to Refund (in blue box)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    border: Border.all(color: Colors.blue.shade200),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Available to Refund',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                      Text(
+                        '₹${NumberFormat('#,##0.00').format(availableToRefund)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Total Deductions
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Total Deductions',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      '-₹${NumberFormat('#,##0.00').format(totalDeductions)}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Status
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Status',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: statusColor.shade50,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        refundStatus,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: statusColor.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                // Last Refund (if available)
+                if (order.securityDepositRefundDate != null) ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Last Refund',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        DateFormat('dd MMM yyyy, hh:mm a').format(order.securityDepositRefundDate!),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                // Refund Deposit Button (only show when items are returned and there's amount to refund)
+                if (_shouldShowRefundButton()) ...[
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _isRefunding ? null : () => _handleRefundDeposit(),
+                      icon: _isRefunding
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Icon(Icons.account_balance_wallet, size: 20),
+                      label: Text(
+                        _isRefunding
+                            ? 'Processing Refund...'
+                            : 'Refund Deposit ₹${NumberFormat('#,##0.00').format(amountToRefund)}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade600,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Collect Outstanding Amount Section Widget
+/// 
+/// Displays input field and button to collect outstanding amount
+class _CollectOutstandingAmountSection extends ConsumerStatefulWidget {
+  final Order order;
+  final double outstandingAmount;
+
+  const _CollectOutstandingAmountSection({
+    required this.order,
+    required this.outstandingAmount,
+  });
+
+  @override
+  ConsumerState<_CollectOutstandingAmountSection> createState() =>
+      _CollectOutstandingAmountSectionState();
+}
+
+class _CollectOutstandingAmountSectionState
+    extends ConsumerState<_CollectOutstandingAmountSection> {
+  final TextEditingController _amountController = TextEditingController();
+  bool _isCollecting = false;
+  double _remainingToCollect = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _remainingToCollect = widget.outstandingAmount;
+    _amountController.text = '₹${NumberFormat('#,##0.00').format(widget.outstandingAmount)} (Remaining)';
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleCollect() async {
+    if (_isCollecting) return;
+
+    // Parse amount from input field (remove ₹ and extract number)
+    String amountText = _amountController.text
+        .replaceAll('₹', '')
+        .replaceAll(',', '')
+        .replaceAll(' (Remaining)', '')
+        .trim();
+    
+    double? amountToCollect;
+    try {
+      amountToCollect = double.tryParse(amountText);
+    } catch (e) {
+      // If parsing fails, use remaining amount
+      amountToCollect = _remainingToCollect;
+    }
+
+    // Validate amount
+    if (amountToCollect == null || amountToCollect <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid amount to collect'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Don't allow collecting more than remaining
+    if (amountToCollect > _remainingToCollect) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Cannot collect more than ₹${NumberFormat('#,##0.00').format(_remainingToCollect)}'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isCollecting = true;
+    });
+
+    try {
+      // Collect the outstanding amount using the service
+      final ordersService = ref.read(ordersServiceProvider);
+      await ordersService.collectOutstandingAmount(
+        orderId: widget.order.id,
+        amount: amountToCollect,
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Successfully collected ₹${NumberFormat('#,##0.00').format(amountToCollect)}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        // Refresh the order to get updated data from database
+        ref.invalidate(orderProvider(widget.order.id));
+        
+        // Wait for order to refresh, then recalculate remaining amount
+        // This ensures we get the updated security_deposit_amount from database
+        await Future.delayed(const Duration(milliseconds: 300));
+        
+        // Get updated order to recalculate outstanding amount
+        final updatedOrderAsync = ref.read(orderProvider(widget.order.id));
+        updatedOrderAsync.whenData((updatedOrder) {
+          if (updatedOrder != null && mounted) {
+            // Recalculate outstanding amount with updated security deposit
+            final updatedSecurityDeposit = updatedOrder.securityDepositAmount ?? 0.0;
+            final rentalAmount = updatedOrder.subtotal ?? 0.0;
+            final gstAmount = updatedOrder.gstAmount ?? 0.0;
+            final rentalAndGst = rentalAmount + gstAmount;
+            final newOutstanding = (rentalAndGst - updatedSecurityDeposit).clamp(0.0, double.infinity);
+            
+            setState(() {
+              _remainingToCollect = newOutstanding;
+              if (_remainingToCollect > 0) {
+                _amountController.text = '₹${NumberFormat('#,##0.00').format(_remainingToCollect)} (Remaining)';
+              } else {
+                _amountController.text = '₹0.00 (Remaining)';
+              }
+            });
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error collecting amount: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCollecting = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      color: Colors.pink.shade50,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.red.shade200, width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.account_balance_wallet_outlined,
+                  size: 20,
+                  color: Colors.red.shade700,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Collect Outstanding Amount',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade900,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Enter Amount to Collect',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _amountController,
+                    readOnly: _remainingToCollect <= 0,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      // Allow only numbers and decimal point
+                      FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
+                    ],
+                    decoration: InputDecoration(
+                      hintText: 'Enter amount',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.red.shade400, width: 2),
+                      ),
+                      suffixIcon: _remainingToCollect > 0
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.arrow_drop_up, color: Colors.grey.shade600),
+                                  onPressed: () {
+                                    // Set to full remaining amount
+                                    setState(() {
+                                      _amountController.text = '₹${NumberFormat('#,##0.00').format(_remainingToCollect)} (Remaining)';
+                                    });
+                                  },
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
+                                  onPressed: () {
+                                    // Set to zero
+                                    setState(() {
+                                      _amountController.text = '₹0.00 (Remaining)';
+                                    });
+                                  },
+                                ),
+                              ],
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.orange.shade400, Colors.red.shade600],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ElevatedButton(
+                    onPressed: _remainingToCollect > 0 && !_isCollecting ? _handleCollect : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: _isCollecting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text(
+                            'Collect',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+            if (_remainingToCollect > 0) ...[
+              const SizedBox(height: 8),
+              RichText(
+                text: TextSpan(
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade700,
+                  ),
+                  children: [
+                    const TextSpan(text: 'Remaining to collect: '),
+                    TextSpan(
+                      text: '₹${NumberFormat('#,##0.00').format(_remainingToCollect)}',
+                      style: TextStyle(
+                        color: Colors.red.shade700,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Refund Row Widget for displaying refund line items
+class _RefundRow extends StatelessWidget {
+  final String label;
+  final double amount;
+  final bool isPositive;
+  final bool isBlue;
+
+  const _RefundRow({
+    required this.label,
+    required this.amount,
+    required this.isPositive,
+    this.isBlue = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Color textColor;
+    if (isBlue) {
+      textColor = Colors.blue.shade700;
+    } else if (isPositive) {
+      textColor = Colors.green.shade700;
+    } else {
+      textColor = Colors.red.shade700;
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey.shade700,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Text(
+          '${amount >= 0 ? '+' : ''}₹${NumberFormat('#,##0.00').format(amount.abs())}',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
+        ),
+      ],
     );
   }
 }

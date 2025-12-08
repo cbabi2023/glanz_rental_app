@@ -13,6 +13,7 @@ class OrderDraftState {
   final String endDate;
   final String invoiceNumber;
   final List<OrderItem> items;
+  final double? securityDeposit;
 
   OrderDraftState({
     this.customerId,
@@ -22,6 +23,7 @@ class OrderDraftState {
     required this.endDate,
     required this.invoiceNumber,
     required this.items,
+    this.securityDeposit,
   });
 
   OrderDraftState copyWith({
@@ -32,6 +34,7 @@ class OrderDraftState {
     String? endDate,
     String? invoiceNumber,
     List<OrderItem>? items,
+    double? securityDeposit,
   }) {
     return OrderDraftState(
       customerId: customerId ?? this.customerId,
@@ -41,6 +44,7 @@ class OrderDraftState {
       endDate: endDate ?? this.endDate,
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
       items: items ?? this.items,
+      securityDeposit: securityDeposit ?? this.securityDeposit,
     );
   }
 
@@ -95,6 +99,10 @@ class OrderDraftNotifier extends StateNotifier<OrderDraftState> {
     state = state.copyWith(invoiceNumber: number);
   }
 
+  void setSecurityDeposit(double? amount) {
+    state = state.copyWith(securityDeposit: amount);
+  }
+
   void addItem(OrderItem item) {
     final newItems = [item, ...state.items];
     state = state.copyWith(items: newItems);
@@ -129,6 +137,7 @@ class OrderDraftNotifier extends StateNotifier<OrderDraftState> {
       endDate: endDate,
       invoiceNumber: order.invoiceNumber,
       items: order.items ?? [],
+      securityDeposit: order.securityDeposit,
     );
   }
 

@@ -67,7 +67,8 @@ class OrdersService {
         .select(
           'id, invoice_number, branch_id, staff_id, customer_id, '
           'booking_date, start_date, end_date, start_datetime, end_datetime, '
-          'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, created_at, '
+          'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, '
+          'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, created_at, '
           'customer:customers(id, name, phone, customer_number), '
           'branch:branches(id, name), '
           'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity, damage_fee)',
@@ -116,7 +117,8 @@ class OrdersService {
           .select(
             'id, invoice_number, branch_id, staff_id, customer_id, '
             'booking_date, start_date, end_date, start_datetime, end_datetime, '
-            'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, created_at, '
+            'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, '
+            'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, created_at, '
             'customer:customers(*), '
             'staff:profiles(id, full_name, upi_id), '
             'branch:branches(*), '
@@ -176,6 +178,7 @@ class OrdersService {
     required double totalAmount,
     double? subtotal,
     double? gstAmount,
+    double? securityDeposit,
     required List<Map<String, dynamic>> items,
   }) async {
     // Parse start date to determine status
@@ -212,6 +215,13 @@ class OrdersService {
       'total_amount': totalAmount,
       'subtotal': subtotal,
       'gst_amount': gstAmount,
+      // Insert security deposit amount (numeric) and collected flag (boolean)
+      if (securityDeposit != null && securityDeposit > 0) 
+        'security_deposit_amount': securityDeposit,
+      if (securityDeposit != null && securityDeposit > 0) 
+        'security_deposit_collected': true, // Boolean flag indicating deposit was collected
+      // Note: security_deposit_refunded is a boolean flag, so we don't set it during creation
+      // Note: security_deposit_refunded_amount and security_deposit_refund_date are set during refund process
     };
 
     // Create the order
@@ -253,6 +263,7 @@ class OrdersService {
     required double totalAmount,
     double? subtotal,
     double? gstAmount,
+    double? securityDeposit,
     required List<Map<String, dynamic>> items,
   }) async {
     final startDateOnly = startDate.split('T')[0];
@@ -268,6 +279,13 @@ class OrdersService {
       'total_amount': totalAmount,
       'subtotal': subtotal,
       'gst_amount': gstAmount,
+      // Update security deposit amount (numeric) and collected flag (boolean)
+      if (securityDeposit != null && securityDeposit > 0) 
+        'security_deposit_amount': securityDeposit,
+      if (securityDeposit != null && securityDeposit > 0) 
+        'security_deposit_collected': true, // Boolean flag indicating deposit was collected
+      // Note: security_deposit_refunded is a boolean flag, so we don't update it here
+      // Note: security_deposit_refunded_amount and security_deposit_refund_date are set during refund process
     };
 
     // Add customer_id if provided
@@ -394,6 +412,130 @@ class OrdersService {
       rethrow;
     }
   }
+
+  /// Refund security deposit for an order
+  /// Updates security_deposit_refunded_amount and security_deposit_refund_date
+  Future<Order> refundSecurityDeposit({
+    required String orderId,
+    required double amount,
+  }) async {
+    try {
+      // Get current order
+      final currentOrder = await getOrder(orderId);
+      if (currentOrder == null) {
+        throw Exception('Order not found');
+      }
+
+      // Validate amount
+      if (amount <= 0) {
+        throw Exception('Amount must be greater than zero');
+      }
+
+      // Get current values
+      final securityDeposit = currentOrder.securityDepositAmount ?? 0.0;
+      final rentalAmount = currentOrder.subtotal ?? 0.0;
+      final gstAmount = currentOrder.gstAmount ?? 0.0;
+      final damageFees = currentOrder.damageFeeTotal ?? 0.0;
+      final lateFee = currentOrder.lateFee ?? 0.0;
+      final totalDeductions = rentalAmount + gstAmount + damageFees + lateFee;
+      final alreadyRefunded = currentOrder.securityDepositRefundedAmount ?? 0.0;
+      
+      // Calculate available to refund
+      final availableToRefund = (securityDeposit - totalDeductions - alreadyRefunded).clamp(0.0, securityDeposit);
+      
+      // Validate: cannot refund more than available
+      if (amount > availableToRefund) {
+        throw Exception('Cannot refund more than available amount: ₹${availableToRefund.toStringAsFixed(2)}');
+      }
+      
+      // Calculate new refunded amount
+      final newRefundedAmount = alreadyRefunded + amount;
+      
+      // Check if fully refunded
+      final totalRefundable = securityDeposit - totalDeductions;
+      final isFullyRefunded = newRefundedAmount >= totalRefundable;
+
+      // Update the order with refund information
+      await _supabase
+          .from('orders')
+          .update({
+            'security_deposit_refunded_amount': newRefundedAmount,
+            'security_deposit_refunded': isFullyRefunded, // Set boolean flag
+            'security_deposit_refund_date': DateTime.now().toIso8601String(),
+          })
+          .eq('id', orderId);
+
+      // Return updated order
+      final updatedOrder = await getOrder(orderId);
+      if (updatedOrder == null) {
+        throw Exception('Failed to retrieve updated order');
+      }
+      return updatedOrder;
+    } catch (e) {
+      print('Error refunding security deposit: $e');
+      rethrow;
+    }
+  }
+
+  /// Collect outstanding amount for an order
+  /// This updates the security_deposit_amount to include the collected outstanding amount
+  /// Following website logic: when collecting outstanding, add to security_deposit_amount
+  /// so that outstanding amount becomes zero (security deposit now covers rental + GST)
+  Future<Order> collectOutstandingAmount({
+    required String orderId,
+    required double amount,
+  }) async {
+    try {
+      // Get current order
+      final currentOrder = await getOrder(orderId);
+      if (currentOrder == null) {
+        throw Exception('Order not found');
+      }
+
+      // Validate amount
+      if (amount <= 0) {
+        throw Exception('Amount must be greater than zero');
+      }
+
+      // Get current security deposit amount (or 0 if null)
+      final currentSecurityDeposit = currentOrder.securityDepositAmount ?? 0.0;
+      
+      // Calculate current outstanding amount
+      final rentalAmount = currentOrder.subtotal ?? 0.0;
+      final gstAmount = currentOrder.gstAmount ?? 0.0;
+      final rentalAndGst = rentalAmount + gstAmount;
+      final currentOutstanding = (rentalAndGst - currentSecurityDeposit).clamp(0.0, double.infinity);
+      
+      // Validate: cannot collect more than outstanding
+      if (amount > currentOutstanding) {
+        throw Exception('Cannot collect more than outstanding amount: ₹${currentOutstanding.toStringAsFixed(2)}');
+      }
+      
+      // Add the collected amount to security deposit
+      // This effectively increases the security deposit to cover the outstanding amount
+      // Following website logic: security_deposit_amount = original + collected
+      final newSecurityDeposit = currentSecurityDeposit + amount;
+
+      // Update the order with new security deposit amount and mark as collected
+      await _supabase
+          .from('orders')
+          .update({
+            'security_deposit_amount': newSecurityDeposit,
+            'security_deposit_collected': true, // Mark as collected
+          })
+          .eq('id', orderId);
+
+      // Return updated order
+      final updatedOrder = await getOrder(orderId);
+      if (updatedOrder == null) {
+        throw Exception('Failed to retrieve updated order');
+      }
+      return updatedOrder;
+    } catch (e) {
+      print('Error collecting outstanding amount: $e');
+      rethrow;
+    }
+  }
   
   /// Process order return with item-wise tracking
   /// Uses RPC function process_order_return_optimized
@@ -435,7 +577,8 @@ class OrdersService {
         .select(
           'id, invoice_number, branch_id, staff_id, customer_id, '
           'booking_date, start_date, end_date, start_datetime, end_datetime, '
-          'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, created_at, '
+          'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, '
+          'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, created_at, '
           'customer:customers(*), '
           'branch:branches(*), '
           'staff:profiles(id, full_name, upi_id), '
