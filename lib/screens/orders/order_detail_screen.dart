@@ -48,6 +48,26 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   // Late fee controller
   final TextEditingController _lateFeeController = TextEditingController();
 
+  @override
+  void initState() {
+    super.initState();
+    // Force refresh order data when screen opens to get latest from database
+    // This ensures we get the latest data, including any changes made on the website
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        // Invalidate to clear cache and force fresh fetch
+        ref.invalidate(orderProvider(widget.orderId));
+      }
+    });
+  }
+  
+  /// Manually refresh order data from database
+  Future<void> _refreshOrder() async {
+    ref.invalidate(orderProvider(widget.orderId));
+    // Wait a bit for the fetch to complete
+    await Future.delayed(const Duration(milliseconds: 500));
+  }
+
   Future<void> _handleInvoiceAction(String action, Order order) async {
     // Set loading state for specific action
     switch (action) {
@@ -237,8 +257,14 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       return {'error': 'Invalid end date'};
     }
 
-    final duration = endDate.difference(startDate);
-    final days = duration.inDays;
+    // Normalize to date only (midnight) to ensure accurate day calculation
+    final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
+    final endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
+    
+    final duration = endDateOnly.difference(startDateOnly);
+    // For rental: same day = 1 day, next day = 1 day (overnight), etc.
+    final daysDifference = duration.inDays;
+    final days = daysDifference < 1 ? 1 : daysDifference;
     final hours = duration.inHours % 24;
 
     return {
@@ -807,6 +833,24 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           ),
         ),
         actions: [
+          // Refresh button to manually refresh order data
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Color(0xFF0F1724)),
+            onPressed: () async {
+              // Force refresh order data from database
+              await _refreshOrder();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Order data refreshed'),
+                    duration: Duration(seconds: 1),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            },
+            tooltip: 'Refresh Order',
+          ),
           orderAsync.when(
             data: (order) {
               if (order != null) {
@@ -2551,7 +2595,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     // Security Deposit Refund Section (only show if security deposit exists)
                     if (order.securityDeposit != null && order.securityDeposit! > 0) ...[
                       const SizedBox(height: 16),
-                      _SecurityDepositRefundSection(order: order),
+                      _SecurityDepositRefundSection(
+                        order: order,
+                        localDamageCosts: _damageCosts, // Pass local damage costs for real-time calculation
+                      ),
                     ],
                   ],
                 ),
@@ -3246,8 +3293,8 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                               ),
                           ],
                         ),
-                        // Damage Fee & Description (only show when quantity is missing - partial return)
-                        if (isPartiallyReturned) ...[
+                        // Damage Fee & Description (show when item is checked/returned - allows damage even for full returns)
+                        if (widget.isChecked || isPartiallyReturned || isFullyReturned) ...[
                           const SizedBox(height: 16),
                           Text(
                             'Damage Fee (₹)',
@@ -3402,9 +3449,11 @@ class _ReturnStatusBox extends StatelessWidget {
 /// Displays security deposit refund details matching website design
 class _SecurityDepositRefundSection extends ConsumerStatefulWidget {
   final Order order;
+  final Map<String, double>? localDamageCosts; // Local damage costs (before saving)
 
   const _SecurityDepositRefundSection({
     required this.order,
+    this.localDamageCosts,
   });
 
   @override
@@ -3505,27 +3554,65 @@ class _SecurityDepositRefundSectionState
 
   @override
   Widget build(BuildContext context) {
-    final order = widget.order;
-    // Calculate refund amounts using actual database fields
-    // Security deposit amount (what was initially collected)
-    final securityDeposit = order.securityDepositAmount ?? 0.0;
-    final rentalAmount = order.subtotal ?? 0.0;
-    final gstAmount = order.gstAmount ?? 0.0;
-    final damageFees = order.damageFeeTotal ?? 0.0;
-    final lateFee = order.lateFee ?? 0.0;
+    // Watch the order provider to get the latest data from database
+    final orderAsync = ref.watch(orderProvider(widget.order.id));
     
-    // Total deductions (rental + GST + damage + late fee)
-    final totalDeductions = rentalAmount + gstAmount + damageFees + lateFee;
-    
-    // Get already refunded amount from database
-    // securityDepositRefunded is a boolean flag, use securityDepositRefundedAmount for the amount
-    final alreadyRefunded = order.securityDepositRefundedAmount ?? 0.0;
-    
-    // Calculate outstanding amount (what needs to be collected)
-    // Outstanding = (Rental + GST) - Security Deposit
-    // This is the amount customer still needs to pay beyond the security deposit
-    final rentalAndGst = rentalAmount + gstAmount;
-    final outstandingAmount = (rentalAndGst - securityDeposit).clamp(0.0, double.infinity);
+    return orderAsync.when(
+      data: (updatedOrder) {
+        if (updatedOrder == null) {
+          return const SizedBox.shrink();
+        }
+        
+        // Use the latest order data from database
+        final order = updatedOrder;
+        
+        // Calculate refund amounts using actual database fields
+        // Security deposit amount (what was initially collected)
+        final securityDeposit = order.securityDepositAmount ?? 0.0;
+        final rentalAmount = order.subtotal ?? 0.0;
+        final gstAmount = order.gstAmount ?? 0.0;
+        
+        // Calculate damage fees: use local damage costs if available (before saving), otherwise use database value
+        double damageFees = order.damageFeeTotal ?? 0.0;
+        if (widget.localDamageCosts != null && widget.localDamageCosts!.isNotEmpty) {
+          // Calculate total from local damage costs
+          final localDamageTotal = widget.localDamageCosts!.values.fold<double>(
+            0.0,
+            (sum, cost) => sum + (cost ?? 0.0),
+          );
+          // Use local damage if it's different from database (user has entered damage but not saved yet)
+          // Otherwise, use the higher value to show the most up-to-date amount
+          damageFees = localDamageTotal > damageFees ? localDamageTotal : damageFees;
+        }
+        
+        final lateFee = order.lateFee ?? 0.0;
+        
+        // Total deductions (rental + GST + damage + late fee)
+        final totalDeductions = rentalAmount + gstAmount + damageFees + lateFee;
+        
+        // Get already refunded amount from database
+        // securityDepositRefunded is a boolean flag, use securityDepositRefundedAmount for the amount
+        final alreadyRefunded = order.securityDepositRefundedAmount ?? 0.0;
+        
+        // Calculate outstanding amount (what needs to be collected)
+        // Outstanding = (Rental + GST + Damage + Late Fee) - Security Deposit - Additional Amount Collected
+        // This is the amount customer still needs to pay beyond the security deposit
+        // Include all charges: rental, GST, damage fees, and late fees
+        // Subtract both security deposit and any additional amounts already collected
+        final additionalCollected = order.additionalAmountCollected ?? 0.0;
+        final totalCharges = rentalAmount + gstAmount + damageFees + lateFee;
+        final outstandingAmount = (totalCharges - securityDeposit - additionalCollected).clamp(0.0, double.infinity);
+        
+        // Debug logging to verify calculation
+        print('🔍 Outstanding Amount Calculation:');
+        print('  Security Deposit: ₹$securityDeposit');
+        print('  Additional Collected: ₹$additionalCollected');
+        print('  Rental: ₹$rentalAmount');
+        print('  GST: ₹$gstAmount');
+        print('  Damage Fees: ₹$damageFees');
+        print('  Late Fee: ₹$lateFee');
+        print('  Total Charges: ₹$totalCharges');
+        print('  Outstanding: ₹$outstandingAmount');
     
     // Available to refund = Security Deposit - Total Deductions - Already Refunded
     final availableToRefund = (securityDeposit - totalDeductions - alreadyRefunded).clamp(0.0, securityDeposit);
@@ -3923,6 +4010,10 @@ class _SecurityDepositRefundSectionState
         ),
       ],
     );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
   }
 }
 
@@ -4033,12 +4124,17 @@ class _CollectOutstandingAmountSectionState
         final updatedOrderAsync = ref.read(orderProvider(widget.order.id));
         updatedOrderAsync.whenData((updatedOrder) {
           if (updatedOrder != null && mounted) {
-            // Recalculate outstanding amount with updated security deposit
+            // Recalculate outstanding amount with updated data
+            // Include all charges: rental, GST, damage fees, and late fees
+            // Subtract both security deposit and additional amount collected
             final updatedSecurityDeposit = updatedOrder.securityDepositAmount ?? 0.0;
+            final updatedAdditionalCollected = updatedOrder.additionalAmountCollected ?? 0.0;
             final rentalAmount = updatedOrder.subtotal ?? 0.0;
             final gstAmount = updatedOrder.gstAmount ?? 0.0;
-            final rentalAndGst = rentalAmount + gstAmount;
-            final newOutstanding = (rentalAndGst - updatedSecurityDeposit).clamp(0.0, double.infinity);
+            final damageFees = updatedOrder.damageFeeTotal ?? 0.0;
+            final lateFee = updatedOrder.lateFee ?? 0.0;
+            final totalCharges = rentalAmount + gstAmount + damageFees + lateFee;
+            final newOutstanding = (totalCharges - updatedSecurityDeposit - updatedAdditionalCollected).clamp(0.0, double.infinity);
             
             setState(() {
               _remainingToCollect = newOutstanding;
@@ -4071,50 +4167,86 @@ class _CollectOutstandingAmountSectionState
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: Colors.pink.shade50,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.red.shade200, width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    // Watch the order to get the latest data and recalculate outstanding amount
+    final orderAsync = ref.watch(orderProvider(widget.order.id));
+    
+    return orderAsync.when(
+      data: (updatedOrder) {
+        if (updatedOrder == null) {
+          return const SizedBox.shrink();
+        }
+        
+        // Recalculate outstanding amount with latest order data
+        final securityDeposit = updatedOrder.securityDepositAmount ?? 0.0;
+        final additionalCollected = updatedOrder.additionalAmountCollected ?? 0.0;
+        final rentalAmount = updatedOrder.subtotal ?? 0.0;
+        final gstAmount = updatedOrder.gstAmount ?? 0.0;
+        final damageFees = updatedOrder.damageFeeTotal ?? 0.0;
+        final lateFee = updatedOrder.lateFee ?? 0.0;
+        final totalCharges = rentalAmount + gstAmount + damageFees + lateFee;
+        final currentOutstanding = (totalCharges - securityDeposit - additionalCollected).clamp(0.0, double.infinity);
+        
+        // Hide the section if outstanding amount is 0 or less
+        if (currentOutstanding <= 0) {
+          return const SizedBox.shrink();
+        }
+        
+        // Update remaining amount if it changed
+        if (currentOutstanding != _remainingToCollect) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _remainingToCollect = currentOutstanding;
+                _amountController.text = '₹${NumberFormat('#,##0.00').format(_remainingToCollect)} (Remaining)';
+              });
+            }
+          });
+        }
+        
+        return Card(
+          elevation: 0,
+          color: Colors.pink.shade50,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.red.shade200, width: 1),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.account_balance_wallet_outlined,
-                  size: 20,
-                  color: Colors.red.shade700,
+                Row(
+                  children: [
+                    Icon(
+                      Icons.account_balance_wallet_outlined,
+                      size: 20,
+                      color: Colors.red.shade700,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Collect Outstanding Amount',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey.shade900,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(height: 20),
                 Text(
-                  'Collect Outstanding Amount',
+                  'Enter Amount to Collect',
                   style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey.shade900,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade700,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Enter Amount to Collect',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
                     controller: _amountController,
                     readOnly: _remainingToCollect <= 0,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -4163,74 +4295,78 @@ class _CollectOutstandingAmountSectionState
                               ],
                             )
                           : null,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.orange.shade400, Colors.red.shade600],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: ElevatedButton(
-                    onPressed: _remainingToCollect > 0 && !_isCollecting ? _handleCollect : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: _isCollecting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Text(
-                            'Collect',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
+                  ),
+                    const SizedBox(width: 12),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.orange.shade400, Colors.red.shade600],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ElevatedButton(
+                        onPressed: _remainingToCollect > 0 && !_isCollecting ? _handleCollect : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                  ),
-                ),
-              ],
-            ),
-            if (_remainingToCollect > 0) ...[
-              const SizedBox(height: 8),
-              RichText(
-                text: TextSpan(
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade700,
-                  ),
-                  children: [
-                    const TextSpan(text: 'Remaining to collect: '),
-                    TextSpan(
-                      text: '₹${NumberFormat('#,##0.00').format(_remainingToCollect)}',
-                      style: TextStyle(
-                        color: Colors.red.shade700,
-                        fontWeight: FontWeight.bold,
+                        ),
+                        child: _isCollecting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : const Text(
+                                'Collect',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
-          ],
-        ),
-      ),
+                if (_remainingToCollect > 0) ...[
+                  const SizedBox(height: 8),
+                  RichText(
+                    text: TextSpan(
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade700,
+                      ),
+                      children: [
+                        const TextSpan(text: 'Remaining to collect: '),
+                        TextSpan(
+                          text: '₹${NumberFormat('#,##0.00').format(_remainingToCollect)}',
+                          style: TextStyle(
+                            color: Colors.red.shade700,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
     );
   }
 }

@@ -73,6 +73,7 @@ class Order {
   final bool? securityDepositRefunded; // Security deposit refunded flag (boolean)
   final double? securityDepositRefundedAmount; // Security deposit refunded amount
   final DateTime? securityDepositRefundDate; // Security deposit refund date
+  final double? additionalAmountCollected; // Additional amount collected beyond security deposit (for outstanding amounts)
   final DateTime createdAt;
   
   // Computed property for backward compatibility
@@ -107,6 +108,7 @@ class Order {
     this.securityDepositRefunded, // Boolean flag (indicates if refunded)
     this.securityDepositRefundedAmount,
     this.securityDepositRefundDate,
+    this.additionalAmountCollected, // Additional amount collected beyond security deposit
     required this.createdAt,
     this.customer,
     this.staff,
@@ -211,6 +213,7 @@ class Order {
       securityDepositRefundDate: json['security_deposit_refund_date'] != null 
           ? safeDateTime(json['security_deposit_refund_date'])
           : null,
+      additionalAmountCollected: safeToDouble(json['additional_amount_collected']),
       createdAt: safeDateTime(json['created_at']),
       customer: customer,
       staff: staff,
@@ -241,6 +244,7 @@ class Order {
       'security_deposit_refunded': securityDepositRefunded, // Boolean flag
       'security_deposit_refunded_amount': securityDepositRefundedAmount,
       'security_deposit_refund_date': securityDepositRefundDate?.toIso8601String(),
+      'additional_amount_collected': additionalAmountCollected,
       'created_at': createdAt.toIso8601String(),
       if (customer != null) 'customer': customer!.toJson(),
       if (staff != null) 'staff': staff!.toJson(),

@@ -1156,9 +1156,18 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
       return {'error': 'Invalid end date'};
     }
 
-    final duration = endDate.difference(startDate);
-    final days = duration.inDays;
-    final hours = duration.inHours % 24;
+    // Normalize to date only (midnight) to ensure accurate day calculation
+    // For rental: same day = 1 day, next day = 1 day (overnight), etc.
+    final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
+    final endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
+    
+    final duration = endDateOnly.difference(startDateOnly);
+    final daysDifference = duration.inDays;
+    // Use same logic as calculateDays: at least 1 day for same-day rentals
+    final days = daysDifference < 1 ? 1 : daysDifference;
+    
+    // Only show hours if days is 0 (shouldn't happen with our logic, but keep for edge cases)
+    final hours = days == 0 ? (endDate.difference(startDate).inHours % 24) : 0;
 
     return {
       'startDate': startDate,
@@ -1640,7 +1649,9 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                'Duration: ${dateInfo['days']} day${dateInfo['days'] != 1 ? 's' : ''} ${dateInfo['hours']} hour${dateInfo['hours'] != 1 ? 's' : ''}',
+                                dateInfo['days'] > 0
+                                    ? 'Duration: ${dateInfo['days']} day${dateInfo['days'] != 1 ? 's' : ''}'
+                                    : 'Duration: ${dateInfo['hours']} hour${dateInfo['hours'] != 1 ? 's' : ''}',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,

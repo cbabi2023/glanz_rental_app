@@ -298,7 +298,12 @@ class InvoiceService {
         : (DateTime.parse(order.endDate));
 
     // Calculate rental days
-    final rentalDays = endDate.difference(startDate).inDays + 1;
+    // Normalize to date only (midnight) to ensure accurate day calculation
+    // For rental: same day = 1 day, next day = 1 day (overnight), etc.
+    final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
+    final endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
+    final daysDifference = endDateOnly.difference(startDateOnly).inDays;
+    final rentalDays = daysDifference < 1 ? 1 : daysDifference;
 
     // Parse address lines
     final addressLines = companyAddress

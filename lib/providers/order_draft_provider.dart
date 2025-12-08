@@ -153,11 +153,25 @@ final orderDraftProvider =
 });
 
 /// Calculate days between two dates
+/// Normalizes dates to midnight to ensure accurate day calculation
+/// For rental purposes:
+/// - Same day (Day 8 to Day 8) = 1 day rental
+/// - Next day (Day 8 to Day 9) = 1 day rental (overnight)
+/// - Day 8 to Day 10 = 2 days rental
 int calculateDays(String startDate, String endDate) {
   try {
     final start = DateTime.parse(startDate);
     final end = DateTime.parse(endDate);
-    return end.difference(start).inDays + 1; // Include both start and end day
+    
+    // Normalize to date only (midnight) to avoid time component issues
+    final startDateOnly = DateTime(start.year, start.month, start.day);
+    final endDateOnly = DateTime(end.year, end.month, end.day);
+    
+    // Calculate difference in days
+    // For rental: same day = 1 day, next day = 1 day (overnight), etc.
+    // Use max(1, ...) to ensure at least 1 day for same-day rentals
+    final daysDifference = endDateOnly.difference(startDateOnly).inDays;
+    return daysDifference < 1 ? 1 : daysDifference;
   } catch (e) {
     return 0;
   }

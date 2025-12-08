@@ -68,7 +68,7 @@ class OrdersService {
           'id, invoice_number, branch_id, staff_id, customer_id, '
           'booking_date, start_date, end_date, start_datetime, end_datetime, '
           'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, '
-          'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, created_at, '
+          'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, additional_amount_collected, created_at, '
           'customer:customers(id, name, phone, customer_number), '
           'branch:branches(id, name), '
           'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity, damage_fee)',
@@ -118,7 +118,7 @@ class OrdersService {
             'id, invoice_number, branch_id, staff_id, customer_id, '
             'booking_date, start_date, end_date, start_datetime, end_datetime, '
             'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, '
-            'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, created_at, '
+            'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, additional_amount_collected, created_at, '
             'customer:customers(*), '
             'staff:profiles(id, full_name, upi_id), '
             'branch:branches(*), '
@@ -497,30 +497,33 @@ class OrdersService {
         throw Exception('Amount must be greater than zero');
       }
 
-      // Get current security deposit amount (or 0 if null)
+      // Get current security deposit and additional amount collected
       final currentSecurityDeposit = currentOrder.securityDepositAmount ?? 0.0;
+      final currentAdditionalCollected = currentOrder.additionalAmountCollected ?? 0.0;
       
       // Calculate current outstanding amount
+      // Outstanding = (Rental + GST + Damage + Late Fee) - Security Deposit - Additional Amount Collected
       final rentalAmount = currentOrder.subtotal ?? 0.0;
       final gstAmount = currentOrder.gstAmount ?? 0.0;
-      final rentalAndGst = rentalAmount + gstAmount;
-      final currentOutstanding = (rentalAndGst - currentSecurityDeposit).clamp(0.0, double.infinity);
+      final damageFees = currentOrder.damageFeeTotal ?? 0.0;
+      final lateFee = currentOrder.lateFee ?? 0.0;
+      final totalCharges = rentalAmount + gstAmount + damageFees + lateFee;
+      final currentOutstanding = (totalCharges - currentSecurityDeposit - currentAdditionalCollected).clamp(0.0, double.infinity);
       
       // Validate: cannot collect more than outstanding
       if (amount > currentOutstanding) {
         throw Exception('Cannot collect more than outstanding amount: ₹${currentOutstanding.toStringAsFixed(2)}');
       }
       
-      // Add the collected amount to security deposit
-      // This effectively increases the security deposit to cover the outstanding amount
-      // Following website logic: security_deposit_amount = original + collected
-      final newSecurityDeposit = currentSecurityDeposit + amount;
+      // Add the collected amount to additional_amount_collected (following website logic)
+      // Website stores collected outstanding amounts in additional_amount_collected field
+      final newAdditionalCollected = currentAdditionalCollected + amount;
 
-      // Update the order with new security deposit amount and mark as collected
+      // Update the order with additional amount collected
       await _supabase
           .from('orders')
           .update({
-            'security_deposit_amount': newSecurityDeposit,
+            'additional_amount_collected': newAdditionalCollected,
             'security_deposit_collected': true, // Mark as collected
           })
           .eq('id', orderId);
@@ -578,7 +581,7 @@ class OrdersService {
           'id, invoice_number, branch_id, staff_id, customer_id, '
           'booking_date, start_date, end_date, start_datetime, end_datetime, '
           'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, '
-          'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, created_at, '
+          'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, additional_amount_collected, created_at, '
           'customer:customers(*), '
           'branch:branches(*), '
           'staff:profiles(id, full_name, upi_id), '
