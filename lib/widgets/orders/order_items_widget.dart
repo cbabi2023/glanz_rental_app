@@ -174,8 +174,8 @@ class _OrderItemCardState extends State<_OrderItemCard> {
     final updatedQuantity = field == 'quantity' ? value : item.quantity;
     final updatedPrice = field == 'price_per_day' ? value : item.pricePerDay;
     
-    // Calculate line total
-    final updatedLineTotal = updatedQuantity * updatedPrice * widget.days;
+    // Calculate line total (without multiplying by days)
+    final updatedLineTotal = updatedQuantity * updatedPrice;
     
     return OrderItem(
       id: item.id,
@@ -362,7 +362,7 @@ class _OrderItemCardState extends State<_OrderItemCard> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${widget.item.quantity} × ₹${widget.item.pricePerDay.toStringAsFixed(2)} × ${widget.days} days',
+                  '${widget.item.quantity} × ₹${widget.item.pricePerDay.toStringAsFixed(2)}',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey.shade600,

@@ -690,16 +690,15 @@ class OrdersService {
       // Get the item to calculate new line_total
       final itemResponse = await _supabase
           .from('order_items')
-          .select('order_id, price_per_day, days')
+          .select('order_id, price_per_day')
           .eq('id', itemId)
           .single();
       
       final orderId = itemResponse['order_id'] as String;
       final pricePerDay = (itemResponse['price_per_day'] as num).toDouble();
-      final days = (itemResponse['days'] as num).toInt();
       
-      // Calculate new line_total
-      final newLineTotal = quantity * pricePerDay * days;
+      // Calculate new line_total (without multiplying by days)
+      final newLineTotal = quantity * pricePerDay;
       
       // Update the item
       await _supabase

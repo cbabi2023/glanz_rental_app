@@ -135,13 +135,13 @@ class OrderItem {
   /// Get the quantity that has been returned
   int get alreadyReturnedQuantity => returnedQuantity ?? (isReturned ? quantity : 0);
 
-  /// Calculate line total (quantity * price_per_day * days)
+  /// Calculate line total (quantity * price_per_day, without multiplying by days)
   static double calculateLineTotal({
     required int quantity,
     required double pricePerDay,
     required int days,
   }) {
-    return quantity * pricePerDay * days;
+    return quantity * pricePerDay;
   }
 }
 

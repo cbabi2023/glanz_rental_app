@@ -113,7 +113,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       final itemsForDb = draft.items.map((item) {
         // Update days for each item based on start/end dates
         final days = calculateDays(draft.startDate, draft.endDate);
-        final lineTotal = item.quantity * item.pricePerDay * days;
+        final lineTotal = item.quantity * item.pricePerDay;
         
         return {
           'photo_url': item.photoUrl,
@@ -362,7 +362,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                           quantity: item.quantity,
                           pricePerDay: item.pricePerDay,
                           days: days,
-                          lineTotal: item.quantity * item.pricePerDay * days,
+                          lineTotal: item.quantity * item.pricePerDay,
                         );
                         ref.read(orderDraftProvider.notifier).addItem(updatedItem);
                       },
@@ -375,7 +375,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                           quantity: updatedItem.quantity,
                           pricePerDay: updatedItem.pricePerDay,
                           days: days,
-                          lineTotal: updatedItem.quantity * updatedItem.pricePerDay * days,
+                          lineTotal: updatedItem.quantity * updatedItem.pricePerDay,
                         );
                         ref.read(orderDraftProvider.notifier).updateItem(index, itemWithDays);
                       },
