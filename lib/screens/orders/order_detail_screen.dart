@@ -4082,8 +4082,12 @@ class _CollectOutstandingAmountSectionState
       return;
     }
 
-    // Don't allow collecting more than remaining
-    if (amountToCollect > _remainingToCollect) {
+    // Don't allow collecting more than remaining (with small tolerance for floating-point precision)
+    // Round to 2 decimal places to avoid floating-point precision issues
+    final roundedAmount = (amountToCollect * 100).round() / 100;
+    final roundedRemaining = (_remainingToCollect * 100).round() / 100;
+    
+    if (roundedAmount > roundedRemaining + 0.01) { // Allow 0.01 tolerance
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Cannot collect more than ₹${NumberFormat('#,##0.00').format(_remainingToCollect)}'),
@@ -4092,6 +4096,9 @@ class _CollectOutstandingAmountSectionState
       );
       return;
     }
+    
+    // Use rounded amount for collection
+    final finalAmount = roundedAmount.clamp(0.0, roundedRemaining);
 
     setState(() {
       _isCollecting = true;
@@ -4099,16 +4106,17 @@ class _CollectOutstandingAmountSectionState
 
     try {
       // Collect the outstanding amount using the service
+      // Use the final rounded amount to avoid precision issues
       final ordersService = ref.read(ordersServiceProvider);
       await ordersService.collectOutstandingAmount(
         orderId: widget.order.id,
-        amount: amountToCollect,
+        amount: finalAmount,
       );
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Successfully collected ₹${NumberFormat('#,##0.00').format(amountToCollect)}'),
+            content: Text('Successfully collected ₹${NumberFormat('#,##0.00').format(finalAmount)}'),
             backgroundColor: Colors.green,
           ),
         );

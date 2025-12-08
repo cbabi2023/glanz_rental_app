@@ -510,14 +510,21 @@ class OrdersService {
       final totalCharges = rentalAmount + gstAmount + damageFees + lateFee;
       final currentOutstanding = (totalCharges - currentSecurityDeposit - currentAdditionalCollected).clamp(0.0, double.infinity);
       
-      // Validate: cannot collect more than outstanding
-      if (amount > currentOutstanding) {
+      // Validate: cannot collect more than outstanding (with small tolerance for floating-point precision)
+      // Round to 2 decimal places to avoid floating-point precision issues
+      final roundedAmount = (amount * 100).round() / 100;
+      final roundedOutstanding = (currentOutstanding * 100).round() / 100;
+      
+      if (roundedAmount > roundedOutstanding + 0.01) { // Allow 0.01 tolerance
         throw Exception('Cannot collect more than outstanding amount: ₹${currentOutstanding.toStringAsFixed(2)}');
       }
       
+      // Use rounded amount for consistency
+      final finalAmount = roundedAmount.clamp(0.0, roundedOutstanding);
+      
       // Add the collected amount to additional_amount_collected (following website logic)
       // Website stores collected outstanding amounts in additional_amount_collected field
-      final newAdditionalCollected = currentAdditionalCollected + amount;
+      final newAdditionalCollected = currentAdditionalCollected + finalAmount;
 
       // Update the order with additional amount collected
       await _supabase
