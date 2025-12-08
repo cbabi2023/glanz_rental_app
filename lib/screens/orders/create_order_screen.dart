@@ -27,6 +27,41 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   final _invoiceNumberController = TextEditingController();
   Customer? _selectedCustomer;
   bool _isLoading = false;
+  bool _invoiceNumberInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Generate and display auto invoice number when screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeInvoiceNumber();
+    });
+  }
+
+  void _initializeInvoiceNumber() {
+    if (!_invoiceNumberInitialized && mounted) {
+      final draft = ref.read(orderDraftProvider);
+      // Only generate if invoice number is empty
+      if (draft.invoiceNumber.isEmpty && _invoiceNumberController.text.isEmpty) {
+        final ordersService = ref.read(ordersServiceProvider);
+        final generatedInvoiceNumber = ordersService.generateInvoiceNumber();
+        // Update draft first, then controller to avoid sync conflicts
+        ref.read(orderDraftProvider.notifier).setInvoiceNumber(generatedInvoiceNumber);
+        if (mounted) {
+          _invoiceNumberController.text = generatedInvoiceNumber;
+        }
+        _invoiceNumberInitialized = true;
+      } else if (draft.invoiceNumber.isNotEmpty && _invoiceNumberController.text.isEmpty) {
+        // If draft has invoice number but controller is empty, sync from draft
+        if (mounted) {
+          _invoiceNumberController.text = draft.invoiceNumber;
+        }
+        _invoiceNumberInitialized = true;
+      } else {
+        _invoiceNumberInitialized = true;
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -197,8 +232,9 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     final endDate =
         draft.endDate.isNotEmpty ? DateTime.tryParse(draft.endDate) : null;
 
-    // Update invoice number in draft when controller changes
-    if (_invoiceNumberController.text != draft.invoiceNumber) {
+    // Sync invoice number from draft to controller only if controller is empty
+    // (to avoid overwriting user edits or auto-generated value)
+    if (_invoiceNumberInitialized && _invoiceNumberController.text.isEmpty && draft.invoiceNumber.isNotEmpty) {
       _invoiceNumberController.text = draft.invoiceNumber;
     }
 
@@ -447,7 +483,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                     child: _ModernTextField(
                       controller: _invoiceNumberController,
                       label: 'Invoice Number',
-                      hint: 'Optional - Auto-generated if empty',
+                      hint: 'Auto-generated (can be edited)',
                       prefixIcon: Icons.receipt_outlined,
                       onChanged: (value) {
                         ref.read(orderDraftProvider.notifier).setInvoiceNumber(value);
