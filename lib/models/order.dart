@@ -124,13 +124,53 @@ class Order {
     }
 
     // Helper function to parse datetime string
+    // Handles timezone correctly - if string is UTC (ends with Z) or has timezone, 
+    // it will be converted to local time. If no timezone, treats as local.
     DateTime safeDateTime(dynamic value) {
       if (value == null) return DateTime.now();
       if (value is DateTime) return value;
       try {
-        return DateTime.parse(value.toString());
+        final dateString = value.toString();
+        // Parse the datetime string
+        DateTime parsed = DateTime.parse(dateString);
+        // DateTime.parse already handles timezone conversion correctly
+        return parsed;
       } catch (e) {
         return DateTime.now();
+      }
+    }
+    
+    // Helper function to parse datetime string and preserve timezone info
+    // This ensures datetimes from database are correctly handled
+    // If the string doesn't have timezone info, we assume it's UTC (common in databases)
+    String? safeDateTimeString(dynamic value) {
+      if (value == null) return null;
+      if (value is DateTime) return value.toIso8601String();
+      try {
+        final dateString = value.toString().trim();
+        
+        // Check if string has timezone info (ends with Z or has timezone offset like +05:30, -05:00)
+        final hasTimezone = dateString.endsWith('Z') || 
+                           RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(dateString);
+        
+        if (!hasTimezone) {
+          // No timezone info - assume it's UTC from database
+          // Parse the components and create as UTC, then convert to local for consistency
+          final parsed = DateTime.parse(dateString);
+          // Create as UTC datetime
+          final utcDate = DateTime.utc(
+            parsed.year, parsed.month, parsed.day,
+            parsed.hour, parsed.minute, parsed.second, 
+            parsed.millisecond, parsed.microsecond
+          );
+          // Return in ISO format - this will be converted to local when parsed later
+          return utcDate.toIso8601String();
+        }
+        
+        // Has timezone info, return as-is (DateTime.parse will handle conversion correctly)
+        return dateString;
+      } catch (e) {
+        return null;
       }
     }
 
@@ -194,8 +234,8 @@ class Order {
       bookingDate: json['booking_date']?.toString(),
       startDate: safeString(json['start_date']),
       endDate: safeString(json['end_date']),
-      startDatetime: json['start_datetime']?.toString(),
-      endDatetime: json['end_datetime']?.toString(),
+      startDatetime: safeDateTimeString(json['start_datetime']),
+      endDatetime: safeDateTimeString(json['end_datetime']),
       status: OrderStatus.fromString(safeString(json['status'], 'active')),
       totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0.0,
       subtotal: (json['subtotal'] as num?)?.toDouble(),
