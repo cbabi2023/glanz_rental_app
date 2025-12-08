@@ -1208,23 +1208,6 @@ class InvoiceService {
                 ],
               ),
             ],
-
-            pw.SizedBox(height: 16),
-
-            // Footer Note
-            pw.Container(
-              padding: const pw.EdgeInsets.only(top: 8),
-              decoration: const pw.BoxDecoration(
-                border: pw.Border(
-                  top: pw.BorderSide(color: PdfColors.grey400, width: 0.5),
-                ),
-              ),
-              child: pw.Text(
-                'This is a system-generated invoice. No physical signature required.',
-                style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
-                textAlign: pw.TextAlign.center,
-              ),
-            ),
           ];
         },
       ),
