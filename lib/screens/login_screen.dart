@@ -70,6 +70,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         email: email,
         password: password,
       );
+      // Refresh user profile data so role/branch updates immediately after login
+      ref.invalidate(userProfileProvider);
+      ref.invalidate(userProfileWithBranchProvider);
 
       // Navigate to dashboard on success
       if (mounted) {

@@ -39,10 +39,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       // If authenticated and going to login, redirect based on role
+      // If profile not loaded yet, assume staff-safe landing (/orders) to avoid showing dashboard
       if (isAuthenticated && isGoingToLogin) {
         final profile = userProfileAsync.valueOrNull;
-        // Staff users should go to orders, others to dashboard
-        if (profile?.isStaff == true) {
+        if (profile == null || profile.isStaff) {
           return '/orders';
         }
         return '/dashboard';
@@ -51,16 +51,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // If staff user tries to access dashboard, redirect to orders
       if (isAuthenticated && (state.matchedLocation == '/dashboard' || state.uri.path == '/dashboard')) {
         final profile = userProfileAsync.valueOrNull;
-        if (profile?.isStaff == true) {
+        if (profile == null || profile.isStaff) {
           return '/orders';
         }
       }
 
       // Additional check: if staff user is authenticated and not going to login,
-      // ensure they're not on dashboard route
+      // ensure they're not on dashboard route (when navigating internally)
       if (isAuthenticated && !isGoingToLogin) {
         final profile = userProfileAsync.valueOrNull;
-        if (profile?.isStaff == true && state.matchedLocation == '/dashboard') {
+        if ((profile == null || profile.isStaff) && state.matchedLocation == '/dashboard') {
           return '/orders';
         }
       }
