@@ -18,10 +18,7 @@ import '../../widgets/orders/order_summary_widget.dart';
 class EditOrderScreen extends ConsumerStatefulWidget {
   final String orderId;
 
-  const EditOrderScreen({
-    super.key,
-    required this.orderId,
-  });
+  const EditOrderScreen({super.key, required this.orderId});
 
   @override
   ConsumerState<EditOrderScreen> createState() => _EditOrderScreenState();
@@ -45,7 +42,7 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
     if (_isInitialized) return;
 
     final orderAsync = ref.read(orderProvider(widget.orderId));
-    
+
     await orderAsync.when(
       data: (order) async {
         if (order == null || !mounted) return;
@@ -78,7 +75,7 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
     final orderAsync = ref.read(orderProvider(widget.orderId));
 
     // Wait for order to load
-    final order = await orderAsync.when(
+    final order = orderAsync.when(
       data: (order) => order,
       loading: () => null,
       error: (_, __) => null,
@@ -102,7 +99,11 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
           backgroundColor: Colors.red,
         ),
       );
-      _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
       return;
     }
 
@@ -128,14 +129,15 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
 
     // Validate all items have required fields
     final invalidItems = draft.items.where(
-      (item) => item.photoUrl.isEmpty ||
-          item.quantity <= 0 ||
-          item.pricePerDay < 0,
+      (item) =>
+          item.photoUrl.isEmpty || item.quantity <= 0 || item.pricePerDay < 0,
     );
     if (invalidItems.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please check all items have valid photo, quantity, and price'),
+          content: Text(
+            'Please check all items have valid photo, quantity, and price',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -157,7 +159,7 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
         // Update days for each item based on start/end dates
         final days = calculateDays(draft.startDate, draft.endDate);
         final lineTotal = item.quantity * item.pricePerDay;
-        
+
         return {
           'photo_url': item.photoUrl,
           'product_name': item.productName,
@@ -186,10 +188,12 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
 
       // Invalidate order provider to refresh the order
       ref.invalidate(orderProvider(widget.orderId));
-      
+
       // Invalidate orders list to refresh
       if (userProfile?.branchId != null) {
-        ref.invalidate(ordersProvider(OrdersParams(branchId: userProfile!.branchId)));
+        ref.invalidate(
+          ordersProvider(OrdersParams(branchId: userProfile!.branchId)),
+        );
       }
 
       if (mounted) {
@@ -246,8 +250,9 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
     final startDate = draft.startDate.isNotEmpty
         ? DateTime.tryParse(draft.startDate)
         : null;
-    final endDate =
-        draft.endDate.isNotEmpty ? DateTime.tryParse(draft.endDate) : null;
+    final endDate = draft.endDate.isNotEmpty
+        ? DateTime.tryParse(draft.endDate)
+        : null;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F9FB),
@@ -274,9 +279,7 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
           }
 
           if (!_isInitialized) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           return CustomScrollView(
@@ -299,10 +302,7 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFF0B63FF),
-                          Color(0xFF0052D4),
-                        ],
+                        colors: [Color(0xFF1F2A7A), Color(0xFF1F2A7A)],
                       ),
                     ),
                     child: SafeArea(
@@ -329,7 +329,8 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       const Text(
                                         'Edit Order',
@@ -378,7 +379,9 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
                             setState(() {
                               _selectedCustomer = customer;
                             });
-                            ref.read(orderDraftProvider.notifier).setCustomer(
+                            ref
+                                .read(orderDraftProvider.notifier)
+                                .setCustomer(
                                   customerId: customer.id,
                                   customerName: customer.name,
                                   customerPhone: customer.phone,
@@ -398,23 +401,25 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
                           endDate: endDate,
                           onStartDateChanged: (date) {
                             if (date != null) {
-                              ref.read(orderDraftProvider.notifier).setStartDate(
-                                    date.toIso8601String(),
-                                  );
+                              ref
+                                  .read(orderDraftProvider.notifier)
+                                  .setStartDate(date.toIso8601String());
                               // Auto-update end date to next day if not set
                               if (endDate == null) {
-                                final nextDay = date.add(const Duration(days: 1));
-                                ref.read(orderDraftProvider.notifier).setEndDate(
-                                      nextDay.toIso8601String(),
-                                    );
+                                final nextDay = date.add(
+                                  const Duration(days: 1),
+                                );
+                                ref
+                                    .read(orderDraftProvider.notifier)
+                                    .setEndDate(nextDay.toIso8601String());
                               }
                             }
                           },
                           onEndDateChanged: (date) {
                             if (date != null) {
-                              ref.read(orderDraftProvider.notifier).setEndDate(
-                                    date.toIso8601String(),
-                                  );
+                              ref
+                                  .read(orderDraftProvider.notifier)
+                                  .setEndDate(date.toIso8601String());
                             }
                           },
                         ),
@@ -439,7 +444,9 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
                               days: days,
                               lineTotal: item.quantity * item.pricePerDay,
                             );
-                            ref.read(orderDraftProvider.notifier).addItem(updatedItem);
+                            ref
+                                .read(orderDraftProvider.notifier)
+                                .addItem(updatedItem);
                           },
                           onUpdateItem: (index, updatedItem) {
                             // Update item with correct days
@@ -450,12 +457,18 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
                               quantity: updatedItem.quantity,
                               pricePerDay: updatedItem.pricePerDay,
                               days: days,
-                              lineTotal: updatedItem.quantity * updatedItem.pricePerDay,
+                              lineTotal:
+                                  updatedItem.quantity *
+                                  updatedItem.pricePerDay,
                             );
-                            ref.read(orderDraftProvider.notifier).updateItem(index, itemWithDays);
+                            ref
+                                .read(orderDraftProvider.notifier)
+                                .updateItem(index, itemWithDays);
                           },
                           onRemoveItem: (index) {
-                            ref.read(orderDraftProvider.notifier).removeItem(index);
+                            ref
+                                .read(orderDraftProvider.notifier)
+                                .removeItem(index);
                           },
                           onImageClick: (imageUrl) {
                             // Show image in dialog
@@ -491,7 +504,9 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
                         child: _SecurityDepositField(
                           value: draft.securityDeposit,
                           onChanged: (value) {
-                            ref.read(orderDraftProvider.notifier).setSecurityDeposit(value);
+                            ref
+                                .read(orderDraftProvider.notifier)
+                                .setSecurityDeposit(value);
                           },
                         ),
                       ),
@@ -525,7 +540,9 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
                           hint: 'Enter invoice number',
                           prefixIcon: Icons.receipt_outlined,
                           onChanged: (value) {
-                            ref.read(orderDraftProvider.notifier).setInvoiceNumber(value);
+                            ref
+                                .read(orderDraftProvider.notifier)
+                                .setInvoiceNumber(value);
                           },
                         ),
                       ),
@@ -539,7 +556,7 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
                         child: ElevatedButton(
                           onPressed: _isLoading ? null : _handleUpdateOrder,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0B63FF),
+                            backgroundColor: const Color(0xFF1F2A7A),
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -552,7 +569,9 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
                                   width: 24,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2.5,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
                                   ),
                                 )
                               : const Row(
@@ -580,11 +599,8 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
             ],
           );
         },
-        loading: () => const Scaffold(
-          body: Center(
-            child: CircularProgressIndicator(),
-          ),
-        ),
+        loading: () =>
+            const Scaffold(body: Center(child: CircularProgressIndicator())),
         error: (error, stack) => Scaffold(
           appBar: AppBar(
             title: const Text('Edit Order'),
@@ -597,11 +613,7 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.error_outline,
-                  size: 64,
-                  color: Colors.red.shade300,
-                ),
+                Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
                 const SizedBox(height: 16),
                 Text(
                   'Error loading order',
@@ -614,10 +626,7 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
                 const SizedBox(height: 8),
                 Text(
                   error.toString(),
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
@@ -628,7 +637,7 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
                   icon: const Icon(Icons.refresh),
                   label: const Text('Retry'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0B63FF),
+                    backgroundColor: const Color(0xFF1F2A7A),
                     foregroundColor: Colors.white,
                   ),
                 ),
@@ -657,9 +666,7 @@ class _SectionCard extends StatelessWidget {
     return Card(
       elevation: 0,
       color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -670,14 +677,10 @@ class _SectionCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0B63FF).withOpacity(0.1),
+                    color: const Color(0xFF1F2A7A).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(
-                    icon,
-                    color: const Color(0xFF0B63FF),
-                    size: 20,
-                  ),
+                  child: Icon(icon, color: const Color(0xFF1F2A7A), size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -721,14 +724,11 @@ class _ModernTextField extends StatelessWidget {
     return TextFormField(
       controller: controller,
       onChanged: onChanged,
-      style: const TextStyle(
-        fontSize: 15,
-        color: Color(0xFF0F1724),
-      ),
+      style: const TextStyle(fontSize: 15, color: Color(0xFF0F1724)),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(prefixIcon, color: const Color(0xFF0B63FF)),
+        prefixIcon: Icon(prefixIcon, color: const Color(0xFF1F2A7A)),
         filled: true,
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(
@@ -745,7 +745,7 @@ class _ModernTextField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 2),
+          borderSide: const BorderSide(color: Color(0xFF1F2A7A), width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -764,10 +764,7 @@ class _SecurityDepositField extends StatefulWidget {
   final double? value;
   final ValueChanged<double?> onChanged;
 
-  const _SecurityDepositField({
-    required this.value,
-    required this.onChanged,
-  });
+  const _SecurityDepositField({required this.value, required this.onChanged});
 
   @override
   State<_SecurityDepositField> createState() => _SecurityDepositFieldState();
@@ -807,17 +804,15 @@ class _SecurityDepositFieldState extends State<_SecurityDepositField> {
     return TextFormField(
       controller: _controller,
       keyboardType: TextInputType.number,
-      inputFormatters: [
-        FilteringTextInputFormatter.digitsOnly,
-      ],
-      style: const TextStyle(
-        fontSize: 15,
-        color: Color(0xFF0F1724),
-      ),
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      style: const TextStyle(fontSize: 15, color: Color(0xFF0F1724)),
       decoration: InputDecoration(
         labelText: 'Security Deposit Amount',
         hintText: 'Enter security deposit (optional)',
-        prefixIcon: const Icon(Icons.security_outlined, color: Color(0xFF0B63FF)),
+        prefixIcon: const Icon(
+          Icons.security_outlined,
+          color: Color(0xFF1F2A7A),
+        ),
         prefixText: '₹ ',
         prefixStyle: const TextStyle(
           fontSize: 15,
@@ -840,7 +835,7 @@ class _SecurityDepositFieldState extends State<_SecurityDepositField> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 2),
+          borderSide: const BorderSide(color: Color(0xFF1F2A7A), width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -857,7 +852,9 @@ class _SecurityDepositFieldState extends State<_SecurityDepositField> {
           return;
         }
         final amount = int.tryParse(value);
-        widget.onChanged(amount != null && amount > 0 ? amount.toDouble() : null);
+        widget.onChanged(
+          amount != null && amount > 0 ? amount.toDouble() : null,
+        );
       },
     );
   }

@@ -42,6 +42,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
+        leadingWidth: 60,
+        leading: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12.0,
+            vertical: 8.0,
+          ),
+          child: Image.asset(
+            'lib/assets/png/glanz.png',
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
         title: const Text(
           'Calendar',
           style: TextStyle(
@@ -128,15 +142,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           color: Colors.grey.shade700,
                         ),
                         todayDecoration: BoxDecoration(
-                          color: const Color(0xFF0B63FF).withOpacity(0.2),
+                          color: const Color(0xFF1F2A7A).withOpacity(0.2),
                           shape: BoxShape.circle,
                         ),
                         selectedDecoration: const BoxDecoration(
-                          color: Color(0xFF0B63FF),
+                          color: Color(0xFF1F2A7A),
                           shape: BoxShape.circle,
                         ),
                         markerDecoration: const BoxDecoration(
-                          color: Color(0xFF0B63FF),
+                          color: Color(0xFF1F2A7A),
                           shape: BoxShape.circle,
                         ),
                         markersMaxCount: 1,
@@ -147,7 +161,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         titleCentered: true,
                         formatButtonShowsNext: false,
                         formatButtonDecoration: BoxDecoration(
-                          color: const Color(0xFF0B63FF),
+                          color: const Color(0xFF1F2A7A),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         formatButtonTextStyle: const TextStyle(
@@ -156,11 +170,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         ),
                         leftChevronIcon: const Icon(
                           Icons.chevron_left,
-                          color: Color(0xFF0B63FF),
+                          color: Color(0xFF1F2A7A),
                         ),
                         rightChevronIcon: const Icon(
                           Icons.chevron_right,
-                          color: Color(0xFF0B63FF),
+                          color: Color(0xFF1F2A7A),
                         ),
                       ),
                       onDaySelected: (selectedDay, focusedDay) {
@@ -190,7 +204,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0B63FF),
+                                color: const Color(0xFF1F2A7A),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text(
@@ -229,7 +243,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0B63FF).withOpacity(0.1),
+                              color: const Color(0xFF1F2A7A).withOpacity(0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
@@ -237,7 +251,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF0B63FF),
+                                color: Color(0xFF1F2A7A),
                               ),
                             ),
                           ),

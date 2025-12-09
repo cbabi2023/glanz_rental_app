@@ -547,7 +547,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   pinned: true,
                   elevation: 0,
                   backgroundColor: Colors.white,
-                  automaticallyImplyLeading: false,
+                  leadingWidth: 60,
+                  leading: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12.0,
+                      vertical: 8.0,
+                    ),
+                    child: Image.asset(
+                      'lib/assets/png/glanz.png',
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                  ),
                   flexibleSpace: FlexibleSpaceBar(
                     background: Container(
                       decoration: BoxDecoration(
@@ -555,8 +568,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            const Color(0xFF0B63FF),
-                            const Color(0xFF0052D4),
+                            const Color(0xFF1F2A7A),
+                            const Color(0xFF1F2A7A),
                           ],
                         ),
                       ),
@@ -590,7 +603,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                             .join()
                                             .toUpperCase(),
                                         style: const TextStyle(
-                                          color: Color(0xFF0B63FF),
+                                          color: Color(0xFF1F2A7A),
                                           fontSize: 32,
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -684,8 +697,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                         const SizedBox(height: 16),
 
-                        // Company Details Card
-                        _SectionCard(
+                        // Company Details Card (not for staff)
+                        if (!profile.isStaff) ...[
+                          _SectionCard(
                           icon: Icons.business_outlined,
                           title: 'Company Details',
                           child: Column(
@@ -747,7 +761,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                           width: 32,
                                           height: 32,
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFF0B63FF),
+                                            color: const Color(0xFF1F2A7A),
                                             shape: BoxShape.circle,
                                             border: Border.all(
                                               color: Colors.white,
@@ -800,7 +814,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 child: ElevatedButton(
                                   onPressed: _isLoadingCompany ? null : _handleSaveCompanyDetails,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF0B63FF),
+                                    backgroundColor: const Color(0xFF1F2A7A),
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(vertical: 16),
                                     shape: RoundedRectangleBorder(
@@ -830,6 +844,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
+                        ],
 
                         // Branch Switching Card (Super Admin only)
                         if (profile.isSuperAdmin) ...[
@@ -852,7 +867,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                     value: profile.branchId,
                                     decoration: InputDecoration(
                                       labelText: 'Current Branch',
-                                      prefixIcon: const Icon(Icons.store, color: Color(0xFF0B63FF)),
+                                      prefixIcon: const Icon(Icons.store, color: Color(0xFF1F2A7A)),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
                                         borderSide: BorderSide(color: Colors.grey.shade300),
@@ -863,7 +878,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       ),
                                       focusedBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 2),
+                                        borderSide: const BorderSide(color: Color(0xFF1F2A7A), width: 2),
                                       ),
                                       filled: true,
                                       fillColor: Colors.grey.shade50,
@@ -909,8 +924,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           const SizedBox(height: 16),
                         ],
 
-                        // GST Settings Card
-                        _SectionCard(
+                        // GST Settings Card (not for staff)
+                        if (!profile.isStaff) ...[
+                          _SectionCard(
                           icon: Icons.receipt_long,
                           title: 'GST Settings',
                           child: Column(
@@ -997,7 +1013,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 child: ElevatedButton(
                                   onPressed: _isLoadingGst ? null : _handleSaveGst,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF0B63FF),
+                                    backgroundColor: const Color(0xFF1F2A7A),
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(vertical: 16),
                                     shape: RoundedRectangleBorder(
@@ -1027,9 +1043,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
+                        ],
 
-                        // Invoice Settings Card
-                        _SectionCard(
+                        // Invoice Settings Card (not for staff)
+                        if (!profile.isStaff) ...[
+                          _SectionCard(
                           icon: Icons.receipt_long_outlined,
                           title: 'Invoice Settings',
                           child: Column(
@@ -1068,7 +1086,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 child: ElevatedButton(
                                   onPressed: _isLoadingInvoiceSettings ? null : _handleSaveInvoiceSettings,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF0B63FF),
+                                    backgroundColor: const Color(0xFF1F2A7A),
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(vertical: 16),
                                     shape: RoundedRectangleBorder(
@@ -1098,9 +1116,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
+                        ],
 
-                        // Change Password Card
-                        _SectionCard(
+                        // Change Password Card (not for staff)
+                        if (!profile.isStaff) ...[
+                          _SectionCard(
                           icon: Icons.lock_outline,
                           title: 'Change Password',
                           child: Column(
@@ -1131,7 +1151,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 child: ElevatedButton(
                                   onPressed: _isLoadingPassword ? null : _handleChangePassword,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF0B63FF),
+                                    backgroundColor: const Color(0xFF1F2A7A),
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(vertical: 16),
                                     shape: RoundedRectangleBorder(
@@ -1161,6 +1181,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
+                        ],
 
                         // Logout Button
                         SizedBox(
@@ -1233,7 +1254,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     icon: const Icon(Icons.refresh),
                     label: const Text('Retry'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0B63FF),
+                      backgroundColor: const Color(0xFF1F2A7A),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 24,
@@ -1287,12 +1308,12 @@ class _SectionCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0B63FF).withOpacity(0.1),
+                    color: const Color(0xFF1F2A7A).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     icon,
-                    color: const Color(0xFF0B63FF),
+                    color: const Color(0xFF1F2A7A),
                     size: 20,
                   ),
                 ),
@@ -1415,7 +1436,7 @@ class _ModernTextField extends StatelessWidget {
           decoration: InputDecoration(
             labelText: label,
             hintText: hint,
-            prefixIcon: Icon(icon, color: const Color(0xFF0B63FF)),
+            prefixIcon: Icon(icon, color: const Color(0xFF1F2A7A)),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: Colors.grey.shade300),
@@ -1426,7 +1447,7 @@ class _ModernTextField extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 2),
+              borderSide: const BorderSide(color: Color(0xFF1F2A7A), width: 2),
             ),
             filled: true,
             fillColor: Colors.grey.shade50,
@@ -1472,10 +1493,10 @@ class _ModernSwitch extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: value ? const Color(0xFF0B63FF).withOpacity(0.1) : Colors.grey.shade50,
+        color: value ? const Color(0xFF1F2A7A).withOpacity(0.1) : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: value ? const Color(0xFF0B63FF) : Colors.grey.shade300,
+          color: value ? const Color(0xFF1F2A7A) : Colors.grey.shade300,
           width: value ? 2 : 1,
         ),
       ),
@@ -1483,7 +1504,7 @@ class _ModernSwitch extends StatelessWidget {
         children: [
           Icon(
             icon,
-            color: value ? const Color(0xFF0B63FF) : Colors.grey.shade600,
+            color: value ? const Color(0xFF1F2A7A) : Colors.grey.shade600,
             size: 24,
           ),
           const SizedBox(width: 12),
@@ -1513,7 +1534,7 @@ class _ModernSwitch extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: const Color(0xFF0B63FF),
+            activeColor: const Color(0xFF1F2A7A),
           ),
         ],
       ),
@@ -1549,10 +1570,10 @@ class _ModernRadioOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0B63FF).withOpacity(0.1) : Colors.grey.shade50,
+          color: isSelected ? const Color(0xFF1F2A7A).withOpacity(0.1) : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? const Color(0xFF0B63FF) : Colors.grey.shade300,
+            color: isSelected ? const Color(0xFF1F2A7A) : Colors.grey.shade300,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -1560,7 +1581,7 @@ class _ModernRadioOption extends StatelessWidget {
           children: [
             Icon(
               icon,
-              color: isSelected ? const Color(0xFF0B63FF) : Colors.grey.shade600,
+              color: isSelected ? const Color(0xFF1F2A7A) : Colors.grey.shade600,
               size: 24,
             ),
             const SizedBox(width: 12),
@@ -1591,7 +1612,7 @@ class _ModernRadioOption extends StatelessWidget {
               value: value,
               groupValue: groupValue,
               onChanged: onChanged,
-              activeColor: const Color(0xFF0B63FF),
+              activeColor: const Color(0xFF1F2A7A),
             ),
           ],
         ),

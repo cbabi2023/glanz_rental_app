@@ -19,7 +19,7 @@ class OrderDetailScreen extends ConsumerStatefulWidget {
   final bool scrollToItems;
 
   const OrderDetailScreen({
-    super.key, 
+    super.key,
     required this.orderId,
     this.scrollToItems = false,
   });
@@ -34,17 +34,19 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   bool _isSharingInvoice = false;
   bool _isDownloadingInvoice = false;
   bool _isPrintingInvoice = false;
-  
+
   // Scroll controller for scrolling to items section
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _itemsSectionKey = GlobalKey();
-  
+
   // State for item return management
   final Map<String, bool> _itemCheckboxes = {}; // itemId -> isChecked
-  final Map<String, int> _returnedQuantities = {}; // itemId -> returned quantity
+  final Map<String, int> _returnedQuantities =
+      {}; // itemId -> returned quantity
   final Map<String, double> _damageCosts = {}; // itemId -> damage cost
-  final Map<String, String> _damageDescriptions = {}; // itemId -> damage description
-  
+  final Map<String, String> _damageDescriptions =
+      {}; // itemId -> damage description
+
   // Late fee controller
   final TextEditingController _lateFeeController = TextEditingController();
 
@@ -60,7 +62,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       }
     });
   }
-  
+
   /// Manually refresh order data from database
   Future<void> _refreshOrder() async {
     ref.invalidate(orderProvider(widget.orderId));
@@ -81,16 +83,16 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           _isSharingInvoice = true;
         });
         break;
-        case 'download':
-          setState(() {
-            _isDownloadingInvoice = true;
-          });
-          break;
-        case 'print':
-          setState(() {
-            _isPrintingInvoice = true;
-          });
-          break;
+      case 'download':
+        setState(() {
+          _isDownloadingInvoice = true;
+        });
+        break;
+      case 'print':
+        setState(() {
+          _isPrintingInvoice = true;
+        });
+        break;
     }
 
     try {
@@ -173,7 +175,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         ),
                       ],
                     ),
-                    backgroundColor: Colors.blue.shade700,
+                    backgroundColor: const Color(0xFF1F2A7A),
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -193,7 +195,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: const Text('Print dialog opened'),
-                backgroundColor: Colors.blue.shade600,
+                backgroundColor: const Color(0xFF1F2A7A),
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -238,7 +240,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
   }
 
-
   Map<String, dynamic> _getDateInfo(Order order) {
     DateTime? startDate;
     DateTime? endDate;
@@ -258,9 +259,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
 
     // Normalize to date only (midnight) to ensure accurate day calculation
-    final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
+    final startDateOnly = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+    );
     final endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
-    
+
     final duration = endDateOnly.difference(startDateOnly);
     // For rental: same day = 1 day, next day = 1 day (overnight), etc.
     final daysDifference = duration.inDays;
@@ -277,33 +282,34 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
 
   _OrderCategory _getOrderCategory(Order order) {
     final status = order.status;
-    
+
     // Fast path: Check status first
     if (status == OrderStatus.cancelled) return _OrderCategory.cancelled;
     if (status == OrderStatus.flagged) return _OrderCategory.flagged;
-    if (status == OrderStatus.partiallyReturned) return _OrderCategory.partiallyReturned;
-    if (status == OrderStatus.completed || 
+    if (status == OrderStatus.partiallyReturned)
+      return _OrderCategory.partiallyReturned;
+    if (status == OrderStatus.completed ||
         status == OrderStatus.completedWithIssues) {
       return _OrderCategory.returned;
     }
-    
+
     // ⚠️ CRITICAL: Scheduled orders ALWAYS return "scheduled" regardless of date
     // Do NOT check dates for scheduled orders - they remain scheduled until explicitly started
     if (status == OrderStatus.scheduled) {
       return _OrderCategory.scheduled;
     }
-    
+
     // Check for partial returns via items (if status is active but some items returned)
     if (order.items != null && order.items!.isNotEmpty) {
       final hasReturned = order.items!.any((item) => item.isReturned);
       final hasNotReturned = order.items!.any((item) => item.isPending);
-      
+
       // If some items are returned but not all, it's partially returned
       if (hasReturned && hasNotReturned) {
         return _OrderCategory.partiallyReturned;
       }
     }
-    
+
     // Parse dates for active orders
     DateTime? endDate;
 
@@ -314,18 +320,19 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       // If parsing fails, treat as ongoing
       return _OrderCategory.ongoing;
     }
-    
+
     // Check if late (end date passed and not completed/cancelled)
-    final isLate = DateTime.now().isAfter(endDate) && 
-                   status != OrderStatus.completed &&
-                   status != OrderStatus.completedWithIssues &&
-                   status != OrderStatus.flagged &&
-                   status != OrderStatus.cancelled &&
-                   status != OrderStatus.partiallyReturned;
-    
+    final isLate =
+        DateTime.now().isAfter(endDate) &&
+        status != OrderStatus.completed &&
+        status != OrderStatus.completedWithIssues &&
+        status != OrderStatus.flagged &&
+        status != OrderStatus.cancelled &&
+        status != OrderStatus.partiallyReturned;
+
     if (isLate) return _OrderCategory.late;
     if (status == OrderStatus.active) return _OrderCategory.ongoing;
-    
+
     // Default to ongoing
     return _OrderCategory.ongoing;
   }
@@ -390,7 +397,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       case _OrderCategory.returned:
         return Colors.green.shade600;
       case _OrderCategory.partiallyReturned:
-        return Colors.blue.shade600;
+        return const Color(0xFF1F2A7A);
       case _OrderCategory.cancelled:
         return Colors.grey.shade500;
       case _OrderCategory.flagged:
@@ -416,7 +423,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         return 'Flagged';
     }
   }
-  
+
   Future<void> _handleCancelOrder(Order order) async {
     final shouldCancel = await showDialog<bool>(
       context: context,
@@ -433,10 +440,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              'No',
-              style: TextStyle(color: Colors.grey.shade700),
-            ),
+            child: Text('No', style: TextStyle(color: Colors.grey.shade700)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -539,21 +543,21 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     // Check if there are any changes
     bool hasChanges = false;
     final items = order.items ?? [];
-    
+
     for (final item in items) {
       if (item.id == null) continue;
-      
+
       final isChecked = _itemCheckboxes[item.id!] ?? false;
       final returnedQty = _returnedQuantities[item.id!];
       final damageCost = _damageCosts[item.id!];
       final damageDesc = _damageDescriptions[item.id!];
-      
+
       // Check if item state differs from current state
       if (isChecked) {
         final currentReturnedQty = item.returnedQuantity ?? 0;
         final currentDamageCost = item.damageCost;
         final currentDamageDesc = item.missingNote;
-        
+
         if (returnedQty != null && returnedQty != currentReturnedQty) {
           hasChanges = true;
           break;
@@ -596,7 +600,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       // Process checked items (returns)
       for (final item in items) {
         if (item.id == null) continue;
-        
+
         final isChecked = _itemCheckboxes[item.id!] ?? false;
         final returnedQty = _returnedQuantities[item.id!];
         final damageCost = _damageCosts[item.id!];
@@ -606,38 +610,47 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           // Item is being returned
           final currentReturnedQty = item.returnedQuantity ?? 0;
           final pendingQty = item.quantity - currentReturnedQty;
-          
+
           if (returnedQty <= pendingQty) {
             // Valid return quantity
-            itemReturns.add(ItemReturn(
-              itemId: item.id!,
-              returnStatus: returnedQty >= item.quantity ? 'returned' : 'returned',
-              actualReturnDate: DateTime.now(),
-              returnedQuantity: returnedQty,
-              damageCost: damageCost,
-              description: damageDesc?.trim().isEmpty ?? true ? null : damageDesc?.trim(),
-            ));
+            itemReturns.add(
+              ItemReturn(
+                itemId: item.id!,
+                returnStatus: returnedQty >= item.quantity
+                    ? 'returned'
+                    : 'returned',
+                actualReturnDate: DateTime.now(),
+                returnedQuantity: returnedQty,
+                damageCost: damageCost,
+                description: damageDesc?.trim().isEmpty ?? true
+                    ? null
+                    : damageDesc?.trim(),
+              ),
+            );
           }
-        } else if (!isChecked && (item.isReturned || (item.returnedQuantity ?? 0) > 0)) {
+        } else if (!isChecked &&
+            (item.isReturned || (item.returnedQuantity ?? 0) > 0)) {
           // Item was returned but now unchecked (unreturn)
-          itemReturns.add(ItemReturn(
-            itemId: item.id!,
-            returnStatus: 'not_yet_returned',
-            actualReturnDate: null,
-            missingNote: null,
-          ));
+          itemReturns.add(
+            ItemReturn(
+              itemId: item.id!,
+              returnStatus: 'not_yet_returned',
+              actualReturnDate: null,
+              missingNote: null,
+            ),
+          );
         }
       }
 
       // Also update damage for items that have damage but may not be returned
       for (final item in items) {
         if (item.id == null) continue;
-        
+
         final damageCost = _damageCosts[item.id!];
         final damageDesc = _damageDescriptions[item.id!];
         final currentDamageCost = item.damageCost;
         final currentDamageDesc = item.missingNote;
-        
+
         // Update damage if changed
         if ((damageCost != null && damageCost != (currentDamageCost ?? 0)) ||
             (damageDesc != null && damageDesc != (currentDamageDesc ?? ''))) {
@@ -650,7 +663,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       }
 
       // Update late fee if order is late or has late fee set
-      if (_isOrderLate(order) || (order.lateFee != null && order.lateFee! > 0)) {
+      if (_isOrderLate(order) ||
+          (order.lateFee != null && order.lateFee! > 0)) {
         final lateFeeText = _lateFeeController.text.trim();
         if (lateFeeText.isNotEmpty) {
           try {
@@ -739,9 +753,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.orange,
-            ),
+            style: TextButton.styleFrom(foregroundColor: Colors.orange),
             child: const Text('Start Rental'),
           ),
         ],
@@ -801,13 +813,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     orderAsync.whenData((order) {
       if (order != null) {
         if (order.lateFee != null && order.lateFee! > 0) {
-          if (_lateFeeController.text.isEmpty || 
+          if (_lateFeeController.text.isEmpty ||
               _lateFeeController.text != order.lateFee!.toStringAsFixed(2)) {
             _lateFeeController.text = order.lateFee!.toStringAsFixed(2);
           }
         } else if (_isOrderLate(order)) {
           // If order is late but no late fee set, keep controller empty
-          if (_lateFeeController.text.isNotEmpty && 
+          if (_lateFeeController.text.isNotEmpty &&
               (order.lateFee == null || order.lateFee! == 0)) {
             // Don't clear if user has entered a value
           }
@@ -864,7 +876,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                           Icons.play_arrow,
                           color: Colors.orange,
                         ),
-                        onPressed: _isUpdating ? null : () => _handleStartRental(order),
+                        onPressed: _isUpdating
+                            ? null
+                            : () => _handleStartRental(order),
                         tooltip: 'Start Rental',
                       ),
                     // Invoice Actions Menu
@@ -956,11 +970,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           final categoryText = _getCategoryText(category);
           final dateInfo = _getDateInfo(order);
           // Show return button if order has pending items to return (not scheduled, completed, cancelled, or flagged)
-          final canMarkReturned = !order.isScheduled && 
-                                  !order.isCompleted && 
-                                  !order.isCancelled &&
-                                  !order.isFlagged &&
-                                  order.hasPendingReturnItems;
+          final canMarkReturned =
+              !order.isScheduled &&
+              !order.isCompleted &&
+              !order.isCancelled &&
+              !order.isFlagged &&
+              order.hasPendingReturnItems;
           final canStartRental = order.isScheduled;
           final canCancel = order.canCancel();
           final canEdit = order.canEdit;
@@ -971,12 +986,16 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           if (canMarkReturned) buttonCount++;
           if (canEdit) buttonCount++;
           if (canCancel) buttonCount++;
-          
+
           // Calculate bottom padding to ensure pricing breakdown is fully visible
           // Button height: ~56px each, spacing: 8px between buttons, container padding: 32px (16 top + 16 bottom)
           // SafeArea bottom padding: ~34px, plus extra buffer: 20px
           final bottomPadding = buttonCount > 0
-              ? (buttonCount * 56.0) + ((buttonCount - 1) * 8.0) + 32.0 + 34.0 + 20.0
+              ? (buttonCount * 56.0) +
+                    ((buttonCount - 1) * 8.0) +
+                    32.0 +
+                    34.0 +
+                    20.0
               : 16.0;
 
           // Scroll to items section if requested
@@ -1009,9 +1028,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                           color: category == _OrderCategory.late
                               ? Colors.red.shade200
                               : category == _OrderCategory.flagged
-                                  ? Colors.purple.shade200
-                                  : Colors.grey.shade200,
-                          width: (category == _OrderCategory.late || category == _OrderCategory.flagged) ? 1.5 : 1,
+                              ? Colors.purple.shade200
+                              : Colors.grey.shade200,
+                          width:
+                              (category == _OrderCategory.late ||
+                                  category == _OrderCategory.flagged)
+                              ? 1.5
+                              : 1,
                         ),
                       ),
                       child: Padding(
@@ -1488,7 +1511,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   Icon(
                                     Icons.calendar_today,
                                     size: 20,
-                                    color: Colors.blue.shade600,
+                                    color: const Color(0xFF1F2A7A),
                                   ),
                                   const SizedBox(width: 8),
                                   const Text(
@@ -1530,7 +1553,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.shade50,
+                                  color: const Color(
+                                    0xFF1F2A7A,
+                                  ).withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Row(
@@ -1538,7 +1563,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     Icon(
                                       Icons.access_time,
                                       size: 18,
-                                      color: Colors.blue.shade700,
+                                      color: const Color(0xFF1F2A7A),
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
@@ -1546,7 +1571,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
-                                        color: Colors.blue.shade700,
+                                        color: const Color(0xFF1F2A7A),
                                       ),
                                     ),
                                   ],
@@ -1560,8 +1585,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     ],
 
                     // Return Status Section (only show if order has items, is not scheduled, and is not cancelled)
-                    if (order.items != null && 
-                        order.items!.isNotEmpty && 
+                    if (order.items != null &&
+                        order.items!.isNotEmpty &&
                         !order.isScheduled &&
                         !order.isCancelled) ...[
                       Card(
@@ -1606,122 +1631,153 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               const SizedBox(height: 16),
                               Divider(color: Colors.grey.shade200, height: 1),
                               const SizedBox(height: 16),
-                              
+
                               // Calculate return statistics
                               Builder(
                                 builder: (context) {
                                   final items = order.items!;
                                   final totalItems = items.length;
                                   final totalQuantity = items.fold<int>(
-                                    0, 
+                                    0,
                                     (sum, item) => sum + item.quantity,
                                   );
-                                  
+
                                   // Website logic (matching exact behavior):
                                   // - RETURNED quantity: Sum of returnedQuantity from ALL items
                                   //   For items with returnStatus = 'returned', if returnedQuantity is null, use item.quantity
                                   //   For items without returnStatus = 'returned', use returnedQuantity (for partial returns)
                                   // - Full/Partial: Count items with returnStatus = 'returned', then check if full or partial
                                   // - PENDING: Items that are not marked as returned (returnStatus != 'returned')
-                                  
+
                                   // Calculate total returned quantity from ALL items
-                                  final returnedQuantity = items.fold<int>(
-                                    0,
-                                    (sum, item) {
-                                      int returnedQty;
-                                      if (item.isReturned) {
-                                        // Item is marked as returned: use returnedQuantity if available, otherwise item.quantity
-                                        returnedQty = item.returnedQuantity ?? item.quantity;
-                                      } else {
-                                        // Item is not marked as returned: use returnedQuantity (could be partial return)
-                                        returnedQty = item.returnedQuantity ?? 0;
-                                      }
-                                      return sum + returnedQty;
-                                    },
-                                  );
-                                  
+                                  final returnedQuantity = items.fold<int>(0, (
+                                    sum,
+                                    item,
+                                  ) {
+                                    int returnedQty;
+                                    if (item.isReturned) {
+                                      // Item is marked as returned: use returnedQuantity if available, otherwise item.quantity
+                                      returnedQty =
+                                          item.returnedQuantity ??
+                                          item.quantity;
+                                    } else {
+                                      // Item is not marked as returned: use returnedQuantity (could be partial return)
+                                      returnedQty = item.returnedQuantity ?? 0;
+                                    }
+                                    return sum + returnedQty;
+                                  });
+
                                   // Get items that are marked as returned (returnStatus = 'returned') for full/partial count
-                                  final returnedItems = items.where((item) => item.isReturned).toList();
-                                  
+                                  final returnedItems = items
+                                      .where((item) => item.isReturned)
+                                      .toList();
+
                                   // Count items with full returns (returned quantity >= item quantity) among returned items
-                                  final fullReturns = returnedItems.where((item) {
+                                  final fullReturns = returnedItems.where((
+                                    item,
+                                  ) {
                                     // If returnedQuantity is null and status is returned, it's fully returned
-                                    final returnedQty = item.returnedQuantity ?? item.quantity;
+                                    final returnedQty =
+                                        item.returnedQuantity ?? item.quantity;
                                     return returnedQty >= item.quantity;
                                   }).length;
-                                  
+
                                   // Count items with partial returns (returned quantity > 0 but < item quantity) among returned items
-                                  final partialReturns = returnedItems.where((item) {
+                                  final partialReturns = returnedItems.where((
+                                    item,
+                                  ) {
                                     // Partial if returnedQuantity exists, is > 0, and is less than quantity
                                     final returnedQty = item.returnedQuantity;
-                                    if (returnedQty == null) return false; // null means full return
-                                    return returnedQty > 0 && returnedQty < item.quantity;
+                                    if (returnedQty == null)
+                                      return false; // null means full return
+                                    return returnedQty > 0 &&
+                                        returnedQty < item.quantity;
                                   }).length;
-                                  
+
                                   // Calculate pending items - Website logic:
                                   // PENDING count = items where returnStatus != 'returned' (not marked as returned)
                                   // PENDING quantity = sum of remaining quantity for ALL items where returnedQuantity < quantity
-                                  final pendingItems = items.where((item) => !item.isReturned).toList();
+                                  final pendingItems = items
+                                      .where((item) => !item.isReturned)
+                                      .toList();
                                   final pendingCount = pendingItems.length;
-                                  
+
                                   // Calculate total pending quantity from ALL items (not just pending items)
                                   // This includes items that are marked as returned but have partial returns
-                                  final pendingQuantity = items.fold<int>(
-                                    0,
-                                    (sum, item) {
-                                      final returnedQty = item.returnedQuantity ?? 0;
-                                      // If item is marked as returned and returnedQuantity is null, assume fully returned
-                                      if (item.isReturned && item.returnedQuantity == null) {
-                                        return sum; // Fully returned, no pending quantity
-                                      }
-                                      // Calculate remaining quantity
-                                      final remaining = item.quantity - returnedQty;
-                                      // Only add if there's remaining quantity
-                                      return sum + (remaining > 0 ? remaining : 0);
-                                    },
-                                  );
-                                  
+                                  final pendingQuantity = items.fold<int>(0, (
+                                    sum,
+                                    item,
+                                  ) {
+                                    final returnedQty =
+                                        item.returnedQuantity ?? 0;
+                                    // If item is marked as returned and returnedQuantity is null, assume fully returned
+                                    if (item.isReturned &&
+                                        item.returnedQuantity == null) {
+                                      return sum; // Fully returned, no pending quantity
+                                    }
+                                    // Calculate remaining quantity
+                                    final remaining =
+                                        item.quantity - returnedQty;
+                                    // Only add if there's remaining quantity
+                                    return sum +
+                                        (remaining > 0 ? remaining : 0);
+                                  });
+
                                   // Get total damage cost from order (damage_fee_total)
-                                  final totalDamage = order.damageFeeTotal ?? 0.0;
-                                  
+                                  final totalDamage =
+                                      order.damageFeeTotal ?? 0.0;
+
                                   // Debug: Check damage fee total value
-                                  print('🔍 Order Damage Fee Total: ${order.damageFeeTotal}');
+                                  print(
+                                    '🔍 Order Damage Fee Total: ${order.damageFeeTotal}',
+                                  );
                                   print('🔍 Total Damage: $totalDamage');
-                                  
+
                                   // Determine overall status
                                   String overallStatus;
                                   Color statusBgColor;
                                   Color statusValueColor;
                                   String statusDetail = '';
-                                  Color statusDetailColor = Colors.grey.shade600;
-                                  
+                                  Color statusDetailColor =
+                                      Colors.grey.shade600;
+
                                   // Determine status based on website logic
                                   // Check if all items are fully returned (returnedQuantity >= item quantity for all)
                                   final allItemsReturned = items.every((item) {
                                     // If item is marked as returned and returnedQuantity is null, it's fully returned
                                     // Otherwise check if returnedQuantity >= quantity
-                                    final returnedQty = item.isReturned && item.returnedQuantity == null
+                                    final returnedQty =
+                                        item.isReturned &&
+                                            item.returnedQuantity == null
                                         ? item.quantity
                                         : (item.returnedQuantity ?? 0);
                                     return returnedQty >= item.quantity;
                                   });
-                                  
+
                                   // Check if some items have returns but not all are fully returned
                                   final hasSomeReturns = returnedQuantity > 0;
-                                  final hasPendingQuantity = pendingQuantity > 0; // Check pending quantity, not just count
-                                  
+                                  final hasPendingQuantity =
+                                      pendingQuantity >
+                                      0; // Check pending quantity, not just count
+
                                   // Website logic: Show "Partial" if there's pending quantity, even if all items are marked as returned
-                                  if (allItemsReturned && !hasPendingQuantity && returnedQuantity > 0) {
+                                  if (allItemsReturned &&
+                                      !hasPendingQuantity &&
+                                      returnedQuantity > 0) {
                                     // All items fully returned with no pending quantity
                                     overallStatus = 'Returned';
                                     statusBgColor = Colors.green.shade50;
                                     statusValueColor = Colors.green.shade700;
-                                  } else if (hasSomeReturns && hasPendingQuantity) {
+                                  } else if (hasSomeReturns &&
+                                      hasPendingQuantity) {
                                     // Partial: Some items returned but there's still pending quantity
                                     overallStatus = 'Partial';
-                                    statusBgColor = Colors.blue.shade50;
-                                    statusValueColor = Colors.blue.shade700;
-                                  } else if (hasSomeReturns && !hasPendingQuantity) {
+                                    statusBgColor = const Color(
+                                      0xFF1F2A7A,
+                                    ).withOpacity(0.1);
+                                    statusValueColor = const Color(0xFF1F2A7A);
+                                  } else if (hasSomeReturns &&
+                                      !hasPendingQuantity) {
                                     // All items fully returned (no pending quantity)
                                     overallStatus = 'Returned';
                                     statusBgColor = Colors.green.shade50;
@@ -1733,17 +1789,23 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     statusBgColor = Colors.indigo.shade50;
                                     statusValueColor = Colors.indigo.shade700;
                                   }
-                                  
+
                                   // Add damage information to status detail if there's damage
                                   // Always show damage if damage_fee_total exists and is greater than 0
-                                  if (order.damageFeeTotal != null && order.damageFeeTotal! > 0) {
-                                    statusDetail = 'Damage: ₹${order.damageFeeTotal!.toStringAsFixed(2)}';
+                                  if (order.damageFeeTotal != null &&
+                                      order.damageFeeTotal! > 0) {
+                                    statusDetail =
+                                        'Damage: ₹${order.damageFeeTotal!.toStringAsFixed(2)}';
                                     statusDetailColor = Colors.red.shade700;
-                                    print('✅ Setting damage detail: $statusDetail');
+                                    print(
+                                      '✅ Setting damage detail: $statusDetail',
+                                    );
                                   } else {
-                                    print('⚠️ Damage not shown - damageFeeTotal: ${order.damageFeeTotal}, totalDamage: $totalDamage');
+                                    print(
+                                      '⚠️ Damage not shown - damageFeeTotal: ${order.damageFeeTotal}, totalDamage: $totalDamage',
+                                    );
                                   }
-                                  
+
                                   // 2x2 Grid Layout for symmetric design
                                   return Column(
                                     children: [
@@ -1764,8 +1826,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                             child: _ReturnStatusBox(
                                               label: 'RETURNED',
                                               value: '$returnedQuantity',
-                                              detail: '$fullReturns full, $partialReturns partial',
-                                              backgroundColor: Colors.green.shade50,
+                                              detail:
+                                                  '$fullReturns full, $partialReturns partial',
+                                              backgroundColor:
+                                                  Colors.green.shade50,
                                               valueColor: Colors.green.shade700,
                                             ),
                                           ),
@@ -1780,8 +1844,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                               label: 'PENDING',
                                               value: '$pendingQuantity',
                                               detail: '$pendingCount items',
-                                              backgroundColor: Colors.orange.shade50,
-                                              valueColor: Colors.orange.shade700,
+                                              backgroundColor:
+                                                  Colors.orange.shade50,
+                                              valueColor:
+                                                  Colors.orange.shade700,
                                             ),
                                           ),
                                           const SizedBox(width: 12),
@@ -1809,7 +1875,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     ],
 
                     // Items Card (hide for cancelled orders)
-                    if (order.items != null && order.items!.isNotEmpty && !order.isCancelled) ...[
+                    if (order.items != null &&
+                        order.items!.isNotEmpty &&
+                        !order.isCancelled) ...[
                       Card(
                         elevation: 0,
                         color: Colors.white,
@@ -1844,24 +1912,35 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   ),
                                   const SizedBox(width: 8),
                                   // Mark All as Returned button (only for non-scheduled, non-cancelled orders)
-                                  if (!order.isScheduled && !order.isCancelled && canMarkReturned)
+                                  if (!order.isScheduled &&
+                                      !order.isCancelled &&
+                                      canMarkReturned)
                                     Flexible(
                                       child: OutlinedButton(
                                         onPressed: () {
                                           setState(() {
                                             for (final item in order.items!) {
                                               if (item.id != null) {
-                                                _itemCheckboxes[item.id!] = true;
-                                                _returnedQuantities[item.id!] = item.quantity;
+                                                _itemCheckboxes[item.id!] =
+                                                    true;
+                                                _returnedQuantities[item.id!] =
+                                                    item.quantity;
                                               }
                                             }
                                           });
                                         },
                                         style: OutlinedButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                          side: BorderSide(color: Colors.grey.shade300),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 8,
+                                          ),
+                                          side: BorderSide(
+                                            color: Colors.grey.shade300,
+                                          ),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(8),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
                                           ),
                                         ),
                                         child: const Text(
@@ -1878,31 +1957,43 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                 final index = entry.key;
                                 final item = entry.value;
                                 // Auto-check if item is already returned
-                                final isItemReturned = item.isReturned || 
-                                    (item.returnedQuantity != null && item.returnedQuantity! > 0);
-                                final shouldBeChecked = _itemCheckboxes[item.id] ?? isItemReturned;
-                                
+                                final isItemReturned =
+                                    item.isReturned ||
+                                    (item.returnedQuantity != null &&
+                                        item.returnedQuantity! > 0);
+                                final shouldBeChecked =
+                                    _itemCheckboxes[item.id] ?? isItemReturned;
+
                                 // Initialize returned quantity if item is returned but not in state
-                                if (isItemReturned && item.id != null && !_itemCheckboxes.containsKey(item.id)) {
-                                  _returnedQuantities[item.id!] = item.returnedQuantity ?? item.quantity;
+                                if (isItemReturned &&
+                                    item.id != null &&
+                                    !_itemCheckboxes.containsKey(item.id)) {
+                                  _returnedQuantities[item.id!] =
+                                      item.returnedQuantity ?? item.quantity;
                                   _itemCheckboxes[item.id!] = true;
                                 }
-                                
+
                                 return _OrderItemCard(
                                   item: item,
                                   index: index + 1,
                                   isLast: index == order.items!.length - 1,
                                   orderId: order.id,
                                   isChecked: shouldBeChecked,
-                                  returnedQuantity: _returnedQuantities[item.id] ?? item.returnedQuantity,
-                                  damageCost: _damageCosts[item.id] ?? item.damageCost,
-                                  damageDescription: _damageDescriptions[item.id] ?? item.missingNote,
+                                  returnedQuantity:
+                                      _returnedQuantities[item.id] ??
+                                      item.returnedQuantity,
+                                  damageCost:
+                                      _damageCosts[item.id] ?? item.damageCost,
+                                  damageDescription:
+                                      _damageDescriptions[item.id] ??
+                                      item.missingNote,
                                   onCheckboxChanged: (checked) {
                                     setState(() {
                                       if (item.id != null) {
                                         _itemCheckboxes[item.id!] = checked;
                                         if (checked) {
-                                          _returnedQuantities[item.id!] = item.returnedQuantity ?? 0;
+                                          _returnedQuantities[item.id!] =
+                                              item.returnedQuantity ?? 0;
                                         } else {
                                           _returnedQuantities.remove(item.id!);
                                           _damageCosts.remove(item.id!);
@@ -1914,7 +2005,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   onReturnedQuantityChanged: (quantity) {
                                     setState(() {
                                       if (item.id != null) {
-                                        _returnedQuantities[item.id!] = quantity;
+                                        _returnedQuantities[item.id!] =
+                                            quantity;
                                       }
                                     });
                                   },
@@ -1932,8 +2024,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   onDamageDescriptionChanged: (description) {
                                     setState(() {
                                       if (item.id != null) {
-                                        if (description != null && description.isNotEmpty) {
-                                          _damageDescriptions[item.id!] = description;
+                                        if (description != null &&
+                                            description.isNotEmpty) {
+                                          _damageDescriptions[item.id!] =
+                                              description;
                                         } else {
                                           _damageDescriptions.remove(item.id!);
                                         }
@@ -1950,41 +2044,63 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               Builder(
                                 builder: (context) {
                                   // Check if any checkbox is checked
-                                  final hasCheckedItems = _itemCheckboxes.values.any((checked) => checked);
-                                  
-                                  if (!order.isScheduled && !order.isCancelled && canMarkReturned && hasCheckedItems) {
+                                  final hasCheckedItems = _itemCheckboxes.values
+                                      .any((checked) => checked);
+
+                                  if (!order.isScheduled &&
+                                      !order.isCancelled &&
+                                      canMarkReturned &&
+                                      hasCheckedItems) {
                                     return Column(
                                       children: [
                                         const SizedBox(height: 20),
-                                        Divider(color: Colors.grey.shade200, height: 1),
+                                        Divider(
+                                          color: Colors.grey.shade200,
+                                          height: 1,
+                                        ),
                                         const SizedBox(height: 16),
                                         SizedBox(
                                           width: double.infinity,
                                           child: ElevatedButton.icon(
-                                            onPressed: _isUpdating ? null : _handleSaveChanges,
+                                            onPressed: _isUpdating
+                                                ? null
+                                                : _handleSaveChanges,
                                             icon: _isUpdating
                                                 ? const SizedBox(
                                                     width: 20,
                                                     height: 20,
                                                     child: CircularProgressIndicator(
                                                       strokeWidth: 2,
-                                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                                      valueColor:
+                                                          AlwaysStoppedAnimation<
+                                                            Color
+                                                          >(Colors.white),
                                                     ),
                                                   )
-                                                : const Icon(Icons.save_outlined, size: 20),
+                                                : const Icon(
+                                                    Icons.save_outlined,
+                                                    size: 20,
+                                                  ),
                                             label: Text(
-                                              _isUpdating ? 'Saving Changes...' : 'Save Changes',
+                                              _isUpdating
+                                                  ? 'Saving Changes...'
+                                                  : 'Save Changes',
                                               style: const TextStyle(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.w600,
                                               ),
                                             ),
                                             style: ElevatedButton.styleFrom(
-                                              padding: const EdgeInsets.symmetric(vertical: 16),
-                                              backgroundColor: Colors.green.shade600,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 16,
+                                                  ),
+                                              backgroundColor:
+                                                  Colors.green.shade600,
                                               foregroundColor: Colors.white,
                                               shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(12),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
                                               ),
                                               elevation: 0,
                                             ),
@@ -2043,13 +2159,18 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     const SizedBox(height: 16),
 
                     // Late Fee Section Card (hide for flagged orders)
-                    if (!order.isFlagged && (_isOrderLate(order) || (order.lateFee != null && order.lateFee! > 0)))
+                    if (!order.isFlagged &&
+                        (_isOrderLate(order) ||
+                            (order.lateFee != null && order.lateFee! > 0)))
                       Card(
                         elevation: 0,
                         color: Colors.red.shade50,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: Colors.red.shade200, width: 1.5),
+                          side: BorderSide(
+                            color: Colors.red.shade200,
+                            width: 1.5,
+                          ),
                         ),
                         child: Padding(
                           padding: const EdgeInsets.all(20),
@@ -2125,7 +2246,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                 const SizedBox(height: 12),
                               ],
                               // Late Fee Input Field (when order is late or has late fee)
-                              if (_isOrderLate(order) || (order.lateFee != null && order.lateFee! > 0)) ...[
+                              if (_isOrderLate(order) ||
+                                  (order.lateFee != null &&
+                                      order.lateFee! > 0)) ...[
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -2140,7 +2263,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     const SizedBox(height: 8),
                                     TextField(
                                       controller: _lateFeeController,
-                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                          ),
                                       decoration: InputDecoration(
                                         hintText: '0.00',
                                         prefixText: '₹ ',
@@ -2152,18 +2278,35 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                         filled: true,
                                         fillColor: Colors.white,
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: Colors.grey.shade300,
+                                          ),
                                         ),
                                         enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: Colors.grey.shade300,
+                                          ),
                                         ),
                                         focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                          borderSide: BorderSide(color: Colors.red.shade600, width: 2),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: Colors.red.shade600,
+                                            width: 2,
+                                          ),
                                         ),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 14,
+                                            ),
                                       ),
                                       style: TextStyle(
                                         fontSize: 16,
@@ -2176,10 +2319,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               ] else ...[
                                 // Display late fee if already set
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      order.lateFee != null && order.lateFee! > 0
+                                      order.lateFee != null &&
+                                              order.lateFee! > 0
                                           ? 'Late Fee Amount'
                                           : 'No Late Fee Applied',
                                       style: TextStyle(
@@ -2188,7 +2333,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                         color: Colors.grey.shade700,
                                       ),
                                     ),
-                                    if (order.lateFee != null && order.lateFee! > 0)
+                                    if (order.lateFee != null &&
+                                        order.lateFee! > 0)
                                       Text(
                                         '₹${NumberFormat('#,##0.00').format(order.lateFee!)}',
                                         style: TextStyle(
@@ -2209,14 +2355,18 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   ],
                                 ),
                               ],
-                              if (_isOrderLate(order) && (order.lateFee == null || order.lateFee! == 0)) ...[
+                              if (_isOrderLate(order) &&
+                                  (order.lateFee == null ||
+                                      order.lateFee! == 0)) ...[
                                 const SizedBox(height: 12),
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: Colors.orange.shade50,
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.orange.shade200),
+                                    border: Border.all(
+                                      color: Colors.orange.shade200,
+                                    ),
                                   ),
                                   child: Row(
                                     children: [
@@ -2244,7 +2394,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                           ),
                         ),
                       ),
-                    if (_isOrderLate(order) || (order.lateFee != null && order.lateFee! > 0))
+                    if (_isOrderLate(order) ||
+                        (order.lateFee != null && order.lateFee! > 0))
                       const SizedBox(height: 16),
 
                     // Summary Card (matching website design)
@@ -2282,7 +2433,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                             // Subtotal
                             if (order.subtotal != null) ...[
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     'Subtotal',
@@ -2305,9 +2457,11 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               Divider(color: Colors.grey.shade200, height: 24),
                             ],
                             // GST
-                            if (order.gstAmount != null && order.gstAmount! > 0) ...[
+                            if (order.gstAmount != null &&
+                                order.gstAmount! > 0) ...[
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     'GST (5%)',
@@ -2332,16 +2486,24 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                             // Damage Fees (itemized breakdown)
                             Builder(
                               builder: (context) {
-                                final itemsWithDamage = order.items?.where((item) => 
-                                  item.damageCost != null && item.damageCost! > 0
-                                ).toList() ?? [];
-                                
+                                final itemsWithDamage =
+                                    order.items
+                                        ?.where(
+                                          (item) =>
+                                              item.damageCost != null &&
+                                              item.damageCost! > 0,
+                                        )
+                                        .toList() ??
+                                    [];
+
                                 if (itemsWithDamage.isNotEmpty) {
                                   return Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
                                         children: [
                                           Text(
                                             'Damage Fees',
@@ -2357,9 +2519,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                       const SizedBox(height: 8),
                                       ...itemsWithDamage.map((item) {
                                         return Padding(
-                                          padding: const EdgeInsets.only(left: 16, bottom: 6),
+                                          padding: const EdgeInsets.only(
+                                            left: 16,
+                                            bottom: 6,
+                                          ),
                                           child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
                                             children: [
                                               Expanded(
                                                 child: Text(
@@ -2384,7 +2550,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                       }),
                                       const SizedBox(height: 8),
                                       Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
                                         children: [
                                           Text(
                                             'Total Damage Fee',
@@ -2404,7 +2571,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                           ),
                                         ],
                                       ),
-                                      Divider(color: Colors.grey.shade200, height: 24),
+                                      Divider(
+                                        color: Colors.grey.shade200,
+                                        height: 24,
+                                      ),
                                     ],
                                   );
                                 }
@@ -2412,7 +2582,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               },
                             ),
                             // Return Status Section
-                            if (order.items != null && order.items!.isNotEmpty && !order.isScheduled && !order.isCancelled) ...[
+                            if (order.items != null &&
+                                order.items!.isNotEmpty &&
+                                !order.isScheduled &&
+                                !order.isCancelled) ...[
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
@@ -2434,28 +2607,34 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     const SizedBox(height: 12),
                                     Builder(
                                       builder: (context) {
-                                        final totalQuantity = order.items!.fold<int>(
-                                          0, 
-                                          (sum, item) => sum + item.quantity,
-                                        );
-                                        final returnedQuantity = order.items!.fold<int>(
-                                          0,
-                                          (sum, item) {
-                                            int returnedQty;
-                                            if (item.isReturned) {
-                                              returnedQty = item.returnedQuantity ?? item.quantity;
-                                            } else {
-                                              returnedQty = item.returnedQuantity ?? 0;
-                                            }
-                                            return sum + returnedQty;
-                                          },
-                                        );
-                                        final missingQuantity = totalQuantity - returnedQuantity;
-                                        
+                                        final totalQuantity = order.items!
+                                            .fold<int>(
+                                              0,
+                                              (sum, item) =>
+                                                  sum + item.quantity,
+                                            );
+                                        final returnedQuantity = order.items!
+                                            .fold<int>(0, (sum, item) {
+                                              int returnedQty;
+                                              if (item.isReturned) {
+                                                returnedQty =
+                                                    item.returnedQuantity ??
+                                                    item.quantity;
+                                              } else {
+                                                returnedQty =
+                                                    item.returnedQuantity ?? 0;
+                                              }
+                                              return sum + returnedQty;
+                                            });
+                                        final missingQuantity =
+                                            totalQuantity - returnedQuantity;
+
                                         return Column(
                                           children: [
                                             Row(
-                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
                                               children: [
                                                 Text(
                                                   'Total Quantity',
@@ -2477,13 +2656,16 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                             ),
                                             const SizedBox(height: 8),
                                             Row(
-                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
                                               children: [
                                                 Text(
                                                   'Returned',
                                                   style: TextStyle(
                                                     fontSize: 12,
-                                                    color: Colors.green.shade700,
+                                                    color:
+                                                        Colors.green.shade700,
                                                     fontWeight: FontWeight.w500,
                                                   ),
                                                 ),
@@ -2492,7 +2674,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                                   style: TextStyle(
                                                     fontSize: 12,
                                                     fontWeight: FontWeight.bold,
-                                                    color: Colors.green.shade700,
+                                                    color:
+                                                        Colors.green.shade700,
                                                   ),
                                                 ),
                                               ],
@@ -2500,22 +2683,28 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                             if (missingQuantity > 0) ...[
                                               const SizedBox(height: 8),
                                               Row(
-                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
                                                 children: [
                                                   Text(
                                                     'Missing',
                                                     style: TextStyle(
                                                       fontSize: 12,
-                                                      color: Colors.red.shade700,
-                                                      fontWeight: FontWeight.w500,
+                                                      color:
+                                                          Colors.red.shade700,
+                                                      fontWeight:
+                                                          FontWeight.w500,
                                                     ),
                                                   ),
                                                   Text(
                                                     '$missingQuantity',
                                                     style: TextStyle(
                                                       fontSize: 12,
-                                                      fontWeight: FontWeight.bold,
-                                                      color: Colors.red.shade700,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color:
+                                                          Colors.red.shade700,
                                                     ),
                                                   ),
                                                 ],
@@ -2531,17 +2720,19 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               const SizedBox(height: 16),
                             ],
                             // Security Deposit (if provided)
-                            if (order.securityDeposit != null && order.securityDeposit! > 0) ...[
+                            if (order.securityDeposit != null &&
+                                order.securityDeposit! > 0) ...[
                               const SizedBox(height: 12),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     'Security Deposit',
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.blue.shade700,
+                                      color: const Color(0xFF1F2A7A),
                                     ),
                                   ),
                                   Text(
@@ -2549,7 +2740,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.blue.shade700,
+                                      color: const Color(0xFF1F2A7A),
                                     ),
                                   ),
                                 ],
@@ -2558,15 +2749,22 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                             ],
                             // Total
                             Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                                horizontal: 12,
+                              ),
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
-                                  colors: [Colors.grey.shade50, Colors.grey.shade100],
+                                  colors: [
+                                    Colors.grey.shade50,
+                                    Colors.grey.shade100,
+                                  ],
                                 ),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     'Total',
@@ -2581,7 +2779,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     style: TextStyle(
                                       fontSize: 20,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.blue.shade700,
+                                      color: const Color(0xFF1F2A7A),
                                     ),
                                   ),
                                 ],
@@ -2593,11 +2791,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     ),
 
                     // Security Deposit Refund Section (only show if security deposit exists)
-                    if (order.securityDeposit != null && order.securityDeposit! > 0) ...[
+                    if (order.securityDeposit != null &&
+                        order.securityDeposit! > 0) ...[
                       const SizedBox(height: 16),
                       _SecurityDepositRefundSection(
                         order: order,
-                        localDamageCosts: _damageCosts, // Pass local damage costs for real-time calculation
+                        localDamageCosts:
+                            _damageCosts, // Pass local damage costs for real-time calculation
                       ),
                     ],
                   ],
@@ -2630,31 +2830,35 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
-                                onPressed: _isUpdating ? null : () => _handleStartRental(order),
+                                onPressed: _isUpdating
+                                    ? null
+                                    : () => _handleStartRental(order),
                                 icon: _isUpdating
                                     ? const SizedBox(
                                         width: 20,
                                         height: 20,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(
-                                            Colors.white,
-                                          ),
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                Colors.white,
+                                              ),
                                         ),
                                       )
-                                    : const Icon(
-                                        Icons.play_arrow,
-                                        size: 20,
-                                      ),
+                                    : const Icon(Icons.play_arrow, size: 20),
                                 label: Text(
-                                  _isUpdating ? 'Processing...' : 'Start Rental',
+                                  _isUpdating
+                                      ? 'Processing...'
+                                      : 'Start Rental',
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
                                 style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
                                   backgroundColor: Colors.orange.shade600,
                                   foregroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(
@@ -2664,11 +2868,16 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               ),
                             ),
                           if (canEdit) ...[
-                            if (canMarkReturned || canStartRental) const SizedBox(height: 8),
+                            if (canMarkReturned || canStartRental)
+                              const SizedBox(height: 8),
                             SizedBox(
                               width: double.infinity,
                               child: OutlinedButton.icon(
-                                onPressed: _isUpdating ? null : () => context.push('/orders/${order.id}/edit'),
+                                onPressed: _isUpdating
+                                    ? null
+                                    : () => context.push(
+                                        '/orders/${order.id}/edit',
+                                      ),
                                 icon: const Icon(Icons.edit_outlined, size: 20),
                                 label: const Text(
                                   'Edit Order',
@@ -2678,7 +2887,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   ),
                                 ),
                                 style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
                                   foregroundColor: const Color(0xFF0F1724),
                                   side: BorderSide(color: Colors.grey.shade300),
                                   shape: RoundedRectangleBorder(
@@ -2689,25 +2900,34 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                             ),
                           ],
                           if (canCancel) ...[
-                            if (canMarkReturned || canStartRental || canEdit) const SizedBox(height: 8),
+                            if (canMarkReturned || canStartRental || canEdit)
+                              const SizedBox(height: 8),
                             SizedBox(
                               width: double.infinity,
                               child: OutlinedButton.icon(
-                                onPressed: _isUpdating ? null : () => _handleCancelOrder(order),
+                                onPressed: _isUpdating
+                                    ? null
+                                    : () => _handleCancelOrder(order),
                                 icon: _isUpdating
                                     ? const SizedBox(
                                         width: 20,
                                         height: 20,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(
-                                            Colors.red,
-                                          ),
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                Colors.red,
+                                              ),
                                         ),
                                       )
-                                    : const Icon(Icons.cancel_outlined, size: 20),
+                                    : const Icon(
+                                        Icons.cancel_outlined,
+                                        size: 20,
+                                      ),
                                 label: Text(
-                                  _isUpdating ? 'Processing...' : 'Cancel Order',
+                                  _isUpdating
+                                      ? 'Processing...'
+                                      : 'Cancel Order',
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
@@ -2715,7 +2935,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   ),
                                 ),
                                 style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
                                   foregroundColor: Colors.red.shade600,
                                   side: BorderSide(
                                     color: Colors.red.shade600,
@@ -2738,7 +2960,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         },
         loading: () => const Center(
           child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0B63FF)),
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1F2A7A)),
           ),
         ),
         error: (error, stack) => Center(
@@ -2784,7 +3006,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   }
 }
 
-enum _OrderCategory { scheduled, ongoing, late, returned, partiallyReturned, cancelled, flagged }
+enum _OrderCategory {
+  scheduled,
+  ongoing,
+  late,
+  returned,
+  partiallyReturned,
+  cancelled,
+  flagged,
+}
 
 class _DateInfoWidget extends StatelessWidget {
   final String label;
@@ -2799,7 +3029,7 @@ class _DateInfoWidget extends StatelessWidget {
     // Convert 24-hour to 12-hour format
     final hour12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
     final minuteStr = minute.toString().padLeft(2, '0');
-    
+
     final dateStr = DateFormat('dd MMM yyyy').format(date);
     return '$dateStr, $hour12:$minuteStr $period';
   }
@@ -2867,7 +3097,6 @@ class _OrderItemCard extends StatefulWidget {
 }
 
 class _OrderItemCardState extends State<_OrderItemCard> {
-
   void _showImagePreview(
     BuildContext context,
     String imageUrl,
@@ -2909,19 +3138,21 @@ class _OrderItemCardState extends State<_OrderItemCard> {
   @override
   Widget build(BuildContext context) {
     // Use state values if checkbox is checked, otherwise use item values
-    final currentReturnedQty = widget.isChecked 
+    final currentReturnedQty = widget.isChecked
         ? (widget.returnedQuantity ?? widget.item.returnedQuantity ?? 0)
         : (widget.item.returnedQuantity ?? 0);
     final currentDamageCost = widget.isChecked && widget.damageCost != null
         ? widget.damageCost
         : widget.item.damageCost;
-    final currentDamageDescription = widget.isChecked && widget.damageDescription != null
+    final currentDamageDescription =
+        widget.isChecked && widget.damageDescription != null
         ? widget.damageDescription
         : widget.item.missingNote;
-    
+
     final isReturned = widget.item.isReturned;
     final isFullyReturned = currentReturnedQty >= widget.item.quantity;
-    final isPartiallyReturned = currentReturnedQty > 0 && currentReturnedQty < widget.item.quantity;
+    final isPartiallyReturned =
+        currentReturnedQty > 0 && currentReturnedQty < widget.item.quantity;
     final isLate = widget.item.lateReturn == true;
     final hasDamage = currentDamageCost != null && currentDamageCost > 0;
     final pendingQty = widget.item.quantity - currentReturnedQty;
@@ -2963,11 +3194,11 @@ class _OrderItemCardState extends State<_OrderItemCard> {
             padding: const EdgeInsets.only(top: 4),
             child: Checkbox(
               value: widget.isChecked,
-              onChanged: isDisabled 
-                  ? null 
+              onChanged: isDisabled
+                  ? null
                   : widget.onCheckboxChanged != null
-                      ? (value) => widget.onCheckboxChanged!(value ?? false)
-                      : null,
+                  ? (value) => widget.onCheckboxChanged!(value ?? false)
+                  : null,
             ),
           ),
           const SizedBox(width: 12),
@@ -3049,109 +3280,137 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                           runSpacing: 6,
                           children: [
                             if (isFullyReturned)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade500,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.check_circle, size: 11, color: Colors.white),
-                                const SizedBox(width: 2),
-                                Flexible(
-                                  child: Text(
-                                    'Fully Returned',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w600,
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade500,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.check_circle,
+                                      size: 11,
                                       color: Colors.white,
                                     ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                    const SizedBox(width: 2),
+                                    Flexible(
+                                      child: Text(
+                                        'Fully Returned',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
-                        if (isPartiallyReturned)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: Colors.yellow.shade500,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.inventory_2, size: 11, color: Colors.white),
-                                const SizedBox(width: 2),
-                                Flexible(
-                                  child: Text(
-                                    'Partial Return',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w600,
+                              ),
+                            if (isPartiallyReturned)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.yellow.shade500,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.inventory_2,
+                                      size: 11,
                                       color: Colors.white,
                                     ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                    const SizedBox(width: 2),
+                                    Flexible(
+                                      child: Text(
+                                        'Partial Return',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
-                        if (isLate && !isReturned)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.shade500,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.access_time, size: 11, color: Colors.white),
-                                const SizedBox(width: 2),
-                                Flexible(
-                                  child: Text(
-                                    'Late',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w600,
+                              ),
+                            if (isLate && !isReturned)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.shade500,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.access_time,
+                                      size: 11,
                                       color: Colors.white,
                                     ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                    const SizedBox(width: 2),
+                                    Flexible(
+                                      child: Text(
+                                        'Late',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
-                        if (hasDamage)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade500,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.warning, size: 11, color: Colors.white),
-                                const SizedBox(width: 2),
-                                Flexible(
-                                  child: Text(
-                                    'Damage',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w600,
+                              ),
+                            if (hasDamage)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade500,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.warning,
+                                      size: 11,
                                       color: Colors.white,
                                     ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                    const SizedBox(width: 2),
+                                    Flexible(
+                                      child: Text(
+                                        'Damage',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
+                              ),
                           ],
                         ),
                       ),
@@ -3220,22 +3479,31 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                             SizedBox(
                               width: 100,
                               child: TextField(
-                                controller: TextEditingController(
-                                  text: currentReturnedQty.toString(),
-                                )..selection = TextSelection.collapsed(
-                                    offset: currentReturnedQty.toString().length,
-                                  ),
+                                controller:
+                                    TextEditingController(
+                                        text: currentReturnedQty.toString(),
+                                      )
+                                      ..selection = TextSelection.collapsed(
+                                        offset: currentReturnedQty
+                                            .toString()
+                                            .length,
+                                      ),
                                 keyboardType: TextInputType.number,
                                 enabled: !isDisabled,
                                 onChanged: (value) {
                                   final qty = int.tryParse(value);
-                                  if (qty != null && qty >= 0 && qty <= widget.item.quantity) {
+                                  if (qty != null &&
+                                      qty >= 0 &&
+                                      qty <= widget.item.quantity) {
                                     widget.onReturnedQuantityChanged?.call(qty);
                                   }
                                 },
                                 decoration: InputDecoration(
                                   isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 8,
+                                  ),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(6),
                                   ),
@@ -3253,7 +3521,10 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                             ),
                             if (isFullyReturned)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 3,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.green.shade500,
                                   borderRadius: BorderRadius.circular(4),
@@ -3261,7 +3532,11 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.check_circle, size: 12, color: Colors.white),
+                                    Icon(
+                                      Icons.check_circle,
+                                      size: 12,
+                                      color: Colors.white,
+                                    ),
                                     const SizedBox(width: 3),
                                     Text(
                                       'Fully Returned',
@@ -3276,10 +3551,15 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                               ),
                             if (isPartiallyReturned)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 3,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.yellow.shade700,
-                                  border: Border.all(color: Colors.yellow.shade300),
+                                  border: Border.all(
+                                    color: Colors.yellow.shade300,
+                                  ),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -3294,7 +3574,9 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                           ],
                         ),
                         // Damage Fee & Description (show when item is checked/returned - allows damage even for full returns)
-                        if (widget.isChecked || isPartiallyReturned || isFullyReturned) ...[
+                        if (widget.isChecked ||
+                            isPartiallyReturned ||
+                            isFullyReturned) ...[
                           const SizedBox(height: 16),
                           Text(
                             'Damage Fee (₹)',
@@ -3307,14 +3589,18 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                           const SizedBox(height: 6),
                           TextField(
                             controller: TextEditingController(
-                              text: currentDamageCost != null && currentDamageCost > 0
+                              text:
+                                  currentDamageCost != null &&
+                                      currentDamageCost > 0
                                   ? currentDamageCost.toStringAsFixed(0)
                                   : '',
                             ),
                             keyboardType: TextInputType.number,
                             enabled: !isDisabled,
                             onChanged: (value) {
-                              final cost = value.isEmpty ? null : double.tryParse(value);
+                              final cost = value.isEmpty
+                                  ? null
+                                  : double.tryParse(value);
                               widget.onDamageCostChanged?.call(cost);
                             },
                             decoration: InputDecoration(
@@ -3344,10 +3630,13 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                             maxLines: 3,
                             enabled: !isDisabled,
                             onChanged: (value) {
-                              widget.onDamageDescriptionChanged?.call(value.isEmpty ? null : value);
+                              widget.onDamageDescriptionChanged?.call(
+                                value.isEmpty ? null : value,
+                              );
                             },
                             decoration: InputDecoration(
-                              hintText: 'Describe any damage, missing parts, or issues...',
+                              hintText:
+                                  'Describe any damage, missing parts, or issues...',
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -3395,10 +3684,7 @@ class _ReturnStatusBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.grey.shade200,
-          width: 1,
-        ),
+        border: Border.all(color: Colors.grey.shade200, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3431,13 +3717,17 @@ class _ReturnStatusBox extends StatelessWidget {
                 fontSize: 11,
                 color: detailColor ?? Colors.grey.shade600,
                 height: 1.3,
-                fontWeight: detailColor != null ? FontWeight.w600 : FontWeight.normal,
+                fontWeight: detailColor != null
+                    ? FontWeight.w600
+                    : FontWeight.normal,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             )
           else
-            const SizedBox(height: 16), // Spacer to maintain symmetry when no detail
+            const SizedBox(
+              height: 16,
+            ), // Spacer to maintain symmetry when no detail
         ],
       ),
     );
@@ -3445,11 +3735,12 @@ class _ReturnStatusBox extends StatelessWidget {
 }
 
 /// Security Deposit Refund Section Widget
-/// 
+///
 /// Displays security deposit refund details matching website design
 class _SecurityDepositRefundSection extends ConsumerStatefulWidget {
   final Order order;
-  final Map<String, double>? localDamageCosts; // Local damage costs (before saving)
+  final Map<String, double>?
+  localDamageCosts; // Local damage costs (before saving)
 
   const _SecurityDepositRefundSection({
     required this.order,
@@ -3470,7 +3761,7 @@ class _SecurityDepositRefundSectionState
     // 1. Order has returned items (completed, completed_with_issues, or has returned items)
     // 2. There's an amount available to refund
     // 3. Not already fully refunded
-    
+
     final order = widget.order;
     final securityDeposit = order.securityDepositAmount ?? 0.0;
     final rentalAmount = order.subtotal ?? 0.0;
@@ -3479,12 +3770,20 @@ class _SecurityDepositRefundSectionState
     final lateFee = order.lateFee ?? 0.0;
     final totalDeductions = rentalAmount + gstAmount + damageFees + lateFee;
     final alreadyRefunded = order.securityDepositRefundedAmount ?? 0.0;
-    final availableToRefund = (securityDeposit - totalDeductions - alreadyRefunded).clamp(0.0, securityDeposit);
-    
+    final availableToRefund =
+        (securityDeposit - totalDeductions - alreadyRefunded).clamp(
+          0.0,
+          securityDeposit,
+        );
+
     // Check if order has returned items
-    final hasReturnedItems = order.isAnyCompleted || 
-                            (order.items != null && order.items!.any((item) => item.isReturned || (item.returnedQuantity ?? 0) > 0));
-    
+    final hasReturnedItems =
+        order.isAnyCompleted ||
+        (order.items != null &&
+            order.items!.any(
+              (item) => item.isReturned || (item.returnedQuantity ?? 0) > 0,
+            ));
+
     // Show button if items are returned and there's amount to refund
     return hasReturnedItems && availableToRefund > 0;
   }
@@ -3500,7 +3799,11 @@ class _SecurityDepositRefundSectionState
     final lateFee = order.lateFee ?? 0.0;
     final totalDeductions = rentalAmount + gstAmount + damageFees + lateFee;
     final alreadyRefunded = order.securityDepositRefundedAmount ?? 0.0;
-    final availableToRefund = (securityDeposit - totalDeductions - alreadyRefunded).clamp(0.0, securityDeposit);
+    final availableToRefund =
+        (securityDeposit - totalDeductions - alreadyRefunded).clamp(
+          0.0,
+          securityDeposit,
+        );
 
     if (availableToRefund <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3526,7 +3829,9 @@ class _SecurityDepositRefundSectionState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Successfully refunded ₹${NumberFormat('#,##0.00').format(availableToRefund)}'),
+            content: Text(
+              'Successfully refunded ₹${NumberFormat('#,##0.00').format(availableToRefund)}',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -3556,25 +3861,26 @@ class _SecurityDepositRefundSectionState
   Widget build(BuildContext context) {
     // Watch the order provider to get the latest data from database
     final orderAsync = ref.watch(orderProvider(widget.order.id));
-    
+
     return orderAsync.when(
       data: (updatedOrder) {
         if (updatedOrder == null) {
           return const SizedBox.shrink();
         }
-        
+
         // Use the latest order data from database
         final order = updatedOrder;
-        
+
         // Calculate refund amounts using actual database fields
         // Security deposit amount (what was initially collected)
         final securityDeposit = order.securityDepositAmount ?? 0.0;
         final rentalAmount = order.subtotal ?? 0.0;
         final gstAmount = order.gstAmount ?? 0.0;
-        
+
         // Calculate damage fees: use local damage costs if available (before saving), otherwise use database value
         double damageFees = order.damageFeeTotal ?? 0.0;
-        if (widget.localDamageCosts != null && widget.localDamageCosts!.isNotEmpty) {
+        if (widget.localDamageCosts != null &&
+            widget.localDamageCosts!.isNotEmpty) {
           // Calculate total from local damage costs
           final localDamageTotal = widget.localDamageCosts!.values.fold<double>(
             0.0,
@@ -3582,18 +3888,20 @@ class _SecurityDepositRefundSectionState
           );
           // Use local damage if it's different from database (user has entered damage but not saved yet)
           // Otherwise, use the higher value to show the most up-to-date amount
-          damageFees = localDamageTotal > damageFees ? localDamageTotal : damageFees;
+          damageFees = localDamageTotal > damageFees
+              ? localDamageTotal
+              : damageFees;
         }
-        
+
         final lateFee = order.lateFee ?? 0.0;
-        
+
         // Total deductions (rental + GST + damage + late fee)
         final totalDeductions = rentalAmount + gstAmount + damageFees + lateFee;
-        
+
         // Get already refunded amount from database
         // securityDepositRefunded is a boolean flag, use securityDepositRefundedAmount for the amount
         final alreadyRefunded = order.securityDepositRefundedAmount ?? 0.0;
-        
+
         // Calculate outstanding amount (what needs to be collected)
         // Outstanding = (Rental + GST + Damage + Late Fee) - Security Deposit - Additional Amount Collected
         // This is the amount customer still needs to pay beyond the security deposit
@@ -3601,8 +3909,12 @@ class _SecurityDepositRefundSectionState
         // Subtract both security deposit and any additional amounts already collected
         final additionalCollected = order.additionalAmountCollected ?? 0.0;
         final totalCharges = rentalAmount + gstAmount + damageFees + lateFee;
-        final outstandingAmount = (totalCharges - securityDeposit - additionalCollected).clamp(0.0, double.infinity);
-        
+        final outstandingAmount =
+            (totalCharges - securityDeposit - additionalCollected).clamp(
+              0.0,
+              double.infinity,
+            );
+
         // Debug logging to verify calculation
         print('🔍 Outstanding Amount Calculation:');
         print('  Security Deposit: ₹$securityDeposit');
@@ -3613,403 +3925,427 @@ class _SecurityDepositRefundSectionState
         print('  Late Fee: ₹$lateFee');
         print('  Total Charges: ₹$totalCharges');
         print('  Outstanding: ₹$outstandingAmount');
-    
-    // Available to refund = Security Deposit - Total Deductions - Already Refunded
-    final availableToRefund = (securityDeposit - totalDeductions - alreadyRefunded).clamp(0.0, securityDeposit);
-    
-    // Amount to refund (what can be refunded now)
-    final amountToRefund = availableToRefund;
-    
-    // Determine status based on actual refund data
-    String refundStatus;
-    MaterialColor statusColor;
-    final totalRefundable = securityDeposit - totalDeductions;
-    if (totalRefundable <= 0) {
-      refundStatus = 'No Refund Available';
-      statusColor = Colors.grey;
-    } else if (alreadyRefunded >= totalRefundable) {
-      refundStatus = 'Fully Refunded';
-      statusColor = Colors.green;
-    } else if (alreadyRefunded > 0) {
-      refundStatus = 'Partially Refunded';
-      statusColor = Colors.orange;
-    } else {
-      refundStatus = 'Not Refunded';
-      statusColor = Colors.grey;
-    }
 
-    return Column(
-      children: [
-        // Summary Card with Payment Accounting
-        Card(
-          elevation: 0,
-          color: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.grey.shade200),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        // Available to refund = Security Deposit - Total Deductions - Already Refunded
+        final availableToRefund =
+            (securityDeposit - totalDeductions - alreadyRefunded).clamp(
+              0.0,
+              securityDeposit,
+            );
+
+        // Amount to refund (what can be refunded now)
+        final amountToRefund = availableToRefund;
+
+        // Determine status based on actual refund data
+        String refundStatus;
+        MaterialColor statusColor;
+        final totalRefundable = securityDeposit - totalDeductions;
+        if (totalRefundable <= 0) {
+          refundStatus = 'No Refund Available';
+          statusColor = Colors.grey;
+        } else if (alreadyRefunded >= totalRefundable) {
+          refundStatus = 'Fully Refunded';
+          statusColor = Colors.green;
+        } else if (alreadyRefunded > 0) {
+          refundStatus = 'Partially Refunded';
+          statusColor = Colors.orange;
+        } else {
+          refundStatus = 'Not Refunded';
+          statusColor = Colors.grey;
+        }
+
+        return Column(
+          children: [
+            // Summary Card with Payment Accounting
+            Card(
+              elevation: 0,
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: Colors.grey.shade200),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.description_outlined,
-                      size: 20,
-                      color: Colors.indigo.shade600,
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.description_outlined,
+                          size: 20,
+                          color: Colors.indigo.shade600,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Summary',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F1724),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Summary',
+                    const SizedBox(height: 4),
+                    Text(
+                      'PAYMENT ACCOUNTING',
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F1724),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                        letterSpacing: 1.2,
                       ),
                     ),
+                    const SizedBox(height: 20),
+                    // Security Deposit (positive, green)
+                    _RefundRow(
+                      label: 'Security Deposit',
+                      amount: securityDeposit,
+                      isPositive: true,
+                    ),
+                    const SizedBox(height: 12),
+                    // Rental Amount (negative, red)
+                    if (rentalAmount > 0)
+                      _RefundRow(
+                        label: 'Rental Amount',
+                        amount: -rentalAmount,
+                        isPositive: false,
+                      ),
+                    if (rentalAmount > 0) const SizedBox(height: 12),
+                    // GST (negative, red)
+                    if (gstAmount > 0)
+                      _RefundRow(
+                        label: 'GST',
+                        amount: -gstAmount,
+                        isPositive: false,
+                      ),
+                    if (gstAmount > 0) const SizedBox(height: 12),
+                    // Damage Fees (negative, red)
+                    if (damageFees > 0)
+                      _RefundRow(
+                        label: 'Damage Fees',
+                        amount: -damageFees,
+                        isPositive: false,
+                      ),
+                    if (damageFees > 0) const SizedBox(height: 12),
+                    // Late Fee (negative, red)
+                    if (lateFee > 0)
+                      _RefundRow(
+                        label: 'Late Fee',
+                        amount: -lateFee,
+                        isPositive: false,
+                      ),
+                    if (lateFee > 0) const SizedBox(height: 12),
+                    // Already Refunded (negative, blue)
+                    if (alreadyRefunded > 0)
+                      _RefundRow(
+                        label: 'Already Refunded',
+                        amount: -alreadyRefunded,
+                        isPositive: false,
+                        isBlue: true,
+                      ),
+                    if (alreadyRefunded > 0) const SizedBox(height: 12),
+                    // Amount to Collect or Amount to Refund
+                    if (outstandingAmount > 0) ...[
+                      // Amount to Collect (highlighted, pink/red) - when security deposit doesn't cover rental + GST
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.pink.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Amount to Collect',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey.shade900,
+                              ),
+                            ),
+                            Text(
+                              '₹${NumberFormat('#,##0.00').format(outstandingAmount)}',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else if (amountToRefund > 0) ...[
+                      // Amount to Refund (highlighted, green) - when security deposit covers everything
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Amount to Refund',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey.shade900,
+                              ),
+                            ),
+                            Text(
+                              '₹${NumberFormat('#,##0.00').format(amountToRefund)}',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'PAYMENT ACCOUNTING',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade600,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // Security Deposit (positive, green)
-                _RefundRow(
-                  label: 'Security Deposit',
-                  amount: securityDeposit,
-                  isPositive: true,
-                ),
-                const SizedBox(height: 12),
-                // Rental Amount (negative, red)
-                if (rentalAmount > 0)
-                  _RefundRow(
-                    label: 'Rental Amount',
-                    amount: -rentalAmount,
-                    isPositive: false,
-                  ),
-                if (rentalAmount > 0) const SizedBox(height: 12),
-                // GST (negative, red)
-                if (gstAmount > 0)
-                  _RefundRow(
-                    label: 'GST',
-                    amount: -gstAmount,
-                    isPositive: false,
-                  ),
-                if (gstAmount > 0) const SizedBox(height: 12),
-                // Damage Fees (negative, red)
-                if (damageFees > 0)
-                  _RefundRow(
-                    label: 'Damage Fees',
-                    amount: -damageFees,
-                    isPositive: false,
-                  ),
-                if (damageFees > 0) const SizedBox(height: 12),
-                // Late Fee (negative, red)
-                if (lateFee > 0)
-                  _RefundRow(
-                    label: 'Late Fee',
-                    amount: -lateFee,
-                    isPositive: false,
-                  ),
-                if (lateFee > 0) const SizedBox(height: 12),
-                // Already Refunded (negative, blue)
-                if (alreadyRefunded > 0)
-                  _RefundRow(
-                    label: 'Already Refunded',
-                    amount: -alreadyRefunded,
-                    isPositive: false,
-                    isBlue: true,
-                  ),
-                if (alreadyRefunded > 0) const SizedBox(height: 12),
-                // Amount to Collect or Amount to Refund
-                if (outstandingAmount > 0) ...[
-                  // Amount to Collect (highlighted, pink/red) - when security deposit doesn't cover rental + GST
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.pink.shade50,
-                      borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            // Collect Outstanding Amount Section (only show if there's outstanding amount)
+            if (outstandingAmount > 0) ...[
+              const SizedBox(height: 16),
+              _CollectOutstandingAmountSection(
+                order: order,
+                outstandingAmount: outstandingAmount,
+              ),
+            ],
+            const SizedBox(height: 16),
+            // Security Deposit Details Card
+            Card(
+              elevation: 0,
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: Colors.grey.shade200),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.security_outlined,
+                          size: 20,
+                          color: Colors.indigo.shade600,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Security Deposit',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F1724),
+                          ),
+                        ),
+                      ],
                     ),
-                    child: Row(
+                    const SizedBox(height: 20),
+                    // Deposit Amount
+                    Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Amount to Collect',
+                          'Deposit Amount',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          '₹${NumberFormat('#,##0.00').format(securityDeposit)}',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
                             color: Colors.grey.shade900,
                           ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // Available to Refund (in blue box)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1F2A7A).withOpacity(0.1),
+                        border: Border.all(
+                          color: const Color(0xFF1F2A7A).withOpacity(0.3),
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Available to Refund',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF1F2A7A),
+                            ),
+                          ),
+                          Text(
+                            '₹${NumberFormat('#,##0.00').format(availableToRefund)}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF1F2A7A),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Total Deductions
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
                         Text(
-                          '₹${NumberFormat('#,##0.00').format(outstandingAmount)}',
+                          'Total Deductions',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          '-₹${NumberFormat('#,##0.00').format(totalDeductions)}',
+                          style: TextStyle(
+                            fontSize: 14,
                             fontWeight: FontWeight.bold,
                             color: Colors.red.shade700,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ] else if (amountToRefund > 0) ...[
-                  // Amount to Refund (highlighted, green) - when security deposit covers everything
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
+                    const SizedBox(height: 16),
+                    // Status
+                    Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Amount to Refund',
+                          'Status',
                           style: TextStyle(
                             fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey.shade900,
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                        Text(
-                          '₹${NumberFormat('#,##0.00').format(amountToRefund)}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green.shade700,
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusColor.shade50,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            refundStatus,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: statusColor.shade700,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-        // Collect Outstanding Amount Section (only show if there's outstanding amount)
-        if (outstandingAmount > 0) ...[
-          const SizedBox(height: 16),
-          _CollectOutstandingAmountSection(
-            order: order,
-            outstandingAmount: outstandingAmount,
-          ),
-        ],
-        const SizedBox(height: 16),
-        // Security Deposit Details Card
-        Card(
-          elevation: 0,
-          color: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.grey.shade200),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.security_outlined,
-                      size: 20,
-                      color: Colors.indigo.shade600,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Security Deposit',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F1724),
+                    // Last Refund (if available)
+                    if (order.securityDepositRefundDate != null) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Last Refund',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            DateFormat(
+                              'dd MMM yyyy, hh:mm a',
+                            ).format(order.securityDepositRefundDate!),
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                // Deposit Amount
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Deposit Amount',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    Text(
-                      '₹${NumberFormat('#,##0.00').format(securityDeposit)}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey.shade900,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                // Available to Refund (in blue box)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    border: Border.all(color: Colors.blue.shade200),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Available to Refund',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.blue.shade700,
-                        ),
-                      ),
-                      Text(
-                        '₹${NumberFormat('#,##0.00').format(availableToRefund)}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade700,
+                    ],
+                    // Refund Deposit Button (only show when items are returned and there's amount to refund)
+                    if (_shouldShowRefundButton()) ...[
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _isRefunding
+                              ? null
+                              : () => _handleRefundDeposit(),
+                          icon: _isRefunding
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.account_balance_wallet,
+                                  size: 20,
+                                ),
+                          label: Text(
+                            _isRefunding
+                                ? 'Processing Refund...'
+                                : 'Refund Deposit ₹${NumberFormat('#,##0.00').format(amountToRefund)}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green.shade600,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                         ),
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Total Deductions
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Total Deductions',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    Text(
-                      '-₹${NumberFormat('#,##0.00').format(totalDeductions)}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red.shade700,
-                      ),
-                    ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                // Status
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Status',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: statusColor.shade50,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        refundStatus,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: statusColor.shade700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                // Last Refund (if available)
-                if (order.securityDepositRefundDate != null) ...[
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Last Refund',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade700,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      Text(
-                        DateFormat('dd MMM yyyy, hh:mm a').format(order.securityDepositRefundDate!),
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                // Refund Deposit Button (only show when items are returned and there's amount to refund)
-                if (_shouldShowRefundButton()) ...[
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _isRefunding ? null : () => _handleRefundDeposit(),
-                      icon: _isRefunding
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Icon(Icons.account_balance_wallet, size: 20),
-                      label: Text(
-                        _isRefunding
-                            ? 'Processing Refund...'
-                            : 'Refund Deposit ₹${NumberFormat('#,##0.00').format(amountToRefund)}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green.shade600,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
+              ),
             ),
-          ),
-        ),
-      ],
-    );
+          ],
+        );
       },
       loading: () => const SizedBox.shrink(),
       error: (_, __) => const SizedBox.shrink(),
@@ -4018,7 +4354,7 @@ class _SecurityDepositRefundSectionState
 }
 
 /// Collect Outstanding Amount Section Widget
-/// 
+///
 /// Displays input field and button to collect outstanding amount
 class _CollectOutstandingAmountSection extends ConsumerStatefulWidget {
   final Order order;
@@ -4044,7 +4380,8 @@ class _CollectOutstandingAmountSectionState
   void initState() {
     super.initState();
     _remainingToCollect = widget.outstandingAmount;
-    _amountController.text = '₹${NumberFormat('#,##0.00').format(widget.outstandingAmount)} (Remaining)';
+    _amountController.text =
+        '₹${NumberFormat('#,##0.00').format(widget.outstandingAmount)} (Remaining)';
   }
 
   @override
@@ -4062,7 +4399,7 @@ class _CollectOutstandingAmountSectionState
         .replaceAll(',', '')
         .replaceAll(' (Remaining)', '')
         .trim();
-    
+
     double? amountToCollect;
     try {
       amountToCollect = double.tryParse(amountText);
@@ -4086,17 +4423,20 @@ class _CollectOutstandingAmountSectionState
     // Round to 2 decimal places to avoid floating-point precision issues
     final roundedAmount = (amountToCollect * 100).round() / 100;
     final roundedRemaining = (_remainingToCollect * 100).round() / 100;
-    
-    if (roundedAmount > roundedRemaining + 0.01) { // Allow 0.01 tolerance
+
+    if (roundedAmount > roundedRemaining + 0.01) {
+      // Allow 0.01 tolerance
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Cannot collect more than ₹${NumberFormat('#,##0.00').format(_remainingToCollect)}'),
+          content: Text(
+            'Cannot collect more than ₹${NumberFormat('#,##0.00').format(_remainingToCollect)}',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
-    
+
     // Use rounded amount for collection
     final finalAmount = roundedAmount.clamp(0.0, roundedRemaining);
 
@@ -4112,22 +4452,24 @@ class _CollectOutstandingAmountSectionState
         orderId: widget.order.id,
         amount: finalAmount,
       );
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Successfully collected ₹${NumberFormat('#,##0.00').format(finalAmount)}'),
+            content: Text(
+              'Successfully collected ₹${NumberFormat('#,##0.00').format(finalAmount)}',
+            ),
             backgroundColor: Colors.green,
           ),
         );
-        
+
         // Refresh the order to get updated data from database
         ref.invalidate(orderProvider(widget.order.id));
-        
+
         // Wait for order to refresh, then recalculate remaining amount
         // This ensures we get the updated security_deposit_amount from database
         await Future.delayed(const Duration(milliseconds: 300));
-        
+
         // Get updated order to recalculate outstanding amount
         final updatedOrderAsync = ref.read(orderProvider(widget.order.id));
         updatedOrderAsync.whenData((updatedOrder) {
@@ -4135,19 +4477,27 @@ class _CollectOutstandingAmountSectionState
             // Recalculate outstanding amount with updated data
             // Include all charges: rental, GST, damage fees, and late fees
             // Subtract both security deposit and additional amount collected
-            final updatedSecurityDeposit = updatedOrder.securityDepositAmount ?? 0.0;
-            final updatedAdditionalCollected = updatedOrder.additionalAmountCollected ?? 0.0;
+            final updatedSecurityDeposit =
+                updatedOrder.securityDepositAmount ?? 0.0;
+            final updatedAdditionalCollected =
+                updatedOrder.additionalAmountCollected ?? 0.0;
             final rentalAmount = updatedOrder.subtotal ?? 0.0;
             final gstAmount = updatedOrder.gstAmount ?? 0.0;
             final damageFees = updatedOrder.damageFeeTotal ?? 0.0;
             final lateFee = updatedOrder.lateFee ?? 0.0;
-            final totalCharges = rentalAmount + gstAmount + damageFees + lateFee;
-            final newOutstanding = (totalCharges - updatedSecurityDeposit - updatedAdditionalCollected).clamp(0.0, double.infinity);
-            
+            final totalCharges =
+                rentalAmount + gstAmount + damageFees + lateFee;
+            final newOutstanding =
+                (totalCharges -
+                        updatedSecurityDeposit -
+                        updatedAdditionalCollected)
+                    .clamp(0.0, double.infinity);
+
             setState(() {
               _remainingToCollect = newOutstanding;
               if (_remainingToCollect > 0) {
-                _amountController.text = '₹${NumberFormat('#,##0.00').format(_remainingToCollect)} (Remaining)';
+                _amountController.text =
+                    '₹${NumberFormat('#,##0.00').format(_remainingToCollect)} (Remaining)';
               } else {
                 _amountController.text = '₹0.00 (Remaining)';
               }
@@ -4177,40 +4527,46 @@ class _CollectOutstandingAmountSectionState
   Widget build(BuildContext context) {
     // Watch the order to get the latest data and recalculate outstanding amount
     final orderAsync = ref.watch(orderProvider(widget.order.id));
-    
+
     return orderAsync.when(
       data: (updatedOrder) {
         if (updatedOrder == null) {
           return const SizedBox.shrink();
         }
-        
+
         // Recalculate outstanding amount with latest order data
         final securityDeposit = updatedOrder.securityDepositAmount ?? 0.0;
-        final additionalCollected = updatedOrder.additionalAmountCollected ?? 0.0;
+        final additionalCollected =
+            updatedOrder.additionalAmountCollected ?? 0.0;
         final rentalAmount = updatedOrder.subtotal ?? 0.0;
         final gstAmount = updatedOrder.gstAmount ?? 0.0;
         final damageFees = updatedOrder.damageFeeTotal ?? 0.0;
         final lateFee = updatedOrder.lateFee ?? 0.0;
         final totalCharges = rentalAmount + gstAmount + damageFees + lateFee;
-        final currentOutstanding = (totalCharges - securityDeposit - additionalCollected).clamp(0.0, double.infinity);
-        
+        final currentOutstanding =
+            (totalCharges - securityDeposit - additionalCollected).clamp(
+              0.0,
+              double.infinity,
+            );
+
         // Hide the section if outstanding amount is 0 or less
         if (currentOutstanding <= 0) {
           return const SizedBox.shrink();
         }
-        
+
         // Update remaining amount if it changed
         if (currentOutstanding != _remainingToCollect) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               setState(() {
                 _remainingToCollect = currentOutstanding;
-                _amountController.text = '₹${NumberFormat('#,##0.00').format(_remainingToCollect)} (Remaining)';
+                _amountController.text =
+                    '₹${NumberFormat('#,##0.00').format(_remainingToCollect)} (Remaining)';
               });
             }
           });
         }
-        
+
         return Card(
           elevation: 0,
           color: Colors.pink.shade50,
@@ -4255,57 +4611,70 @@ class _CollectOutstandingAmountSectionState
                   children: [
                     Expanded(
                       child: TextField(
-                    controller: _amountController,
-                    readOnly: _remainingToCollect <= 0,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [
-                      // Allow only numbers and decimal point
-                      FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
-                    ],
-                    decoration: InputDecoration(
-                      hintText: 'Enter amount',
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: Colors.red.shade400, width: 2),
-                      ),
-                      suffixIcon: _remainingToCollect > 0
-                          ? Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: Icon(Icons.arrow_drop_up, color: Colors.grey.shade600),
-                                  onPressed: () {
-                                    // Set to full remaining amount
-                                    setState(() {
-                                      _amountController.text = '₹${NumberFormat('#,##0.00').format(_remainingToCollect)} (Remaining)';
-                                    });
-                                  },
-                                ),
-                                IconButton(
-                                  icon: Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
-                                  onPressed: () {
-                                    // Set to zero
-                                    setState(() {
-                                      _amountController.text = '₹0.00 (Remaining)';
-                                    });
-                                  },
-                                ),
-                              ],
-                            )
-                          : null,
+                        controller: _amountController,
+                        readOnly: _remainingToCollect <= 0,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        inputFormatters: [
+                          // Allow only numbers and decimal point
+                          FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
+                        ],
+                        decoration: InputDecoration(
+                          hintText: 'Enter amount',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color: Colors.red.shade400,
+                              width: 2,
+                            ),
+                          ),
+                          suffixIcon: _remainingToCollect > 0
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.arrow_drop_up,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                      onPressed: () {
+                                        // Set to full remaining amount
+                                        setState(() {
+                                          _amountController.text =
+                                              '₹${NumberFormat('#,##0.00').format(_remainingToCollect)} (Remaining)';
+                                        });
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.arrow_drop_down,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                      onPressed: () {
+                                        // Set to zero
+                                        setState(() {
+                                          _amountController.text =
+                                              '₹0.00 (Remaining)';
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                )
+                              : null,
+                        ),
                       ),
                     ),
-                  ),
                     const SizedBox(width: 12),
                     Container(
                       decoration: BoxDecoration(
@@ -4317,11 +4686,16 @@ class _CollectOutstandingAmountSectionState
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: ElevatedButton(
-                        onPressed: _remainingToCollect > 0 && !_isCollecting ? _handleCollect : null,
+                        onPressed: _remainingToCollect > 0 && !_isCollecting
+                            ? _handleCollect
+                            : null,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -4332,7 +4706,9 @@ class _CollectOutstandingAmountSectionState
                                 height: 20,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
                                 ),
                               )
                             : const Text(
@@ -4358,7 +4734,8 @@ class _CollectOutstandingAmountSectionState
                       children: [
                         const TextSpan(text: 'Remaining to collect: '),
                         TextSpan(
-                          text: '₹${NumberFormat('#,##0.00').format(_remainingToCollect)}',
+                          text:
+                              '₹${NumberFormat('#,##0.00').format(_remainingToCollect)}',
                           style: TextStyle(
                             color: Colors.red.shade700,
                             fontWeight: FontWeight.bold,
@@ -4397,7 +4774,7 @@ class _RefundRow extends StatelessWidget {
   Widget build(BuildContext context) {
     Color textColor;
     if (isBlue) {
-      textColor = Colors.blue.shade700;
+      textColor = const Color(0xFF1F2A7A);
     } else if (isPositive) {
       textColor = Colors.green.shade700;
     } else {
@@ -4591,7 +4968,7 @@ class _ImagePreviewModalState extends State<_ImagePreviewModal> {
                         ),
                         child: Icon(
                           Icons.image_outlined,
-                          color: Colors.blue.shade300,
+                          color: const Color(0xFF1F2A7A).withOpacity(0.5),
                           size: 24,
                         ),
                       ),
@@ -4702,8 +5079,8 @@ class _ImagePreviewModalState extends State<_ImagePreviewModal> {
                                                       .expectedTotalBytes!
                                             : null,
                                         valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              Colors.blue.shade400,
+                                            const AlwaysStoppedAnimation<Color>(
+                                              Color(0xFF1F2A7A),
                                             ),
                                         strokeWidth: 3,
                                       ),
@@ -4844,21 +5221,24 @@ class _ModernActionButton extends StatelessWidget {
           decoration: BoxDecoration(
             gradient: isActive
                 ? LinearGradient(
-                    colors: [Colors.blue.shade400, Colors.blue.shade600],
+                    colors: [
+                      const Color(0xFF1F2A7A).withOpacity(0.7),
+                      const Color(0xFF1F2A7A),
+                    ],
                   )
                 : null,
             color: isActive ? null : Colors.white.withOpacity(0.1),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: isActive
-                  ? Colors.blue.shade300
+                  ? const Color(0xFF1F2A7A).withOpacity(0.5)
                   : Colors.white.withOpacity(0.2),
               width: isActive ? 1.5 : 1,
             ),
             boxShadow: isActive
                 ? [
                     BoxShadow(
-                      color: Colors.blue.withOpacity(0.3),
+                      color: Color(0xFF1F2A7A).withOpacity(0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -5178,7 +5558,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
 }
 
 /// Order Timeline Widget
-/// 
+///
 /// Displays the order's journey from creation to completion
 /// Uses real audit log data from order_return_audit table (matching website)
 class _OrderTimelineWidget extends StatefulWidget {
@@ -5230,7 +5610,7 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
       final period = hour >= 12 ? 'PM' : 'AM';
       final hour12 = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
       final minuteStr = minute.toString().padLeft(2, '0');
-      
+
       final dateStr = DateFormat('dd MMM yyyy').format(date);
       return '$dateStr, $hour12:$minuteStr $period';
     } catch (e) {
@@ -5322,17 +5702,21 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
       case 'updated_return_date':
         return 'Return Date Updated';
       default:
-        return action.replaceAll('_', ' ').split(' ').map((word) {
-          if (word.isEmpty) return word;
-          return word[0].toUpperCase() + word.substring(1);
-        }).join(' ');
+        return action
+            .replaceAll('_', ' ')
+            .split(' ')
+            .map((word) {
+              if (word.isEmpty) return word;
+              return word[0].toUpperCase() + word.substring(1);
+            })
+            .join(' ');
     }
   }
 
   Color _getActionColor(String action) {
     switch (action) {
       case 'order_created':
-        return Colors.blue;
+        return Color(0xFF1F2A7A);
       case 'order_scheduled':
         return Colors.indigo;
       case 'rental_started':
@@ -5399,8 +5783,8 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
     }
 
     // Determine which items to show
-    final itemsToShow = _isExpanded 
-        ? _timelineEvents! 
+    final itemsToShow = _isExpanded
+        ? _timelineEvents!
         : _timelineEvents!.take(_initialItemCount).toList();
     final hasMoreItems = _timelineEvents!.length > _initialItemCount;
 
@@ -5409,7 +5793,7 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
         ...itemsToShow.asMap().entries.map((entry) {
           final index = entry.key;
           final event = entry.value;
-          final isLast = _isExpanded 
+          final isLast = _isExpanded
               ? (index == itemsToShow.length - 1)
               : (index == itemsToShow.length - 1 && !hasMoreItems);
           final action = event['action'] as String;
@@ -5433,7 +5817,7 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
             isLast: isLast,
             formatDateTime: _formatDateTime12Hour,
           );
-        }).toList(),
+        }),
         // View All / View Less button
         if (hasMoreItems)
           Padding(
@@ -5449,16 +5833,16 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
                 size: 18,
               ),
               label: Text(
-                _isExpanded 
-                    ? 'View Less' 
+                _isExpanded
+                    ? 'View Less'
                     : 'View All (${_timelineEvents!.length - _initialItemCount} more)',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 side: BorderSide(color: Colors.indigo.shade300),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -5514,22 +5898,16 @@ class _TimelineItemWidget extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: event.isCompleted 
-                    ? event.color 
-                    : Colors.grey.shade300,
+                color: event.isCompleted ? event.color : Colors.grey.shade300,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: event.isCompleted 
-                      ? event.color 
-                      : Colors.grey.shade400,
+                  color: event.isCompleted ? event.color : Colors.grey.shade400,
                   width: 2,
                 ),
               ),
               child: Icon(
                 event.icon,
-                color: event.isCompleted 
-                    ? Colors.white 
-                    : Colors.grey.shade600,
+                color: event.isCompleted ? Colors.white : Colors.grey.shade600,
                 size: 20,
               ),
             ),
@@ -5537,7 +5915,7 @@ class _TimelineItemWidget extends StatelessWidget {
               Container(
                 width: 2,
                 height: 60,
-                color: event.isCompleted 
+                color: event.isCompleted
                     ? event.color.withOpacity(0.3)
                     : Colors.grey.shade300,
               ),
@@ -5555,7 +5933,10 @@ class _TimelineItemWidget extends StatelessWidget {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: event.color.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(6),

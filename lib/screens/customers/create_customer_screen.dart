@@ -217,8 +217,8 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Color(0xFF0B63FF),
-                      Color(0xFF0052D4),
+                      Color(0xFF1F2A7A),
+                      Color(0xFF1F2A7A),
                     ],
                   ),
                 ),
@@ -432,7 +432,7 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : _handleSubmit,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0B63FF),
+                          backgroundColor: const Color(0xFF1F2A7A),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -511,7 +511,7 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
                   child: _ImageSourceButton(
                     icon: Icons.camera_alt,
                     label: 'Camera',
-                    color: const Color(0xFF0B63FF),
+                    color: const Color(0xFF1F2A7A),
                     onTap: () {
                       Navigator.pop(context);
                       _pickImage(ImageSource.camera, isFront);
@@ -586,12 +586,12 @@ class _SectionCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0B63FF).withOpacity(0.1),
+                    color: const Color(0xFF1F2A7A).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     icon,
-                    color: const Color(0xFF0B63FF),
+                    color: const Color(0xFF1F2A7A),
                     size: 20,
                   ),
                 ),
@@ -671,7 +671,7 @@ class _ModernTextField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(prefixIcon, color: enabled ? const Color(0xFF0B63FF) : Colors.grey.shade400),
+        prefixIcon: Icon(prefixIcon, color: enabled ? const Color(0xFF1F2A7A) : Colors.grey.shade400),
         filled: true,
         fillColor: enabled ? Colors.white : Colors.grey.shade50,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -685,7 +685,7 @@ class _ModernTextField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 2),
+          borderSide: const BorderSide(color: Color(0xFF1F2A7A), width: 2),
         ),
         disabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -731,7 +731,7 @@ class _ModernDropdown<T> extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(icon, color: const Color(0xFF0B63FF)),
+        prefixIcon: Icon(icon, color: const Color(0xFF1F2A7A)),
         filled: true,
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -745,7 +745,7 @@ class _ModernDropdown<T> extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 2),
+          borderSide: const BorderSide(color: Color(0xFF1F2A7A), width: 2),
         ),
       ),
       style: const TextStyle(
@@ -780,7 +780,7 @@ class _ImageUploadCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: image != null ? const Color(0xFF0B63FF) : Colors.grey.shade300,
+            color: image != null ? const Color(0xFF1F2A7A) : Colors.grey.shade300,
             width: image != null ? 2 : 1,
           ),
         ),
@@ -839,7 +839,7 @@ class _ImageUploadCard extends StatelessWidget {
                       child: Icon(
                         Icons.edit,
                         size: 16,
-                        color: const Color(0xFF0B63FF),
+                        color: const Color(0xFF1F2A7A),
                       ),
                     ),
                   ),

@@ -62,7 +62,7 @@ class _BranchesListScreenState extends ConsumerState<BranchesListScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_circle_outline, color: Color(0xFF0B63FF)),
+            icon: const Icon(Icons.add_circle_outline, color: Color(0xFF1F2A7A)),
             onPressed: () => _showCreateBranchDialog(context),
             tooltip: 'Add Branch',
           ),
@@ -114,7 +114,7 @@ class _BranchesListScreenState extends ConsumerState<BranchesListScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 2),
+                        borderSide: const BorderSide(color: Color(0xFF1F2A7A), width: 2),
                       ),
                       filled: true,
                       fillColor: Colors.grey.shade50,
@@ -184,7 +184,7 @@ class _BranchesListScreenState extends ConsumerState<BranchesListScreen> {
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'branches_fab',
         onPressed: () => _showCreateBranchDialog(context),
-        backgroundColor: const Color(0xFF0B63FF),
+        backgroundColor: const Color(0xFF1F2A7A),
         icon: const Icon(Icons.add),
         label: const Text('Add Branch'),
       ),
@@ -351,12 +351,12 @@ class _BranchCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0B63FF).withOpacity(0.1),
+                    color: const Color(0xFF1F2A7A).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
                     Icons.store,
-                    color: Color(0xFF0B63FF),
+                    color: Color(0xFF1F2A7A),
                     size: 24,
                   ),
                 ),
@@ -407,7 +407,7 @@ class _BranchCard extends StatelessWidget {
                       value: 'edit',
                       child: Row(
                         children: [
-                          Icon(Icons.edit, size: 20, color: Color(0xFF0B63FF)),
+                          Icon(Icons.edit, size: 20, color: Color(0xFF1F2A7A)),
                           SizedBox(width: 8),
                           Text('Edit'),
                         ],
@@ -567,7 +567,7 @@ class _BranchFormDialogState extends State<_BranchFormDialog> {
             }
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0B63FF),
+            backgroundColor: const Color(0xFF1F2A7A),
             foregroundColor: Colors.white,
           ),
           child: Text(widget.branch == null ? 'Create' : 'Update'),
@@ -627,7 +627,7 @@ class _EmptyState extends StatelessWidget {
               icon: const Icon(Icons.add),
               label: const Text('Add Branch'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0B63FF),
+                backgroundColor: const Color(0xFF1F2A7A),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,

@@ -31,7 +31,7 @@ class GlanzRentalApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0EA5E9), // Sky-500 (matching web app)
+          seedColor: const Color(0xFF1F2A7A), // Brand blue color
           brightness: Brightness.light,
         ),
         useMaterial3: true,

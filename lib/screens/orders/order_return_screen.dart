@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../models/order.dart';
-import '../../models/order_item.dart';
 import '../../services/orders_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/orders_provider.dart';
@@ -15,10 +13,7 @@ import '../../providers/orders_provider.dart';
 class OrderReturnScreen extends ConsumerStatefulWidget {
   final String orderId;
 
-  const OrderReturnScreen({
-    super.key,
-    required this.orderId,
-  });
+  const OrderReturnScreen({super.key, required this.orderId});
 
   @override
   ConsumerState<OrderReturnScreen> createState() => _OrderReturnScreenState();
@@ -26,13 +21,17 @@ class OrderReturnScreen extends ConsumerStatefulWidget {
 
 class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
   final Set<String> _selectedItemIds = {}; // Item IDs to mark as returned
-  final Set<String> _unselectedReturnedItemIds = {}; // Item IDs that were returned but now unselected
+  final Set<String> _unselectedReturnedItemIds =
+      {}; // Item IDs that were returned but now unselected
   final Map<String, bool> _missingItems = {}; // Item ID -> is missing
   final Map<String, String> _missingNotes = {}; // Item ID -> missing note
-  final Map<String, int> _returnedQuantities = {}; // Item ID -> quantity to return
+  final Map<String, int> _returnedQuantities =
+      {}; // Item ID -> quantity to return
   final Map<String, double> _damageCosts = {}; // Item ID -> damage cost
-  final Map<String, String> _damageDescriptions = {}; // Item ID -> damage description
-  final Map<String, TextEditingController> _quantityControllers = {}; // Item ID -> quantity controller
+  final Map<String, String> _damageDescriptions =
+      {}; // Item ID -> damage description
+  final Map<String, TextEditingController> _quantityControllers =
+      {}; // Item ID -> quantity controller
   double _lateFee = 0.0;
   bool _isProcessing = false;
 
@@ -79,10 +78,7 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                   const SizedBox(height: 16),
                   Text(
                     'Order not found',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey.shade700,
-                    ),
+                    style: TextStyle(fontSize: 18, color: Colors.grey.shade700),
                   ),
                 ],
               ),
@@ -101,7 +97,8 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
 
           // Initialize selected items with already returned items on first build
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_selectedItemIds.isEmpty && _unselectedReturnedItemIds.isEmpty) {
+            if (_selectedItemIds.isEmpty &&
+                _unselectedReturnedItemIds.isEmpty) {
               setState(() {
                 for (var item in items) {
                   if (item.id != null && item.isReturned) {
@@ -137,7 +134,7 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildStatItem('Total', items.length, Colors.blue),
+                    _buildStatItem('Total', items.length, Color(0xFF1F2A7A)),
                     _buildStatItem('Returned', returnedCount, Colors.green),
                     _buildStatItem('Pending', pendingCount, Colors.orange),
                     _buildStatItem('Missing', missingCount, Colors.red),
@@ -192,8 +189,11 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                     final isItemReturned = item.isReturned;
                     final isItemMissing = item.isMissing;
                     final isItemLate = item.lateReturn == true;
-                    final isUnselectedReturned = _unselectedReturnedItemIds.contains(item.id);
-                    final isSelected = _selectedItemIds.contains(item.id) && !isUnselectedReturned;
+                    final isUnselectedReturned = _unselectedReturnedItemIds
+                        .contains(item.id);
+                    final isSelected =
+                        _selectedItemIds.contains(item.id) &&
+                        !isUnselectedReturned;
                     final isMarkedMissing = _missingItems[item.id] == true;
 
                     return Card(
@@ -202,18 +202,18 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                       color: isItemReturned && !isUnselectedReturned
                           ? Colors.green.shade50
                           : isItemMissing || isMarkedMissing
-                              ? Colors.red.shade50
-                              : isItemLate
-                                  ? Colors.orange.shade50
-                                  : Colors.white,
+                          ? Colors.red.shade50
+                          : isItemLate
+                          ? Colors.orange.shade50
+                          : Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                         side: BorderSide(
                           color: isItemReturned && !isUnselectedReturned
                               ? Colors.green.shade200
                               : isItemMissing || isMarkedMissing
-                                  ? Colors.red.shade200
-                                  : Colors.grey.shade200,
+                              ? Colors.red.shade200
+                              : Colors.grey.shade200,
                         ),
                       ),
                       child: Padding(
@@ -222,20 +222,25 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                           children: [
                             // Checkbox
                             Checkbox(
-                              value: (isItemReturned && !isUnselectedReturned) || (isSelected && !isItemReturned),
+                              value:
+                                  (isItemReturned && !isUnselectedReturned) ||
+                                  (isSelected && !isItemReturned),
                               onChanged: (value) {
                                 setState(() {
                                   if (value == true) {
                                     // Selecting item
                                     if (isItemReturned) {
                                       // This is a returned item - just remove from unselected list
-                                      _unselectedReturnedItemIds.remove(item.id!);
+                                      _unselectedReturnedItemIds.remove(
+                                        item.id!,
+                                      );
                                     } else {
                                       // This is a pending item - add to selected
                                       _selectedItemIds.add(item.id!);
                                       _missingItems[item.id!] = false;
                                       // Initialize returned quantity to pending quantity
-                                      _returnedQuantities[item.id!] = item.pendingQuantity;
+                                      _returnedQuantities[item.id!] =
+                                          item.pendingQuantity;
                                     }
                                   } else {
                                     // Unselecting item
@@ -278,11 +283,13 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                   ),
                                   errorWidget: (context, url, error) =>
                                       Container(
-                                    width: 60,
-                                    height: 60,
-                                    color: Colors.grey.shade200,
-                                    child: const Icon(Icons.image_not_supported),
-                                  ),
+                                        width: 60,
+                                        height: 60,
+                                        color: Colors.grey.shade200,
+                                        child: const Icon(
+                                          Icons.image_not_supported,
+                                        ),
+                                      ),
                                 ),
                               ),
 
@@ -358,14 +365,19 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                     Container(
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        color: Colors.blue.shade50,
+                                        color: const Color(
+                                          0xFF1F2A7A,
+                                        ).withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(8),
                                         border: Border.all(
-                                          color: Colors.blue.shade200,
+                                          color: const Color(
+                                            0xFF1F2A7A,
+                                          ).withOpacity(0.3),
                                         ),
                                       ),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           const Text(
                                             'Return Quantity:',
@@ -380,16 +392,24 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                             children: [
                                               // Decrease button
                                               IconButton(
-                                                icon: const Icon(Icons.remove_circle_outline),
+                                                icon: const Icon(
+                                                  Icons.remove_circle_outline,
+                                                ),
                                                 iconSize: 24,
-                                                color: Colors.blue.shade700,
+                                                color: const Color(0xFF1F2A7A),
                                                 padding: EdgeInsets.zero,
-                                                constraints: const BoxConstraints(),
+                                                constraints:
+                                                    const BoxConstraints(),
                                                 onPressed: () {
                                                   setState(() {
-                                                    final currentQty = _returnedQuantities[item.id!] ?? item.pendingQuantity;
+                                                    final currentQty =
+                                                        _returnedQuantities[item
+                                                            .id!] ??
+                                                        item.pendingQuantity;
                                                     if (currentQty > 1) {
-                                                      _returnedQuantities[item.id!] = currentQty - 1;
+                                                      _returnedQuantities[item
+                                                              .id!] =
+                                                          currentQty - 1;
                                                     }
                                                   });
                                                 },
@@ -398,29 +418,47 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                               // Quantity input field (editable)
                                               Expanded(
                                                 child: _QuantityInputField(
-                                                  key: ValueKey('qty_${item.id}'),
-                                                  initialValue: _returnedQuantities[item.id!] ?? item.pendingQuantity,
-                                                  maxValue: item.pendingQuantity,
+                                                  key: ValueKey(
+                                                    'qty_${item.id}',
+                                                  ),
+                                                  initialValue:
+                                                      _returnedQuantities[item
+                                                          .id!] ??
+                                                      item.pendingQuantity,
+                                                  maxValue:
+                                                      item.pendingQuantity,
                                                   onChanged: (value) {
                                                     // Update state without rebuilding immediately
-                                                    _returnedQuantities[item.id!] = value;
+                                                    _returnedQuantities[item
+                                                            .id!] =
+                                                        value;
                                                   },
                                                 ),
                                               ),
                                               const SizedBox(width: 4),
                                               // Increase button
                                               IconButton(
-                                                icon: const Icon(Icons.add_circle_outline),
+                                                icon: const Icon(
+                                                  Icons.add_circle_outline,
+                                                ),
                                                 iconSize: 24,
-                                                color: Colors.blue.shade700,
+                                                color: const Color(0xFF1F2A7A),
                                                 padding: EdgeInsets.zero,
-                                                constraints: const BoxConstraints(),
+                                                constraints:
+                                                    const BoxConstraints(),
                                                 onPressed: () {
                                                   setState(() {
-                                                    final currentQty = _returnedQuantities[item.id!] ?? item.pendingQuantity;
-                                                    final pendingQty = item.pendingQuantity;
-                                                    if (currentQty < pendingQty) {
-                                                      _returnedQuantities[item.id!] = currentQty + 1;
+                                                    final currentQty =
+                                                        _returnedQuantities[item
+                                                            .id!] ??
+                                                        item.pendingQuantity;
+                                                    final pendingQty =
+                                                        item.pendingQuantity;
+                                                    if (currentQty <
+                                                        pendingQty) {
+                                                      _returnedQuantities[item
+                                                              .id!] =
+                                                          currentQty + 1;
                                                     }
                                                   });
                                                 },
@@ -441,41 +479,61 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                     // Show missing quantity info if returned quantity < pending quantity
                                     Builder(
                                       builder: (context) {
-                                        final returnedQty = _returnedQuantities[item.id!] ?? item.pendingQuantity;
-                                        final missingQty = item.pendingQuantity - returnedQty;
-                                        
-                                        if (missingQty > 0 && returnedQty < item.pendingQuantity) {
+                                        final returnedQty =
+                                            _returnedQuantities[item.id!] ??
+                                            item.pendingQuantity;
+                                        final missingQty =
+                                            item.pendingQuantity - returnedQty;
+
+                                        if (missingQty > 0 &&
+                                            returnedQty <
+                                                item.pendingQuantity) {
                                           return Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
                                               const SizedBox(height: 12),
                                               Container(
-                                                padding: const EdgeInsets.all(12),
+                                                padding: const EdgeInsets.all(
+                                                  12,
+                                                ),
                                                 decoration: BoxDecoration(
                                                   color: Colors.orange.shade50,
-                                                  borderRadius: BorderRadius.circular(8),
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
                                                   border: Border.all(
-                                                    color: Colors.orange.shade200,
+                                                    color:
+                                                        Colors.orange.shade200,
                                                   ),
                                                 ),
                                                 child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
                                                     Row(
                                                       children: [
                                                         Icon(
-                                                          Icons.warning_amber_rounded,
+                                                          Icons
+                                                              .warning_amber_rounded,
                                                           size: 18,
-                                                          color: Colors.orange.shade700,
+                                                          color: Colors
+                                                              .orange
+                                                              .shade700,
                                                         ),
-                                                        const SizedBox(width: 8),
+                                                        const SizedBox(
+                                                          width: 8,
+                                                        ),
                                                         Expanded(
                                                           child: Text(
                                                             '$missingQty item${missingQty > 1 ? 's' : ''} will be marked as missing',
                                                             style: TextStyle(
                                                               fontSize: 12,
-                                                              fontWeight: FontWeight.w600,
-                                                              color: Colors.orange.shade900,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                              color: Colors
+                                                                  .orange
+                                                                  .shade900,
                                                             ),
                                                           ),
                                                         ),
@@ -484,14 +542,22 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                                     const SizedBox(height: 12),
                                                     // Damage Cost Input
                                                     _DamageCostField(
-                                                      key: ValueKey('damage_cost_${item.id}'),
-                                                      initialValue: _damageCosts[item.id!],
+                                                      key: ValueKey(
+                                                        'damage_cost_${item.id}',
+                                                      ),
+                                                      initialValue:
+                                                          _damageCosts[item
+                                                              .id!],
                                                       onChanged: (value) {
                                                         setState(() {
                                                           if (value == null) {
-                                                            _damageCosts.remove(item.id!);
+                                                            _damageCosts.remove(
+                                                              item.id!,
+                                                            );
                                                           } else {
-                                                            _damageCosts[item.id!] = value;
+                                                            _damageCosts[item
+                                                                    .id!] =
+                                                                value;
                                                           }
                                                         });
                                                       },
@@ -499,14 +565,25 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                                     const SizedBox(height: 8),
                                                     // Description Input
                                                     _DamageDescriptionField(
-                                                      key: ValueKey('damage_desc_${item.id}'),
-                                                      initialValue: _damageDescriptions[item.id!],
+                                                      key: ValueKey(
+                                                        'damage_desc_${item.id}',
+                                                      ),
+                                                      initialValue:
+                                                          _damageDescriptions[item
+                                                              .id!],
                                                       onChanged: (value) {
                                                         setState(() {
-                                                          if (value.trim().isEmpty) {
-                                                            _damageDescriptions.remove(item.id!);
+                                                          if (value
+                                                              .trim()
+                                                              .isEmpty) {
+                                                            _damageDescriptions
+                                                                .remove(
+                                                                  item.id!,
+                                                                );
                                                           } else {
-                                                            _damageDescriptions[item.id!] = value;
+                                                            _damageDescriptions[item
+                                                                    .id!] =
+                                                                value;
                                                           }
                                                         });
                                                       },
@@ -526,7 +603,9 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
                                           color: Colors.red.shade50,
-                                          borderRadius: BorderRadius.circular(6),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
                                           border: Border.all(
                                             color: Colors.red.shade200,
                                           ),
@@ -570,7 +649,8 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    if (_selectedItemIds.isNotEmpty || _unselectedReturnedItemIds.isNotEmpty)
+                    if (_selectedItemIds.isNotEmpty ||
+                        _unselectedReturnedItemIds.isNotEmpty)
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
@@ -581,8 +661,9 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                   height: 20,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor:
-                                        AlwaysStoppedAnimation<Color>(Colors.white),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
                                   ),
                                 )
                               : const Icon(Icons.check_circle),
@@ -609,8 +690,8 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                         icon: const Icon(Icons.select_all),
                         label: const Text('Mark All as Returned'),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.blue.shade600,
-                          side: BorderSide(color: Colors.blue.shade600),
+                          foregroundColor: const Color(0xFF1F2A7A),
+                          side: const BorderSide(color: Color(0xFF1F2A7A)),
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -624,9 +705,7 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
             ],
           );
         },
-        loading: () => const Center(
-          child: CircularProgressIndicator(),
-        ),
+        loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -664,10 +743,7 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
         const SizedBox(height: 4),
         Text(
           label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
         ),
       ],
     );
@@ -676,7 +752,7 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
   String _buildProcessButtonLabel() {
     final selectedCount = _selectedItemIds.length;
     final unselectedCount = _unselectedReturnedItemIds.length;
-    
+
     if (selectedCount > 0 && unselectedCount > 0) {
       return 'Process Changes ($selectedCount to return, $unselectedCount to unreturn)';
     } else if (selectedCount > 0) {
@@ -745,63 +821,77 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
       // Build item returns list - only include items that need changes
       final List<ItemReturn> itemReturns = [];
       final items = order.items ?? [];
-      
+
       // Add items to be returned or marked as missing (only if not already returned)
       for (final itemId in _selectedItemIds) {
-        final item = items.firstWhere((i) => i.id == itemId, orElse: () => items.first);
+        final item = items.firstWhere(
+          (i) => i.id == itemId,
+          orElse: () => items.first,
+        );
         // Only process if item is not already returned
         if (!item.isReturned) {
           final isMissing = _missingItems[itemId] == true;
           final missingNote = _missingNotes[itemId];
-          final returnedQty = _returnedQuantities[itemId] ?? item.pendingQuantity;
+          final returnedQty =
+              _returnedQuantities[itemId] ?? item.pendingQuantity;
           final pendingQty = item.pendingQuantity;
 
           if (isMissing) {
             // Mark entire item as missing
-            itemReturns.add(ItemReturn(
-              itemId: itemId,
-              returnStatus: 'missing',
-              actualReturnDate: null,
-              missingNote: missingNote?.isEmpty ?? true ? null : missingNote,
-              returnedQuantity: null,
-              damageCost: _damageCosts[itemId],
-              description: _damageDescriptions[itemId]?.trim().isEmpty ?? true ? null : _damageDescriptions[itemId]?.trim(),
-            ));
+            itemReturns.add(
+              ItemReturn(
+                itemId: itemId,
+                returnStatus: 'missing',
+                actualReturnDate: null,
+                missingNote: missingNote?.isEmpty ?? true ? null : missingNote,
+                returnedQuantity: null,
+                damageCost: _damageCosts[itemId],
+                description: _damageDescriptions[itemId]?.trim().isEmpty ?? true
+                    ? null
+                    : _damageDescriptions[itemId]?.trim(),
+              ),
+            );
           } else {
             // Partial return - some returned, rest missing
             if (returnedQty < pendingQty && returnedQty > 0) {
               // Mark returned items - missing items will be processed separately
-              itemReturns.add(ItemReturn(
-                itemId: itemId,
-                returnStatus: 'returned',
-                actualReturnDate: DateTime.now(),
-                missingNote: null,
-                returnedQuantity: returnedQty,
-              ));
+              itemReturns.add(
+                ItemReturn(
+                  itemId: itemId,
+                  returnStatus: 'returned',
+                  actualReturnDate: DateTime.now(),
+                  missingNote: null,
+                  returnedQuantity: returnedQty,
+                ),
+              );
             } else if (returnedQty == pendingQty) {
               // Full return
-              itemReturns.add(ItemReturn(
-                itemId: itemId,
-                returnStatus: 'returned',
-                actualReturnDate: DateTime.now(),
-                missingNote: null,
-                returnedQuantity: returnedQty,
-              ));
+              itemReturns.add(
+                ItemReturn(
+                  itemId: itemId,
+                  returnStatus: 'returned',
+                  actualReturnDate: DateTime.now(),
+                  missingNote: null,
+                  returnedQuantity: returnedQty,
+                ),
+              );
             }
           }
         }
       }
-      
+
       // Add items to be unreturned (reverted to not_yet_returned)
       for (final itemId in _unselectedReturnedItemIds) {
-        itemReturns.add(ItemReturn(
-          itemId: itemId,
-          returnStatus: 'not_yet_returned',
-          actualReturnDate: null,
-          missingNote: null,
-        ));
+        itemReturns.add(
+          ItemReturn(
+            itemId: itemId,
+            returnStatus: 'not_yet_returned',
+            actualReturnDate: null,
+            missingNote: null,
+          ),
+        );
       }
-      
+
       // If no actual changes, return early
       if (itemReturns.isEmpty) {
         setState(() {
@@ -823,49 +913,59 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
         userId: userProfile!.id,
         lateFee: _lateFee,
       );
-      
+
       // Process missing items separately for partial returns
       final List<ItemReturn> missingItemReturns = [];
-      
+
       for (final itemId in _selectedItemIds) {
-        final item = items.firstWhere((i) => i.id == itemId, orElse: () => items.first);
+        final item = items.firstWhere(
+          (i) => i.id == itemId,
+          orElse: () => items.first,
+        );
         if (!item.isReturned) {
-          final returnedQty = _returnedQuantities[itemId] ?? item.pendingQuantity;
+          final returnedQty =
+              _returnedQuantities[itemId] ?? item.pendingQuantity;
           final pendingQty = item.pendingQuantity;
-          
+
           if (returnedQty < pendingQty && returnedQty > 0) {
             final missingQty = pendingQty - returnedQty;
-            
+
             // Create missing entry with damage cost and description
-            missingItemReturns.add(ItemReturn(
-              itemId: itemId,
-              returnStatus: 'missing',
-              actualReturnDate: null,
-              missingNote: _damageDescriptions[itemId]?.trim().isEmpty ?? true 
-                  ? (_damageCosts[itemId] != null ? 'Missing item - Damage cost: ₹${_damageCosts[itemId]!.toInt()}' : 'Items not returned')
-                  : _damageDescriptions[itemId]?.trim(),
-              returnedQuantity: missingQty,
-              damageCost: _damageCosts[itemId],
-              description: _damageDescriptions[itemId]?.trim().isEmpty ?? true ? null : _damageDescriptions[itemId]?.trim(),
-            ));
+            missingItemReturns.add(
+              ItemReturn(
+                itemId: itemId,
+                returnStatus: 'missing',
+                actualReturnDate: null,
+                missingNote: _damageDescriptions[itemId]?.trim().isEmpty ?? true
+                    ? (_damageCosts[itemId] != null
+                          ? 'Missing item - Damage cost: ₹${_damageCosts[itemId]!.toInt()}'
+                          : 'Items not returned')
+                    : _damageDescriptions[itemId]?.trim(),
+                returnedQuantity: missingQty,
+                damageCost: _damageCosts[itemId],
+                description: _damageDescriptions[itemId]?.trim().isEmpty ?? true
+                    ? null
+                    : _damageDescriptions[itemId]?.trim(),
+              ),
+            );
           }
         }
       }
-      
+
       // Process missing items in a separate call
       if (missingItemReturns.isNotEmpty) {
         // Wait for return transaction to complete
         await Future.delayed(const Duration(milliseconds: 800));
-        
+
         // Refresh order to get updated state
         ref.invalidate(orderProvider(widget.orderId));
         await Future.delayed(const Duration(milliseconds: 500));
-        
+
         try {
           await ordersService.processOrderReturn(
             orderId: widget.orderId,
             itemReturns: missingItemReturns,
-            userId: userProfile!.id,
+            userId: userProfile.id,
             lateFee: 0.0, // Don't add late fee again
           );
         } catch (e) {
@@ -893,8 +993,10 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
 
       // Refresh order data
       ref.invalidate(orderProvider(widget.orderId));
-      if (userProfile!.branchId != null) {
-        ref.invalidate(ordersProvider(OrdersParams(branchId: userProfile!.branchId!)));
+      if (userProfile.branchId != null) {
+        ref.invalidate(
+          ordersProvider(OrdersParams(branchId: userProfile.branchId!)),
+        );
       }
 
       if (mounted) {
@@ -926,7 +1028,7 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
 }
 
 /// Quantity Input Field Widget
-/// 
+///
 /// A reusable widget for entering quantity with validation
 class _QuantityInputField extends StatefulWidget {
   final int initialValue;
@@ -962,7 +1064,7 @@ class _QuantityInputFieldState extends State<_QuantityInputField> {
   void didUpdateWidget(_QuantityInputField oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Only update if the value changed externally (from +/- buttons) and we're not focused
-    if (widget.initialValue != oldWidget.initialValue && 
+    if (widget.initialValue != oldWidget.initialValue &&
         widget.initialValue != _currentValue &&
         !_focusNode.hasFocus) {
       _isInternalUpdate = true;
@@ -981,7 +1083,7 @@ class _QuantityInputFieldState extends State<_QuantityInputField> {
 
   void _updateValue(int newValue, {bool updateController = true}) {
     int finalValue = newValue;
-    
+
     if (newValue > widget.maxValue) {
       finalValue = widget.maxValue;
     } else if (newValue < 1) {
@@ -1017,15 +1119,19 @@ class _QuantityInputFieldState extends State<_QuantityInputField> {
         contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.blue.shade300),
+          borderSide: BorderSide(
+            color: const Color(0xFF1F2A7A).withOpacity(0.5),
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.blue.shade300),
+          borderSide: BorderSide(
+            color: const Color(0xFF1F2A7A).withOpacity(0.5),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+          borderSide: const BorderSide(color: Color(0xFF1F2A7A), width: 2),
         ),
         filled: true,
         fillColor: Colors.white,
@@ -1033,12 +1139,12 @@ class _QuantityInputFieldState extends State<_QuantityInputField> {
       onChanged: (value) {
         // Don't update if this is an internal update
         if (_isInternalUpdate) return;
-        
+
         // Allow empty string temporarily while user is typing
         if (value.isEmpty) {
           return;
         }
-        
+
         // Parse and validate
         final intValue = int.tryParse(value);
         if (intValue != null) {
@@ -1109,7 +1215,9 @@ class _DamageCostFieldState extends State<_DamageCostField> {
     super.didUpdateWidget(oldWidget);
     if (widget.initialValue != oldWidget.initialValue) {
       _currentValue = widget.initialValue;
-      _controller.text = _currentValue != null ? _currentValue!.toInt().toString() : '';
+      _controller.text = _currentValue != null
+          ? _currentValue!.toInt().toString()
+          : '';
     }
   }
 
@@ -1128,9 +1236,7 @@ class _DamageCostFieldState extends State<_DamageCostField> {
         labelText: 'Damage Cost (₹)',
         hintText: '0',
         prefixText: '₹ ',
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         filled: true,
         fillColor: Colors.white,
       ),
@@ -1158,7 +1264,9 @@ class _DamageCostFieldState extends State<_DamageCostField> {
             _controller.text = cost.toString();
             widget.onChanged(cost.toDouble());
           } else {
-            _controller.text = _currentValue != null ? _currentValue!.toInt().toString() : '';
+            _controller.text = _currentValue != null
+                ? _currentValue!.toInt().toString()
+                : '';
           }
         }
       },
@@ -1178,7 +1286,8 @@ class _DamageDescriptionField extends StatefulWidget {
   });
 
   @override
-  State<_DamageDescriptionField> createState() => _DamageDescriptionFieldState();
+  State<_DamageDescriptionField> createState() =>
+      _DamageDescriptionFieldState();
 }
 
 class _DamageDescriptionFieldState extends State<_DamageDescriptionField> {
@@ -1212,9 +1321,7 @@ class _DamageDescriptionFieldState extends State<_DamageDescriptionField> {
       decoration: InputDecoration(
         labelText: 'Description (Damage/Missing reason)',
         hintText: 'Enter description...',
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         filled: true,
         fillColor: Colors.white,
       ),
@@ -1224,4 +1331,3 @@ class _DamageDescriptionFieldState extends State<_DamageDescriptionField> {
     );
   }
 }
-

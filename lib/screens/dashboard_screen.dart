@@ -366,7 +366,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 shaderCallback: (bounds) => const LinearGradient(
                   colors: [
                     Color(0xFF0F1724),
-                    Color(0xFF273492),
+                    Color(0xFF1F2A7A),
                     Color(0xFF0F1724),
                   ],
                 ).createShader(bounds),
@@ -509,7 +509,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               Icon(
                                 Icons.flash_on,
                                 size: 20,
-                                color: const Color(0xFF273492),
+                                color: const Color(0xFF1F2A7A),
                               ),
                               const SizedBox(width: 8),
                               const Text(
@@ -598,7 +598,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               Icon(
                                 Icons.trending_up,
                                 size: 20,
-                                color: const Color(0xFF273492),
+                                color: const Color(0xFF1F2A7A),
                               ),
                               const SizedBox(width: 8),
                               const Text(
@@ -754,7 +754,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         Icon(
                           Icons.access_time,
                           size: 20,
-                          color: const Color(0xFF273492),
+                          color: const Color(0xFF1F2A7A),
                         ),
                         const SizedBox(width: 8),
                         const Text(
@@ -775,7 +775,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF273492),
+                          color: Color(0xFF1F2A7A),
                         ),
                       ),
                     ),
@@ -980,10 +980,10 @@ class _PremiumStatCard extends StatelessWidget {
         'cardBg': Colors.white,
       },
       'primary': {
-        'iconBg': const Color(0xFF273492).withOpacity(0.1),
-        'iconColor': const Color(0xFF273492),
-        'border': const Color(0xFF273492).withOpacity(0.2),
-        'accent': const Color(0xFF273492),
+        'iconBg': const Color(0xFF1F2A7A).withOpacity(0.1),
+        'iconColor': const Color(0xFF1F2A7A),
+        'border': const Color(0xFF1F2A7A).withOpacity(0.2),
+        'accent': const Color(0xFF1F2A7A),
         'cardBg': Colors.white,
       },
       'success': {
@@ -1060,13 +1060,13 @@ class _PremiumStatCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            const Color(0xFF273492).withOpacity(0.1),
-                            const Color(0xFF273492).withOpacity(0.05),
+                            const Color(0xFF1F2A7A).withOpacity(0.1),
+                            const Color(0xFF1F2A7A).withOpacity(0.05),
                           ],
                         ),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
-                          color: const Color(0xFF273492).withOpacity(0.2),
+                          color: const Color(0xFF1F2A7A).withOpacity(0.2),
                         ),
                       ),
                       child: Text(
@@ -1074,7 +1074,7 @@ class _PremiumStatCard extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF273492),
+                          color: Color(0xFF1F2A7A),
                         ),
                       ),
                     ),
@@ -1201,7 +1201,7 @@ class _ActionButton extends StatelessWidget {
       return ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF0B63FF),
+          backgroundColor: const Color(0xFF1F2A7A),
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
@@ -1226,8 +1226,8 @@ class _ActionButton extends StatelessWidget {
     return OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF0B63FF),
-        side: const BorderSide(color: Color(0xFF0B63FF), width: 1.5),
+        foregroundColor: const Color(0xFF1F2A7A),
+        side: const BorderSide(color: Color(0xFF1F2A7A), width: 1.5),
         padding: const EdgeInsets.symmetric(vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
@@ -1267,7 +1267,7 @@ class _ModernOrderCard extends StatelessWidget {
       case OrderStatus.cancelled:
         return Colors.grey;
       case OrderStatus.partiallyReturned:
-        return Colors.blue;
+        return const Color(0xFF1F2A7A);
       case OrderStatus.flagged:
         return Colors.orange;
     }

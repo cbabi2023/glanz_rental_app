@@ -204,6 +204,20 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
+        leadingWidth: 60,
+        leading: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12.0,
+            vertical: 8.0,
+          ),
+          child: Image.asset(
+            'lib/assets/png/glanz.png',
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
         title: const Text(
           'Orders',
           style: TextStyle(
@@ -222,7 +236,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
               ),
               icon: Stack(
                 children: [
-                  const Icon(Icons.filter_list, color: Color(0xFF0B63FF)),
+                  const Icon(Icons.filter_list, color: Color(0xFF1F2A7A)),
                   if (_selectedDateFilter != _DateFilter.allTime)
                     Positioned(
                       right: 0,
@@ -249,7 +263,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                         Icons.all_inclusive,
                         size: 20,
                         color: _selectedDateFilter == _DateFilter.allTime
-                            ? const Color(0xFF0B63FF)
+                            ? const Color(0xFF1F2A7A)
                             : Colors.grey.shade600,
                       ),
                       const SizedBox(width: 12),
@@ -260,7 +274,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                               ? FontWeight.w600
                               : FontWeight.normal,
                           color: _selectedDateFilter == _DateFilter.allTime
-                              ? const Color(0xFF0B63FF)
+                              ? const Color(0xFF1F2A7A)
                               : Colors.grey.shade700,
                         ),
                       ),
@@ -269,7 +283,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                         Icon(
                           Icons.check,
                           size: 18,
-                          color: const Color(0xFF0B63FF),
+                          color: const Color(0xFF1F2A7A),
                         ),
                       ],
                     ],
@@ -283,7 +297,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                         Icons.today,
                         size: 20,
                         color: _selectedDateFilter == _DateFilter.today
-                            ? const Color(0xFF0B63FF)
+                            ? const Color(0xFF1F2A7A)
                             : Colors.grey.shade600,
                       ),
                       const SizedBox(width: 12),
@@ -294,7 +308,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                               ? FontWeight.w600
                               : FontWeight.normal,
                           color: _selectedDateFilter == _DateFilter.today
-                              ? const Color(0xFF0B63FF)
+                              ? const Color(0xFF1F2A7A)
                               : Colors.grey.shade700,
                         ),
                       ),
@@ -303,7 +317,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                         Icon(
                           Icons.check,
                           size: 18,
-                          color: const Color(0xFF0B63FF),
+                          color: const Color(0xFF1F2A7A),
                         ),
                       ],
                     ],
@@ -317,7 +331,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                         Icons.history,
                         size: 20,
                         color: _selectedDateFilter == _DateFilter.yesterday
-                            ? const Color(0xFF0B63FF)
+                            ? const Color(0xFF1F2A7A)
                             : Colors.grey.shade600,
                       ),
                       const SizedBox(width: 12),
@@ -329,7 +343,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                               ? FontWeight.w600
                               : FontWeight.normal,
                           color: _selectedDateFilter == _DateFilter.yesterday
-                              ? const Color(0xFF0B63FF)
+                              ? const Color(0xFF1F2A7A)
                               : Colors.grey.shade700,
                         ),
                       ),
@@ -338,7 +352,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                         Icon(
                           Icons.check,
                           size: 18,
-                          color: const Color(0xFF0B63FF),
+                          color: const Color(0xFF1F2A7A),
                         ),
                       ],
                     ],
@@ -352,7 +366,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                         Icons.date_range,
                         size: 20,
                         color: _selectedDateFilter == _DateFilter.thisWeek
-                            ? const Color(0xFF0B63FF)
+                            ? const Color(0xFF1F2A7A)
                             : Colors.grey.shade600,
                       ),
                       const SizedBox(width: 12),
@@ -364,7 +378,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                               ? FontWeight.w600
                               : FontWeight.normal,
                           color: _selectedDateFilter == _DateFilter.thisWeek
-                              ? const Color(0xFF0B63FF)
+                              ? const Color(0xFF1F2A7A)
                               : Colors.grey.shade700,
                         ),
                       ),
@@ -373,7 +387,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                         Icon(
                           Icons.check,
                           size: 18,
-                          color: const Color(0xFF0B63FF),
+                          color: const Color(0xFF1F2A7A),
                         ),
                       ],
                     ],
@@ -387,7 +401,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                         Icons.calendar_month,
                         size: 20,
                         color: _selectedDateFilter == _DateFilter.thisMonth
-                            ? const Color(0xFF0B63FF)
+                            ? const Color(0xFF1F2A7A)
                             : Colors.grey.shade600,
                       ),
                       const SizedBox(width: 12),
@@ -399,7 +413,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                               ? FontWeight.w600
                               : FontWeight.normal,
                           color: _selectedDateFilter == _DateFilter.thisMonth
-                              ? const Color(0xFF0B63FF)
+                              ? const Color(0xFF1F2A7A)
                               : Colors.grey.shade700,
                         ),
                       ),
@@ -408,7 +422,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                         Icon(
                           Icons.check,
                           size: 18,
-                          color: const Color(0xFF0B63FF),
+                          color: const Color(0xFF1F2A7A),
                         ),
                       ],
                     ],
@@ -422,7 +436,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                         Icons.view_week,
                         size: 20,
                         color: _selectedDateFilter == _DateFilter.last7Days
-                            ? const Color(0xFF0B63FF)
+                            ? const Color(0xFF1F2A7A)
                             : Colors.grey.shade600,
                       ),
                       const SizedBox(width: 12),
@@ -434,7 +448,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                               ? FontWeight.w600
                               : FontWeight.normal,
                           color: _selectedDateFilter == _DateFilter.last7Days
-                              ? const Color(0xFF0B63FF)
+                              ? const Color(0xFF1F2A7A)
                               : Colors.grey.shade700,
                         ),
                       ),
@@ -443,7 +457,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                         Icon(
                           Icons.check,
                           size: 18,
-                          color: const Color(0xFF0B63FF),
+                          color: const Color(0xFF1F2A7A),
                         ),
                       ],
                     ],
@@ -457,7 +471,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                         Icons.event_note,
                         size: 20,
                         color: _selectedDateFilter == _DateFilter.custom
-                            ? const Color(0xFF0B63FF)
+                            ? const Color(0xFF1F2A7A)
                             : Colors.grey.shade600,
                       ),
                       const SizedBox(width: 12),
@@ -474,7 +488,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                                 ? FontWeight.w600
                                 : FontWeight.normal,
                             color: _selectedDateFilter == _DateFilter.custom
-                                ? const Color(0xFF0B63FF)
+                                ? const Color(0xFF1F2A7A)
                                 : Colors.grey.shade700,
                           ),
                           maxLines: 1,
@@ -485,7 +499,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                         Icon(
                           Icons.check,
                           size: 18,
-                          color: const Color(0xFF0B63FF),
+                          color: const Color(0xFF1F2A7A),
                         ),
                     ],
                   ),
@@ -507,7 +521,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'orders_fab',
         onPressed: () => context.push('/orders/new'),
-        backgroundColor: const Color(0xFF0B63FF),
+        backgroundColor: const Color(0xFF1F2A7A),
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
         label: const Text(
@@ -819,7 +833,7 @@ class _OrdersSearchBar extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 1.5),
+          borderSide: const BorderSide(color: Color(0xFF1F2A7A), width: 1.5),
         ),
       ),
       onChanged: onChanged,
@@ -946,13 +960,13 @@ class _OrdersTabChip extends StatelessWidget {
       ),
       selected: selected,
       onSelected: (_) => onTap(),
-      selectedColor: isWarning ? warningColor : const Color(0xFF0B63FF),
+      selectedColor: isWarning ? warningColor : const Color(0xFF1F2A7A),
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(
           color: selected
-              ? (isWarning ? warningColor : const Color(0xFF0B63FF))
+              ? (isWarning ? warningColor : const Color(0xFF1F2A7A))
               : (isWarning
                     ? warningColor.withOpacity(0.5)
                     : Colors.grey.shade300),
@@ -1007,7 +1021,7 @@ class _OrdersStatsRow extends StatelessWidget {
             label: 'Partially Returned',
             value: stats.partiallyReturned,
             icon: Icons.history,
-            color: Colors.blue.shade600,
+            color: Color(0xFF1F2A7A),
           ),
           const SizedBox(width: 8),
           _StatPill(
@@ -1347,7 +1361,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
       case _OrderCategory.returned:
         return Colors.green.shade600;
       case _OrderCategory.partiallyReturned:
-        return Colors.blue.shade600;
+        return Color(0xFF1F2A7A);
       case _OrderCategory.cancelled:
         return Colors.grey.shade500;
       case _OrderCategory.flagged:
@@ -1636,7 +1650,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
+                            color: Color(0xFF1F2A7A).withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(
@@ -1645,7 +1659,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                               Icon(
                                 Icons.access_time,
                                 size: 14,
-                                color: Colors.blue.shade700,
+                                color: Color(0xFF1F2A7A),
                               ),
                               const SizedBox(width: 6),
                               Text(
@@ -1655,7 +1669,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.blue.shade700,
+                                  color: Color(0xFF1F2A7A),
                                 ),
                               ),
                             ],
@@ -1787,7 +1801,7 @@ class _EmptyOrdersState extends StatelessWidget {
               icon: const Icon(Icons.add_circle_outline),
               label: const Text('New Order'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0B63FF),
+                backgroundColor: const Color(0xFF1F2A7A),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,

@@ -11,15 +11,12 @@ import '../../models/customer.dart';
 import '../../models/order.dart';
 
 /// Customer Detail Screen
-/// 
+///
 /// Modern, attractive customer detail screen with information and order history
 class CustomerDetailScreen extends ConsumerWidget {
   final String customerId;
 
-  const CustomerDetailScreen({
-    super.key,
-    required this.customerId,
-  });
+  const CustomerDetailScreen({super.key, required this.customerId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -31,9 +28,7 @@ class CustomerDetailScreen extends ConsumerWidget {
       body: customerAsync.when(
         data: (customer) {
           if (customer == null) {
-            return const Center(
-              child: Text('Customer not found'),
-            );
+            return const Center(child: Text('Customer not found'));
           }
 
           return CustomScrollView(
@@ -52,7 +47,8 @@ class CustomerDetailScreen extends ConsumerWidget {
                 actions: [
                   IconButton(
                     icon: const Icon(Icons.edit, color: Colors.white),
-                    onPressed: () => context.push('/customers/${customer.id}/edit'),
+                    onPressed: () =>
+                        context.push('/customers/${customer.id}/edit'),
                     tooltip: 'Edit Customer',
                   ),
                 ],
@@ -63,8 +59,8 @@ class CustomerDetailScreen extends ConsumerWidget {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          const Color(0xFF0B63FF),
-                          const Color(0xFF0052D4),
+                          const Color(0xFF1F2A7A),
+                          const Color(0xFF1F2A7A),
                         ],
                       ),
                     ),
@@ -93,14 +89,14 @@ class CustomerDetailScreen extends ConsumerWidget {
                                     child: Text(
                                       customer.name.isNotEmpty
                                           ? customer.name
-                                              .split(' ')
-                                              .map((n) => n[0])
-                                              .take(2)
-                                              .join()
-                                              .toUpperCase()
+                                                .split(' ')
+                                                .map((n) => n[0])
+                                                .take(2)
+                                                .join()
+                                                .toUpperCase()
                                           : 'CU',
                                       style: const TextStyle(
-                                        color: Color(0xFF0B63FF),
+                                        color: Color(0xFF1F2A7A),
                                         fontSize: 32,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -110,7 +106,8 @@ class CustomerDetailScreen extends ConsumerWidget {
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         customer.name,
@@ -125,7 +122,9 @@ class CustomerDetailScreen extends ConsumerWidget {
                                         Text(
                                           customer.customerNumber!,
                                           style: TextStyle(
-                                            color: Colors.white.withOpacity(0.9),
+                                            color: Colors.white.withOpacity(
+                                              0.9,
+                                            ),
                                             fontSize: 14,
                                             fontWeight: FontWeight.w500,
                                           ),
@@ -152,9 +151,7 @@ class CustomerDetailScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Quick Actions (Call & WhatsApp)
-                      _QuickActionsCard(
-                        phoneNumber: customer.phone,
-                      ),
+                      _QuickActionsCard(phoneNumber: customer.phone),
                       const SizedBox(height: 16),
 
                       // Quick Stats Card
@@ -176,9 +173,7 @@ class CustomerDetailScreen extends ConsumerWidget {
 
                       // Due Amount Card (if applicable)
                       if (customer.dueAmount != null && customer.dueAmount! > 0)
-                        _DueAmountCard(
-                          amount: customer.dueAmount!,
-                        ),
+                        _DueAmountCard(amount: customer.dueAmount!),
                       if (customer.dueAmount != null && customer.dueAmount! > 0)
                         const SizedBox(height: 16),
 
@@ -189,7 +184,8 @@ class CustomerDetailScreen extends ConsumerWidget {
                       // ID Proof Card (if available)
                       if (customer.idProofType != null)
                         _IdProofCard(customer: customer),
-                      if (customer.idProofType != null) const SizedBox(height: 16),
+                      if (customer.idProofType != null)
+                        const SizedBox(height: 16),
 
                       // Order History Section
                       Row(
@@ -229,7 +225,7 @@ class CustomerDetailScreen extends ConsumerWidget {
                             padding: EdgeInsets.all(32),
                             child: CircularProgressIndicator(
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                Color(0xFF0B63FF),
+                                Color(0xFF1F2A7A),
                               ),
                             ),
                           ),
@@ -251,7 +247,7 @@ class CustomerDetailScreen extends ConsumerWidget {
         },
         loading: () => const Center(
           child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0B63FF)),
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1F2A7A)),
           ),
         ),
         error: (error, stack) => Center(
@@ -292,9 +288,7 @@ class _QuickActionsCard extends StatelessWidget {
     return Card(
       elevation: 0,
       color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -391,23 +385,13 @@ class _ActionButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: color.withOpacity(0.3),
-          ),
+          border: Border.all(color: color.withOpacity(0.3)),
         ),
         child: Column(
           children: [
             isFaIcon
-                ? FaIcon(
-                    icon,
-                    size: 24,
-                    color: color,
-                  )
-                : Icon(
-                    icon,
-                    size: 24,
-                    color: color,
-                  ),
+                ? FaIcon(icon, size: 24, color: color)
+                : Icon(icon, size: 24, color: color),
             const SizedBox(height: 6),
             Text(
               label,
@@ -436,10 +420,7 @@ class _DueAmountCard extends StatelessWidget {
       color: Colors.orange.shade50,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: Colors.orange.shade200,
-          width: 1.5,
-        ),
+        side: BorderSide(color: Colors.orange.shade200, width: 1.5),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -504,9 +485,7 @@ class _ContactInfoCard extends StatelessWidget {
     return Card(
       elevation: 0,
       color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -514,11 +493,7 @@ class _ContactInfoCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(
-                  Icons.contact_phone,
-                  color: Colors.blue.shade600,
-                  size: 20,
-                ),
+                Icon(Icons.contact_phone, color: Color(0xFF1F2A7A), size: 20),
                 const SizedBox(width: 8),
                 const Text(
                   'Contact Information',
@@ -543,7 +518,7 @@ class _ContactInfoCard extends StatelessWidget {
                 icon: Icons.email_outlined,
                 label: 'Email',
                 value: customer.email!,
-                color: Colors.blue,
+                color: Color(0xFF1F2A7A),
               ),
             ],
             if (customer.address != null && customer.address!.isNotEmpty) ...[
@@ -561,7 +536,7 @@ class _ContactInfoCard extends StatelessWidget {
                 icon: Icons.calendar_today_outlined,
                 label: 'Member Since',
                 value: DateFormat('dd MMM yyyy').format(customer.createdAt!),
-                color: const Color(0xFF0B63FF),
+                color: const Color(0xFF1F2A7A),
               ),
             ],
           ],
@@ -595,11 +570,7 @@ class _InfoRow extends StatelessWidget {
             color: color.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            icon,
-            size: 18,
-            color: color,
-          ),
+          child: Icon(icon, size: 18, color: color),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -641,9 +612,7 @@ class _IdProofCard extends StatelessWidget {
     return Card(
       elevation: 0,
       color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -653,7 +622,7 @@ class _IdProofCard extends StatelessWidget {
               children: [
                 Icon(
                   Icons.verified_outlined,
-                  color: Colors.blue.shade600,
+                  color: const Color(0xFF1F2A7A),
                   size: 20,
                 ),
                 const SizedBox(width: 8),
@@ -671,14 +640,14 @@ class _IdProofCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
+                color: const Color(0xFF1F2A7A).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
                   Icon(
                     Icons.badge_outlined,
-                    color: Colors.blue.shade700,
+                    color: const Color(0xFF1F2A7A),
                     size: 20,
                   ),
                   const SizedBox(width: 12),
@@ -691,7 +660,7 @@ class _IdProofCard extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: Colors.blue.shade700,
+                            color: const Color(0xFF1F2A7A),
                           ),
                         ),
                         if (customer.idProofNumber != null) ...[
@@ -723,10 +692,7 @@ class _IdProofCard extends StatelessWidget {
                       label: 'Front',
                     ),
                   if (customer.idProofBackUrl != null)
-                    _IdProofImage(
-                      url: customer.idProofBackUrl!,
-                      label: 'Back',
-                    ),
+                    _IdProofImage(url: customer.idProofBackUrl!, label: 'Back'),
                 ],
               ),
             ],
@@ -754,10 +720,7 @@ class _IdProofImage extends StatelessWidget {
   final String url;
   final String label;
 
-  const _IdProofImage({
-    required this.url,
-    required this.label,
-  });
+  const _IdProofImage({required this.url, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -775,13 +738,10 @@ class _IdProofImage extends StatelessWidget {
                     child: CachedNetworkImage(
                       imageUrl: url,
                       fit: BoxFit.contain,
-                      placeholder: (context, url) => const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                      errorWidget: (context, url, error) => const Icon(
-                        Icons.error,
-                        color: Colors.red,
-                      ),
+                      placeholder: (context, url) =>
+                          const Center(child: CircularProgressIndicator()),
+                      errorWidget: (context, url, error) =>
+                          const Icon(Icons.error, color: Colors.red),
                     ),
                   ),
                 ),
@@ -873,9 +833,7 @@ class _OrderCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: Colors.grey.shade200,
-        ),
+        side: BorderSide(color: Colors.grey.shade200),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -890,12 +848,12 @@ class _OrderCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
+                      color: const Color(0xFF1F2A7A).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
                       Icons.receipt_long,
-                      color: Colors.blue.shade700,
+                      color: const Color(0xFF1F2A7A),
                       size: 20,
                     ),
                   ),
@@ -935,11 +893,7 @@ class _OrderCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          statusIcon,
-                          size: 14,
-                          color: statusColor,
-                        ),
+                        Icon(statusIcon, size: 14, color: statusColor),
                         const SizedBox(width: 4),
                         Text(
                           _formatStatus(order.status),
@@ -979,10 +933,7 @@ class _OrderCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  Icon(
-                    Icons.chevron_right,
-                    color: Colors.grey.shade400,
-                  ),
+                  Icon(Icons.chevron_right, color: Colors.grey.shade400),
                 ],
               ),
             ],
@@ -1001,13 +952,13 @@ class _OrderCard extends StatelessWidget {
       case OrderStatus.pendingReturn:
         return Colors.orange;
       case OrderStatus.completed:
-        return Colors.blue;
+        return Color(0xFF1F2A7A);
       case OrderStatus.completedWithIssues:
         return Colors.orange;
       case OrderStatus.cancelled:
         return Colors.red;
       case OrderStatus.partiallyReturned:
-        return Colors.blue;
+        return Color(0xFF1F2A7A);
       case OrderStatus.flagged:
         return Colors.orange;
     }
@@ -1071,9 +1022,7 @@ class _EmptyOrdersState extends StatelessWidget {
     return Card(
       elevation: 0,
       color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(40),
         child: Column(
@@ -1095,10 +1044,7 @@ class _EmptyOrdersState extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'This customer hasn\'t placed any orders',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade500,
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
               textAlign: TextAlign.center,
             ),
           ],
@@ -1112,10 +1058,7 @@ class _ErrorCard extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
 
-  const _ErrorCard({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorCard({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -1130,11 +1073,7 @@ class _ErrorCard extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 48,
-              color: Colors.red.shade700,
-            ),
+            Icon(Icons.error_outline, size: 48, color: Colors.red.shade700),
             const SizedBox(height: 12),
             Text(
               'Failed to load orders',
@@ -1147,10 +1086,7 @@ class _ErrorCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               message,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.red.shade600,
-              ),
+              style: TextStyle(fontSize: 13, color: Colors.red.shade600),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -1171,7 +1107,7 @@ class _ErrorCard extends StatelessWidget {
 }
 
 /// Customer Stats Card
-/// 
+///
 /// Displays quick statistics: Total Orders, Total Spent, Active Rentals
 class _CustomerStatsCard extends StatelessWidget {
   final List<Order> orders;
@@ -1186,10 +1122,10 @@ class _CustomerStatsCard extends StatelessWidget {
 
   int get activeRentals {
     return orders.where((order) {
-      return order.isActive || 
-             order.isPendingReturn || 
-             order.isPartiallyReturned ||
-             order.isScheduled;
+      return order.isActive ||
+          order.isPendingReturn ||
+          order.isPartiallyReturned ||
+          order.isScheduled;
     }).length;
   }
 
@@ -1235,7 +1171,7 @@ class _CustomerStatsCard extends StatelessWidget {
                 Icon(
                   Icons.bar_chart_outlined,
                   size: 20,
-                  color: Colors.indigo.shade600,
+                  color: const Color(0xFF1F2A7A),
                 ),
                 const SizedBox(width: 8),
                 const Text(
@@ -1257,7 +1193,7 @@ class _CustomerStatsCard extends StatelessWidget {
                     icon: Icons.receipt_long_outlined,
                     label: 'Total Orders',
                     value: totalOrders.toString(),
-                    color: Colors.blue,
+                    color: Color(0xFF1F2A7A),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1309,18 +1245,11 @@ class _StatItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withOpacity(0.2),
-          width: 1,
-        ),
+        border: Border.all(color: color.withOpacity(0.2), width: 1),
       ),
       child: Column(
         children: [
-          Icon(
-            icon,
-            size: 24,
-            color: color,
-          ),
+          Icon(icon, size: 24, color: color),
           const SizedBox(height: 8),
           Text(
             value,

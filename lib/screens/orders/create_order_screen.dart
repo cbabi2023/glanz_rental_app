@@ -261,8 +261,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Color(0xFF0B63FF),
-                      Color(0xFF0052D4),
+                      Color(0xFF1F2A7A),
+                      Color(0xFF1F2A7A),
                     ],
                   ),
                 ),
@@ -500,7 +500,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _handleSaveOrder,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0B63FF),
+                        backgroundColor: const Color(0xFF1F2A7A),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -573,12 +573,12 @@ class _SectionCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0B63FF).withOpacity(0.1),
+                    color: const Color(0xFF1F2A7A).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     icon,
-                    color: const Color(0xFF0B63FF),
+                    color: const Color(0xFF1F2A7A),
                     size: 20,
                   ),
                 ),
@@ -631,7 +631,7 @@ class _ModernTextField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(prefixIcon, color: const Color(0xFF0B63FF)),
+        prefixIcon: Icon(prefixIcon, color: const Color(0xFF1F2A7A)),
         filled: true,
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(
@@ -648,7 +648,7 @@ class _ModernTextField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 2),
+          borderSide: const BorderSide(color: Color(0xFF1F2A7A), width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -720,7 +720,7 @@ class _SecurityDepositFieldState extends State<_SecurityDepositField> {
       decoration: InputDecoration(
         labelText: 'Security Deposit Amount',
         hintText: 'Enter security deposit (optional)',
-        prefixIcon: const Icon(Icons.security_outlined, color: Color(0xFF0B63FF)),
+        prefixIcon: const Icon(Icons.security_outlined, color: Color(0xFF1F2A7A)),
         prefixText: '₹ ',
         prefixStyle: const TextStyle(
           fontSize: 15,
@@ -743,7 +743,7 @@ class _SecurityDepositFieldState extends State<_SecurityDepositField> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 2),
+          borderSide: const BorderSide(color: Color(0xFF1F2A7A), width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

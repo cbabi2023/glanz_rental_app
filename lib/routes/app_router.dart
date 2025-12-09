@@ -25,6 +25,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// Uses StatefulShellRoute for smooth bottom navigation
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
+  final userProfileAsync = ref.watch(userProfileProvider);
 
   return GoRouter(
     initialLocation: '/login',
@@ -37,9 +38,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return '/login';
       }
 
-      // If authenticated and going to login, redirect to dashboard
+      // If authenticated and going to login, redirect based on role
       if (isAuthenticated && isGoingToLogin) {
+        final profile = userProfileAsync.valueOrNull;
+        // Staff users should go to orders, others to dashboard
+        if (profile?.isStaff == true) {
+          return '/orders';
+        }
         return '/dashboard';
+      }
+
+      // If staff user tries to access dashboard, redirect to orders
+      if (isAuthenticated && (state.matchedLocation == '/dashboard' || state.uri.path == '/dashboard')) {
+        final profile = userProfileAsync.valueOrNull;
+        if (profile?.isStaff == true) {
+          return '/orders';
+        }
+      }
+
+      // Additional check: if staff user is authenticated and not going to login,
+      // ensure they're not on dashboard route
+      if (isAuthenticated && !isGoingToLogin) {
+        final profile = userProfileAsync.valueOrNull;
+        if (profile?.isStaff == true && state.matchedLocation == '/dashboard') {
+          return '/orders';
+        }
       }
 
       return null; // No redirect needed

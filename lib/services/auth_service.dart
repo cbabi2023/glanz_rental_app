@@ -13,11 +13,32 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    final response = await _supabase.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
-    return response.user;
+    // Normalize email: trim and lowercase
+    final normalizedEmail = email.trim().toLowerCase();
+    // Trim password to remove any accidental whitespace
+    final normalizedPassword = password.trim();
+    
+    // Validate inputs
+    if (normalizedEmail.isEmpty) {
+      throw Exception('Email cannot be empty');
+    }
+    if (normalizedPassword.isEmpty) {
+      throw Exception('Password cannot be empty');
+    }
+    
+    try {
+      final response = await _supabase.auth.signInWithPassword(
+        email: normalizedEmail,
+        password: normalizedPassword,
+      );
+      return response.user;
+    } on AuthException {
+      // Re-throw auth exceptions as-is (they contain proper error messages)
+      rethrow;
+    } catch (e) {
+      // Wrap unexpected errors
+      throw Exception('Login failed: ${e.toString()}');
+    }
   }
 
   /// Sign out current user

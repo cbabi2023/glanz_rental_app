@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Login Screen
 ///
@@ -22,7 +23,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   // Brand colors derived from the provided logo
   static const _brandRed = Color(0xFFE53935);
-  static const _brandBlue = Color(0xFF143B8A);
+  static const _brandBlue = Color(0xFF1F2A7A);
   static const _lightBackground = Color(0xFFF7F8FC);
 
   @override
@@ -43,19 +44,73 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
+      // Normalize inputs: trim whitespace and lowercase email
+      final email = _emailController.text.trim().toLowerCase();
+      final password = _passwordController.text.trim();
+      
+      // Validate inputs are not empty after trimming
+      if (email.isEmpty) {
+        setState(() {
+          _errorMessage = 'Please enter your email';
+          _isLoading = false;
+        });
+        return;
+      }
+      
+      if (password.isEmpty) {
+        setState(() {
+          _errorMessage = 'Please enter your password';
+          _isLoading = false;
+        });
+        return;
+      }
+
       final authService = ref.read(authServiceProvider);
       await authService.signInWithEmail(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+        email: email,
+        password: password,
       );
 
       // Navigate to dashboard on success
       if (mounted) {
         context.go('/dashboard');
       }
-    } catch (e) {
+    } on AuthException catch (e) {
+      // Handle Supabase auth exceptions specifically
+      String errorMsg = 'Login failed';
+      
+      if (e.statusCode == '400' || e.message.toLowerCase().contains('invalid') || 
+          e.message.toLowerCase().contains('credentials')) {
+        errorMsg = 'Invalid email or password. Please check your credentials and try again.';
+      } else if (e.message.toLowerCase().contains('network') || 
+                 e.message.toLowerCase().contains('connection')) {
+        errorMsg = 'Network error. Please check your internet connection and try again.';
+      } else if (e.message.toLowerCase().contains('timeout')) {
+        errorMsg = 'Request timed out. Please try again.';
+      } else {
+        errorMsg = 'Login failed: ${e.message}';
+      }
+      
       setState(() {
-        _errorMessage = 'Login failed: ${e.toString()}';
+        _errorMessage = errorMsg;
+      });
+    } catch (e) {
+      // Handle other exceptions
+      String errorMsg = 'Login failed';
+      
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('invalid') && errorString.contains('credentials')) {
+        errorMsg = 'Invalid email or password. Please check your credentials and try again.';
+      } else if (errorString.contains('network') || errorString.contains('connection')) {
+        errorMsg = 'Network error. Please check your internet connection and try again.';
+      } else if (errorString.contains('timeout')) {
+        errorMsg = 'Request timed out. Please try again.';
+      } else {
+        errorMsg = 'Login failed. Please check your credentials and try again.';
+      }
+      
+      setState(() {
+        _errorMessage = errorMsg;
       });
     } finally {
       if (mounted) {
@@ -161,15 +216,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             child: TextFormField(
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,
+                              autocorrect: false,
+                              textCapitalization: TextCapitalization.none,
+                              textInputAction: TextInputAction.next,
                               decoration: _inputDecoration(
                                 hint: 'you@example.com',
                                 icon: Icons.email_outlined,
                               ),
                               validator: (value) {
-                                if (value == null || value.isEmpty) {
+                                if (value == null || value.trim().isEmpty) {
                                   return 'Please enter your email';
                                 }
-                                if (!value.contains('@')) {
+                                final trimmed = value.trim();
+                                if (!trimmed.contains('@')) {
                                   return 'Please enter a valid email';
                                 }
                                 return null;
@@ -184,6 +243,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             child: TextFormField(
                               controller: _passwordController,
                               obscureText: true,
+                              autocorrect: false,
+                              textCapitalization: TextCapitalization.none,
+                              textInputAction: TextInputAction.done,
+                              enableSuggestions: false,
+                              onFieldSubmitted: (_) => _handleLogin(),
                               decoration: _inputDecoration(
                                 hint: '••••••••',
                                 icon: Icons.lock_outline,

@@ -209,7 +209,7 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
               color: Colors.white.withOpacity(0.7),
               child: const Center(
                 child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0B63FF)),
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1F2A7A)),
                 ),
               ),
             ),
@@ -231,6 +231,20 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
+        leadingWidth: 60,
+        leading: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12.0,
+            vertical: 8.0,
+          ),
+          child: Image.asset(
+            'lib/assets/png/glanz.png',
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
         title: const Text(
           'Customers',
           style: TextStyle(
@@ -243,7 +257,7 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'customers_fab',
         onPressed: () => context.push('/customers/new'),
-        backgroundColor: const Color(0xFF0B63FF),
+        backgroundColor: const Color(0xFF1F2A7A),
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
         label: const Text(
@@ -269,7 +283,7 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
           // If no previous data, show loading spinner
           return const Center(
             child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0B63FF)),
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1F2A7A)),
             ),
           );
         },
@@ -372,13 +386,13 @@ class _CustomerFilterChip extends StatelessWidget {
       ),
       selected: selected,
       onSelected: (_) => onTap(),
-      selectedColor: isWarning ? warningColor : const Color(0xFF0B63FF),
+      selectedColor: isWarning ? warningColor : const Color(0xFF1F2A7A),
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(
           color: selected
-              ? (isWarning ? warningColor : const Color(0xFF0B63FF))
+              ? (isWarning ? warningColor : const Color(0xFF1F2A7A))
               : (isWarning ? warningColor.withOpacity(0.5) : Colors.grey.shade300),
         ),
       ),
@@ -415,7 +429,7 @@ class _CustomersSearchBar extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 1.5),
+          borderSide: const BorderSide(color: Color(0xFF1F2A7A), width: 1.5),
         ),
       ),
       onChanged: onChanged,
@@ -555,8 +569,8 @@ class _CustomerCardItem extends StatelessWidget {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        Color(0xFF0B63FF),
-                        Color(0xFF0052D4),
+                        Color(0xFF1F2A7A),
+                        Color(0xFF1F2A7A),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(14),
@@ -733,7 +747,7 @@ class _CustomerCardItem extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
+                            color: Color(0xFF1F2A7A).withOpacity(0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Row(
@@ -742,7 +756,7 @@ class _CustomerCardItem extends StatelessWidget {
                               Icon(
                                 Icons.verified_outlined,
                                 size: 12,
-                                color: Colors.blue.shade700,
+                                color: Color(0xFF1F2A7A),
                               ),
                               const SizedBox(width: 4),
                               Text(
@@ -750,7 +764,7 @@ class _CustomerCardItem extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.blue.shade700,
+                                  color: Color(0xFF1F2A7A),
                                 ),
                               ),
                             ],
@@ -928,7 +942,7 @@ class _EmptyCustomersState extends StatelessWidget {
                 icon: const Icon(Icons.add_circle_outline),
                 label: const Text('New Customer'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0B63FF),
+                  backgroundColor: const Color(0xFF1F2A7A),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   shape: RoundedRectangleBorder(

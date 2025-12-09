@@ -43,7 +43,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF0B63FF),
+              primary: Color(0xFF1F2A7A),
             ),
           ),
           child: child!,
@@ -344,8 +344,8 @@ class _QuickFilterChip extends StatelessWidget {
     return FilterChip(
       label: Text(label),
       onSelected: (_) => onTap(),
-      selectedColor: const Color(0xFF0B63FF).withOpacity(0.2),
-      checkmarkColor: const Color(0xFF0B63FF),
+      selectedColor: const Color(0xFF1F2A7A).withOpacity(0.2),
+      checkmarkColor: const Color(0xFF1F2A7A),
       labelStyle: const TextStyle(
         fontWeight: FontWeight.w500,
         color: Color(0xFF0F1724),
@@ -451,7 +451,7 @@ class _StatsGrid extends StatelessWidget {
           title: 'Total Revenue',
           value: '₹${NumberFormat('#,##0.00').format(stats.todayCollection)}',
           icon: Icons.currency_rupee,
-          color: const Color(0xFF0B63FF),
+          color: const Color(0xFF1F2A7A),
         ),
         _StatCard(
           title: 'Total Orders',
@@ -463,7 +463,7 @@ class _StatsGrid extends StatelessWidget {
           title: 'Active Rentals',
           value: stats.active.toString(),
           icon: Icons.inventory_2_outlined,
-          color: Colors.blue,
+          color: Color(0xFF1F2A7A),
         ),
         _StatCard(
           title: 'Completed',
@@ -713,7 +713,7 @@ class _ErrorState extends StatelessWidget {
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0B63FF),
+                backgroundColor: const Color(0xFF1F2A7A),
                 foregroundColor: Colors.white,
               ),
             ),

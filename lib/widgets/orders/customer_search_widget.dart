@@ -75,7 +75,7 @@ class _CustomerSearchWidgetState
           decoration: InputDecoration(
             labelText: 'Customer',
             hintText: 'Search by name or phone',
-            prefixIcon: const Icon(Icons.search, color: Color(0xFF0B63FF)),
+            prefixIcon: const Icon(Icons.search, color: Color(0xFF1F2A7A)),
             suffixIcon: widget.selectedCustomer != null && widget.selectedCustomer!.id.isNotEmpty
                 ? IconButton(
                     icon: const Icon(Icons.clear),
@@ -108,7 +108,7 @@ class _CustomerSearchWidgetState
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF0B63FF), width: 2),
+              borderSide: const BorderSide(color: Color(0xFF1F2A7A), width: 2),
             ),
           ),
           onChanged: (value) {
@@ -176,7 +176,7 @@ class _CustomerSearchWidgetState
                           icon: const Icon(Icons.add),
                           label: const Text('Add New Customer'),
                           style: TextButton.styleFrom(
-                            foregroundColor: const Color(0xFF0B63FF),
+                            foregroundColor: const Color(0xFF1F2A7A),
                           ),
                         ),
                       ],
@@ -314,7 +314,7 @@ class _CustomerSearchWidgetState
                 padding: EdgeInsets.all(16),
                 child: Center(
                   child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0B63FF)),
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1F2A7A)),
                   ),
                 ),
               ),
@@ -361,10 +361,10 @@ class _CustomerSearchWidgetState
             margin: const EdgeInsets.only(top: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF0B63FF).withOpacity(0.1),
+              color: const Color(0xFF1F2A7A).withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: const Color(0xFF0B63FF).withOpacity(0.3),
+                color: const Color(0xFF1F2A7A).withOpacity(0.3),
               ),
             ),
             child: Row(
@@ -373,7 +373,7 @@ class _CustomerSearchWidgetState
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0B63FF),
+                    color: const Color(0xFF1F2A7A),
                     shape: BoxShape.circle,
                   ),
                   child: Center(
@@ -463,7 +463,7 @@ class _CustomerSearchWidgetState
                   child: const Text(
                     'Change',
                     style: TextStyle(
-                      color: Color(0xFF0B63FF),
+                      color: Color(0xFF1F2A7A),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -487,8 +487,8 @@ class _CustomerSearchWidgetState
               icon: const Icon(Icons.add_circle_outline),
               label: const Text('Add New Customer'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF0B63FF),
-                side: const BorderSide(color: Color(0xFF0B63FF)),
+                foregroundColor: const Color(0xFF1F2A7A),
+                side: const BorderSide(color: Color(0xFF1F2A7A)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),

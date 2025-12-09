@@ -80,7 +80,7 @@ class _StaffListScreenState extends ConsumerState<StaffListScreen> {
           IconButton(
             icon: const Icon(
               Icons.add_circle_outline,
-              color: Color(0xFF0B63FF),
+              color: Color(0xFF1F2A7A),
             ),
             onPressed: () => _showCreateStaffDialog(context, branchesAsync),
             tooltip: 'Add Staff',
@@ -138,7 +138,7 @@ class _StaffListScreenState extends ConsumerState<StaffListScreen> {
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(
-                          color: Color(0xFF0B63FF),
+                          color: Color(0xFF1F2A7A),
                           width: 2,
                         ),
                       ),
@@ -275,7 +275,7 @@ class _StaffListScreenState extends ConsumerState<StaffListScreen> {
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'staff_fab',
         onPressed: () => _showCreateStaffDialog(context, branchesAsync),
-        backgroundColor: const Color(0xFF0B63FF),
+        backgroundColor: const Color(0xFF1F2A7A),
         icon: const Icon(Icons.person_add),
         label: const Text('Add Staff'),
       ),
@@ -467,7 +467,7 @@ class _StaffCard extends StatelessWidget {
       case UserRole.superAdmin:
         return Colors.red;
       case UserRole.branchAdmin:
-        return Colors.blue;
+        return Color(0xFF1F2A7A);
       case UserRole.staff:
         return Colors.green;
     }
@@ -548,7 +548,7 @@ class _StaffCard extends StatelessWidget {
                       value: 'edit',
                       child: Row(
                         children: [
-                          Icon(Icons.edit, size: 20, color: Color(0xFF0B63FF)),
+                          Icon(Icons.edit, size: 20, color: Color(0xFF1F2A7A)),
                           SizedBox(width: 8),
                           Text('Edit'),
                         ],
@@ -621,10 +621,10 @@ class _FilterChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF0B63FF) : Colors.transparent,
+          color: selected ? const Color(0xFF1F2A7A) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? const Color(0xFF0B63FF) : Colors.grey.shade300,
+            color: selected ? const Color(0xFF1F2A7A) : Colors.grey.shade300,
           ),
         ),
         child: Text(
@@ -893,7 +893,7 @@ class _StaffFormDialogState extends ConsumerState<_StaffFormDialog> {
             }
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0B63FF),
+            backgroundColor: const Color(0xFF1F2A7A),
             foregroundColor: Colors.white,
           ),
           child: Text(widget.staff == null ? 'Create' : 'Update'),
@@ -950,7 +950,7 @@ class _EmptyState extends StatelessWidget {
               icon: const Icon(Icons.person_add),
               label: const Text('Add Staff'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0B63FF),
+                backgroundColor: const Color(0xFF1F2A7A),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,

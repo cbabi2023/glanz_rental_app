@@ -105,7 +105,7 @@ class OrderSummaryWidget extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Colors.blue,
+                      color: Color(0xFF1F2A7A),
                     ),
                   ),
                   Text(
@@ -113,7 +113,7 @@ class OrderSummaryWidget extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Colors.blue,
+                      color: Color(0xFF1F2A7A),
                     ),
                   ),
                 ],
