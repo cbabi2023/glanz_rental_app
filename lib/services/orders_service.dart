@@ -68,7 +68,7 @@ class OrdersService {
           'id, invoice_number, branch_id, staff_id, customer_id, '
           'booking_date, start_date, end_date, start_datetime, end_datetime, '
           'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, '
-          'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, additional_amount_collected, created_at, '
+          'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, additional_amount_collected, deposit_balance, created_at, '
           'customer:customers(id, name, phone, customer_number), '
           'branch:branches(id, name), '
           'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity, damage_fee)',
@@ -118,7 +118,7 @@ class OrdersService {
             'id, invoice_number, branch_id, staff_id, customer_id, '
             'booking_date, start_date, end_date, start_datetime, end_datetime, '
             'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, '
-            'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, additional_amount_collected, created_at, '
+            'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, additional_amount_collected, deposit_balance, created_at, '
             'customer:customers(*), '
             'staff:profiles(id, full_name, upi_id), '
             'branch:branches(*), '
@@ -413,57 +413,116 @@ class OrdersService {
     }
   }
 
-  /// Refund security deposit for an order
-  /// Updates security_deposit_refunded_amount and security_deposit_refund_date
+  /// Refund security deposit for an order using transaction-based approach
+  /// Matches website's useRefundDepositTransaction() logic
   Future<Order> refundSecurityDeposit({
     required String orderId,
     required double amount,
+    String? method,
+    String? reference,
+    String? notes,
   }) async {
     try {
-      // Get current order
-      final currentOrder = await getOrder(orderId);
-      if (currentOrder == null) {
-        throw Exception('Order not found');
-      }
-
       // Validate amount
       if (amount <= 0) {
         throw Exception('Amount must be greater than zero');
       }
 
-      // Get current values
-      final securityDeposit = currentOrder.securityDepositAmount ?? 0.0;
-      final rentalAmount = currentOrder.subtotal ?? 0.0;
-      final gstAmount = currentOrder.gstAmount ?? 0.0;
-      final damageFees = currentOrder.damageFeeTotal ?? 0.0;
-      final lateFee = currentOrder.lateFee ?? 0.0;
-      final totalDeductions = rentalAmount + gstAmount + damageFees + lateFee;
-      final alreadyRefunded = currentOrder.securityDepositRefundedAmount ?? 0.0;
-      
-      // Calculate available to refund
-      final availableToRefund = (securityDeposit - totalDeductions - alreadyRefunded).clamp(0.0, securityDeposit);
-      
-      // Validate: cannot refund more than available
-      if (amount > availableToRefund) {
-        throw Exception('Cannot refund more than available amount: ₹${availableToRefund.toStringAsFixed(2)}');
-      }
-      
-      // Calculate new refunded amount
-      final newRefundedAmount = alreadyRefunded + amount;
-      
-      // Check if fully refunded
-      final totalRefundable = securityDeposit - totalDeductions;
-      final isFullyRefunded = newRefundedAmount >= totalRefundable;
-
-      // Update the order with refund information
-      await _supabase
+      // Get current order to validate refund
+      final orderResponse = await _supabase
           .from('orders')
-          .update({
-            'security_deposit_refunded_amount': newRefundedAmount,
-            'security_deposit_refunded': isFullyRefunded, // Set boolean flag
-            'security_deposit_refund_date': DateTime.now().toIso8601String(),
+          .select(
+              'deposit_balance, security_deposit_amount, security_deposit_refunded_amount')
+          .eq('id', orderId)
+          .single();
+
+      if (orderResponse.isEmpty) {
+        throw Exception('Order not found');
+      }
+
+      // Validate sufficient balance
+      final dbBalance =
+          (orderResponse['deposit_balance'] as num?)?.toDouble() ?? 0.0;
+      final depositAmount =
+          (orderResponse['security_deposit_amount'] as num?)?.toDouble() ?? 0.0;
+      final alreadyRefunded = (orderResponse['security_deposit_refunded_amount']
+                  as num?)
+              ?.toDouble() ??
+          0.0;
+
+      // Fallback balance = deposit - already refunded
+      final fallbackBalance =
+          (depositAmount - alreadyRefunded).clamp(0.0, double.infinity);
+
+      // Effective balance prefers db balance if present, otherwise fallback
+      double effectiveBalance = dbBalance > 0 ? dbBalance : fallbackBalance;
+      if (effectiveBalance <= 0 && depositAmount > 0) {
+        // As a final fallback, allow full deposit amount (per user request to refund full deposit)
+        effectiveBalance = depositAmount;
+      }
+
+      // Only block if we have a positive effective balance and the requested amount exceeds it
+      if (effectiveBalance > 0 && amount > effectiveBalance + 0.01) {
+        throw Exception(
+          'Cannot refund ₹${amount.toStringAsFixed(2)}. Current deposit balance is ₹${effectiveBalance.toStringAsFixed(2)}',
+        );
+      }
+
+      // Get current user
+      final userResponse = await _supabase.auth.getUser();
+      if (userResponse.user == null) {
+        throw Exception('Not authenticated');
+      }
+
+      // Insert refund transaction
+      final transactionResponse = await _supabase
+          .from('order_payment_transactions')
+          .insert({
+            'order_id': orderId,
+            'type': 'deposit_refund',
+            'amount': amount,
+            'method': method,
+            'reference': reference,
+            'notes': notes,
+            'created_by': userResponse.user!.id,
           })
-          .eq('id', orderId);
+          .select()
+          .single();
+
+      if (transactionResponse.isEmpty) {
+        throw Exception('Failed to create refund transaction');
+      }
+
+      // Recalculate order balances using database function
+      try {
+        await _supabase.rpc(
+          'recalculate_order_balances',
+          params: {'p_order_id': orderId},
+        );
+      } catch (rpcError) {
+        print('Warning: Failed to recalculate balances: $rpcError');
+        // Continue even if RPC fails - balances may be calculated by triggers
+      }
+
+      // Update legacy fields for backward compatibility
+      final updatedOrderResponse = await _supabase
+          .from('orders')
+          .select('deposit_balance')
+          .eq('id', orderId)
+          .single();
+
+      final updatedBalance = (updatedOrderResponse['deposit_balance'] as num?)?.toDouble() ?? 0.0;
+      final isFullyRefunded = updatedBalance < 0.01;
+
+      if (isFullyRefunded) {
+        await _supabase
+            .from('orders')
+            .update({
+              'security_deposit_refunded': true,
+              'security_deposit_refund_date': DateTime.now().toIso8601String(),
+            })
+            .eq('id', orderId);
+      }
 
       // Return updated order
       final updatedOrder = await getOrder(orderId);
@@ -588,7 +647,7 @@ class OrdersService {
           'id, invoice_number, branch_id, staff_id, customer_id, '
           'booking_date, start_date, end_date, start_datetime, end_datetime, '
           'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, '
-          'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, additional_amount_collected, created_at, '
+          'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, additional_amount_collected, deposit_balance, created_at, '
           'customer:customers(*), '
           'branch:branches(*), '
           'staff:profiles(id, full_name, upi_id), '

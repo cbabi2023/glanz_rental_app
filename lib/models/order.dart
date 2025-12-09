@@ -69,6 +69,7 @@ class Order {
   final double? lateFee; // Late fee amount
   final double? damageFeeTotal; // Total damage fee for the order
   final double? securityDepositAmount; // Security deposit amount
+  final double? depositBalance; // Backend-computed deposit balance (if provided)
   final bool? securityDepositCollected; // Security deposit collected flag (boolean - indicates if collected)
   final bool? securityDepositRefunded; // Security deposit refunded flag (boolean)
   final double? securityDepositRefundedAmount; // Security deposit refunded amount
@@ -104,6 +105,7 @@ class Order {
     this.lateFee,
     this.damageFeeTotal,
     this.securityDepositAmount,
+    this.depositBalance,
     this.securityDepositCollected, // Boolean flag (indicates if collected)
     this.securityDepositRefunded, // Boolean flag (indicates if refunded)
     this.securityDepositRefundedAmount,
@@ -243,6 +245,9 @@ class Order {
       lateFee: (json['late_fee'] as num?)?.toDouble(),
       damageFeeTotal: (json['damage_fee_total'] as num?)?.toDouble(),
       securityDepositAmount: safeToDouble(json['security_deposit_amount']),
+      depositBalance: safeToDouble(
+        json['deposit_balance'] ?? json['security_deposit_balance'],
+      ),
       securityDepositCollected: json['security_deposit_collected'] is bool 
           ? json['security_deposit_collected'] as bool?
           : (json['security_deposit_collected'] == true || json['security_deposit_collected'] == 'true' || json['security_deposit_collected'] == 1),
@@ -280,6 +285,7 @@ class Order {
       'gst_amount': gstAmount,
       'late_fee': lateFee,
       'security_deposit_amount': securityDepositAmount,
+      'deposit_balance': depositBalance,
       'security_deposit_collected': securityDepositCollected,
       'security_deposit_refunded': securityDepositRefunded, // Boolean flag
       'security_deposit_refunded_amount': securityDepositRefundedAmount,

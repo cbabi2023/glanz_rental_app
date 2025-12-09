@@ -3175,9 +3175,6 @@ class _OrderItemCardState extends State<_OrderItemCard> {
     }
 
     // Check if order is scheduled or cancelled (disable editing)
-    // Note: We'll pass this as a prop or check via widget properties
-    final isDisabled = false; // Will be set based on order status from parent
-
     return Container(
       margin: EdgeInsets.only(bottom: widget.isLast ? 0 : 12),
       padding: const EdgeInsets.all(16),
@@ -3194,9 +3191,7 @@ class _OrderItemCardState extends State<_OrderItemCard> {
             padding: const EdgeInsets.only(top: 4),
             child: Checkbox(
               value: widget.isChecked,
-              onChanged: isDisabled
-                  ? null
-                  : widget.onCheckboxChanged != null
+              onChanged: widget.onCheckboxChanged != null
                   ? (value) => widget.onCheckboxChanged!(value ?? false)
                   : null,
             ),
@@ -3489,7 +3484,7 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                                             .length,
                                       ),
                                 keyboardType: TextInputType.number,
-                                enabled: !isDisabled,
+                                enabled: true,
                                 onChanged: (value) {
                                   final qty = int.tryParse(value);
                                   if (qty != null &&
@@ -3596,7 +3591,7 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                                   : '',
                             ),
                             keyboardType: TextInputType.number,
-                            enabled: !isDisabled,
+                            enabled: true,
                             onChanged: (value) {
                               final cost = value.isEmpty
                                   ? null
@@ -3628,7 +3623,7 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                               text: currentDamageDescription ?? '',
                             ),
                             maxLines: 3,
-                            enabled: !isDisabled,
+                            enabled: true,
                             onChanged: (value) {
                               widget.onDamageDescriptionChanged?.call(
                                 value.isEmpty ? null : value,
@@ -3756,56 +3751,70 @@ class _SecurityDepositRefundSectionState
     extends ConsumerState<_SecurityDepositRefundSection> {
   bool _isRefunding = false;
 
-  bool _shouldShowRefundButton() {
-    // Show refund button when:
-    // 1. Order has returned items (completed, completed_with_issues, or has returned items)
-    // 2. There's an amount available to refund
-    // 3. Not already fully refunded
+  // Helper function to calculate refundable amount (matches website's calculateRefundableAmount)
+  double _calculateRefundableAmount(Order order) {
+    // Use deposit_balance from backend if available, otherwise calculate it
+    final depositBalance =
+        (order.depositBalance ??
+                ((order.securityDepositAmount ?? 0.0) -
+                    (order.securityDepositRefundedAmount ?? 0.0)))
+            .clamp(0.0, double.infinity);
 
-    final order = widget.order;
-    final securityDeposit = order.securityDepositAmount ?? 0.0;
-    final rentalAmount = order.subtotal ?? 0.0;
-    final gstAmount = order.gstAmount ?? 0.0;
-    final damageFees = order.damageFeeTotal ?? 0.0;
-    final lateFee = order.lateFee ?? 0.0;
-    final totalDeductions = rentalAmount + gstAmount + damageFees + lateFee;
-    final alreadyRefunded = order.securityDepositRefundedAmount ?? 0.0;
-    final availableToRefund =
-        (securityDeposit - totalDeductions - alreadyRefunded).clamp(
-          0.0,
-          securityDeposit,
-        );
-
-    // Check if order has returned items
-    final hasReturnedItems =
-        order.isAnyCompleted ||
-        (order.items != null &&
-            order.items!.any(
-              (item) => item.isReturned || (item.returnedQuantity ?? 0) > 0,
-            ));
-
-    // Show button if items are returned and there's amount to refund
-    return hasReturnedItems && availableToRefund > 0;
+    // Per user request: always refund full remaining deposit balance (no deductions)
+    return depositBalance;
   }
 
-  Future<void> _handleRefundDeposit() async {
+  bool _shouldShowRefundButton(Order order) {
+    // Must have collected deposit and not fully refunded (matches website logic)
+    if (!(order.securityDepositCollected == true) ||
+        order.securityDepositRefunded == true) {
+      return false;
+    }
+
+    // Must have some items returned or order completed/cancelled (matches website logic)
+    // Website checks: item.return_status === 'returned' || item.return_status === 'partial' || (item.returned_quantity && item.returned_quantity > 0)
+    final hasReturns =
+        order.items != null &&
+        order.items!.any(
+          (item) =>
+              item.returnStatus == ReturnStatus.returned ||
+              (item.returnedQuantity != null && item.returnedQuantity! > 0),
+        );
+    final isOrderCompleted =
+        order.status == OrderStatus.completed ||
+        order.status == OrderStatus.completedWithIssues ||
+        order.status == OrderStatus.cancelled;
+
+    if (!hasReturns && !isOrderCompleted) {
+      return false;
+    }
+
+    // Calculate remaining deposit to refund (deposit - already refunded)
+    // This matches the website's simple calculation for button visibility
+    final depositAmount = order.securityDepositAmount ?? 0.0;
+    final alreadyRefunded = order.securityDepositRefundedAmount ?? 0.0;
+    final remainingDeposit = (depositAmount - alreadyRefunded).clamp(
+      0.0,
+      double.infinity,
+    );
+
+    // Show button if there's remaining deposit to refund
+    return remainingDeposit > 0.01;
+  }
+
+  Future<void> _handleRefundDeposit(Order order) async {
     if (_isRefunding) return;
 
-    final order = widget.order;
-    final securityDeposit = order.securityDepositAmount ?? 0.0;
-    final rentalAmount = order.subtotal ?? 0.0;
-    final gstAmount = order.gstAmount ?? 0.0;
-    final damageFees = order.damageFeeTotal ?? 0.0;
-    final lateFee = order.lateFee ?? 0.0;
-    final totalDeductions = rentalAmount + gstAmount + damageFees + lateFee;
+    // Calculate remaining deposit to refund (deposit - already refunded)
+    // This matches the website's simple calculation
+    final depositAmount = order.securityDepositAmount ?? 0.0;
     final alreadyRefunded = order.securityDepositRefundedAmount ?? 0.0;
-    final availableToRefund =
-        (securityDeposit - totalDeductions - alreadyRefunded).clamp(
-          0.0,
-          securityDeposit,
-        );
+    final remainingDeposit = (depositAmount - alreadyRefunded).clamp(
+      0.0,
+      double.infinity,
+    );
 
-    if (availableToRefund <= 0) {
+    if (remainingDeposit <= 0.01) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No amount available to refund'),
@@ -3815,6 +3824,9 @@ class _SecurityDepositRefundSectionState
       return;
     }
 
+    // Amount to refund = full remaining deposit balance (per user request)
+    final amountToRefund = remainingDeposit;
+
     setState(() {
       _isRefunding = true;
     });
@@ -3823,14 +3835,14 @@ class _SecurityDepositRefundSectionState
       final ordersService = ref.read(ordersServiceProvider);
       await ordersService.refundSecurityDeposit(
         orderId: order.id,
-        amount: availableToRefund,
+        amount: amountToRefund,
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Successfully refunded ₹${NumberFormat('#,##0.00').format(availableToRefund)}',
+              'Successfully refunded ₹${NumberFormat('#,##0.00').format(amountToRefund)}',
             ),
             backgroundColor: Colors.green,
           ),
@@ -3871,480 +3883,194 @@ class _SecurityDepositRefundSectionState
         // Use the latest order data from database
         final order = updatedOrder;
 
-        // Calculate refund amounts using actual database fields
-        // Security deposit amount (what was initially collected)
+        // Calculate refundable amount using website's formula
+        final refundableAmount = _calculateRefundableAmount(order);
+
+        // Use deposit_balance from backend if available
+        final depositBalance =
+            order.depositBalance ??
+            ((order.securityDepositAmount ?? 0.0) -
+                (order.securityDepositRefundedAmount ?? 0.0));
+
         final securityDeposit = order.securityDepositAmount ?? 0.0;
-        final rentalAmount = order.subtotal ?? 0.0;
-        final gstAmount = order.gstAmount ?? 0.0;
+        final refunded = order.securityDepositRefundedAmount ?? 0.0;
 
-        // Calculate damage fees: use local damage costs if available (before saving), otherwise use database value
-        double damageFees = order.damageFeeTotal ?? 0.0;
-        if (widget.localDamageCosts != null &&
-            widget.localDamageCosts!.isNotEmpty) {
-          // Calculate total from local damage costs
-          final localDamageTotal = widget.localDamageCosts!.values.fold<double>(
-            0.0,
-            (sum, cost) => sum + (cost ?? 0.0),
-          );
-          // Use local damage if it's different from database (user has entered damage but not saved yet)
-          // Otherwise, use the higher value to show the most up-to-date amount
-          damageFees = localDamageTotal > damageFees
-              ? localDamageTotal
-              : damageFees;
-        }
+        // Amount to show in refund button
+        final amountToRefund = refundableAmount.clamp(0.0, depositBalance);
 
-        final lateFee = order.lateFee ?? 0.0;
-
-        // Total deductions (rental + GST + damage + late fee)
-        final totalDeductions = rentalAmount + gstAmount + damageFees + lateFee;
-
-        // Get already refunded amount from database
-        // securityDepositRefunded is a boolean flag, use securityDepositRefundedAmount for the amount
-        final alreadyRefunded = order.securityDepositRefundedAmount ?? 0.0;
-
-        // Calculate outstanding amount (what needs to be collected)
-        // Outstanding = (Rental + GST + Damage + Late Fee) - Security Deposit - Additional Amount Collected
-        // This is the amount customer still needs to pay beyond the security deposit
-        // Include all charges: rental, GST, damage fees, and late fees
-        // Subtract both security deposit and any additional amounts already collected
-        final additionalCollected = order.additionalAmountCollected ?? 0.0;
-        final totalCharges = rentalAmount + gstAmount + damageFees + lateFee;
-        final outstandingAmount =
-            (totalCharges - securityDeposit - additionalCollected).clamp(
-              0.0,
-              double.infinity,
-            );
-
-        // Debug logging to verify calculation
-        print('🔍 Outstanding Amount Calculation:');
-        print('  Security Deposit: ₹$securityDeposit');
-        print('  Additional Collected: ₹$additionalCollected');
-        print('  Rental: ₹$rentalAmount');
-        print('  GST: ₹$gstAmount');
-        print('  Damage Fees: ₹$damageFees');
-        print('  Late Fee: ₹$lateFee');
-        print('  Total Charges: ₹$totalCharges');
-        print('  Outstanding: ₹$outstandingAmount');
-
-        // Available to refund = Security Deposit - Total Deductions - Already Refunded
-        final availableToRefund =
-            (securityDeposit - totalDeductions - alreadyRefunded).clamp(
-              0.0,
-              securityDeposit,
-            );
-
-        // Amount to refund (what can be refunded now)
-        final amountToRefund = availableToRefund;
-
-        // Determine status based on actual refund data
-        String refundStatus;
-        MaterialColor statusColor;
-        final totalRefundable = securityDeposit - totalDeductions;
-        if (totalRefundable <= 0) {
-          refundStatus = 'No Refund Available';
-          statusColor = Colors.grey;
-        } else if (alreadyRefunded >= totalRefundable) {
-          refundStatus = 'Fully Refunded';
+        // Status mapping to mirror website (matches website logic from order details page)
+        String statusLabel;
+        Color statusColor;
+        if (order.securityDepositRefunded == true ||
+            (refunded >= securityDeposit && securityDeposit > 0)) {
+          statusLabel = 'Fully Refunded';
           statusColor = Colors.green;
-        } else if (alreadyRefunded > 0) {
-          refundStatus = 'Partially Refunded';
+        } else if (refunded > 0) {
+          statusLabel = 'Partially Refunded';
           statusColor = Colors.orange;
+        } else if (order.securityDepositCollected == true) {
+          statusLabel = 'Collected';
+          statusColor = Colors.blue;
         } else {
-          refundStatus = 'Not Refunded';
-          statusColor = Colors.grey;
+          statusLabel = 'Pending Collection';
+          statusColor = Colors.orange;
         }
 
-        return Column(
-          children: [
-            // Summary Card with Payment Accounting
-            Card(
-              elevation: 0,
-              color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: Colors.grey.shade200),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        return Card(
+          elevation: 0,
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.description_outlined,
-                          size: 20,
-                          color: Colors.indigo.shade600,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Summary',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF0F1724),
-                          ),
-                        ),
-                      ],
+                    Icon(
+                      Icons.security_outlined,
+                      size: 20,
+                      color: Colors.indigo.shade600,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'PAYMENT ACCOUNTING',
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Security Deposit',
                       style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade600,
-                        letterSpacing: 1.2,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F1724),
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    // Security Deposit (positive, green)
-                    _RefundRow(
-                      label: 'Security Deposit',
-                      amount: securityDeposit,
-                      isPositive: true,
-                    ),
-                    const SizedBox(height: 12),
-                    // Rental Amount (negative, red)
-                    if (rentalAmount > 0)
-                      _RefundRow(
-                        label: 'Rental Amount',
-                        amount: -rentalAmount,
-                        isPositive: false,
-                      ),
-                    if (rentalAmount > 0) const SizedBox(height: 12),
-                    // GST (negative, red)
-                    if (gstAmount > 0)
-                      _RefundRow(
-                        label: 'GST',
-                        amount: -gstAmount,
-                        isPositive: false,
-                      ),
-                    if (gstAmount > 0) const SizedBox(height: 12),
-                    // Damage Fees (negative, red)
-                    if (damageFees > 0)
-                      _RefundRow(
-                        label: 'Damage Fees',
-                        amount: -damageFees,
-                        isPositive: false,
-                      ),
-                    if (damageFees > 0) const SizedBox(height: 12),
-                    // Late Fee (negative, red)
-                    if (lateFee > 0)
-                      _RefundRow(
-                        label: 'Late Fee',
-                        amount: -lateFee,
-                        isPositive: false,
-                      ),
-                    if (lateFee > 0) const SizedBox(height: 12),
-                    // Already Refunded (negative, blue)
-                    if (alreadyRefunded > 0)
-                      _RefundRow(
-                        label: 'Already Refunded',
-                        amount: -alreadyRefunded,
-                        isPositive: false,
-                        isBlue: true,
-                      ),
-                    if (alreadyRefunded > 0) const SizedBox(height: 12),
-                    // Amount to Collect or Amount to Refund
-                    if (outstandingAmount > 0) ...[
-                      // Amount to Collect (highlighted, pink/red) - when security deposit doesn't cover rental + GST
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.pink.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Amount to Collect',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey.shade900,
-                              ),
-                            ),
-                            Text(
-                              '₹${NumberFormat('#,##0.00').format(outstandingAmount)}',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.red.shade700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ] else if (amountToRefund > 0) ...[
-                      // Amount to Refund (highlighted, green) - when security deposit covers everything
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Amount to Refund',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey.shade900,
-                              ),
-                            ),
-                            Text(
-                              '₹${NumberFormat('#,##0.00').format(amountToRefund)}',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green.shade700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                   ],
                 ),
-              ),
-            ),
-            // Collect Outstanding Amount Section (only show if there's outstanding amount)
-            if (outstandingAmount > 0) ...[
-              const SizedBox(height: 16),
-              _CollectOutstandingAmountSection(
-                order: order,
-                outstandingAmount: outstandingAmount,
-              ),
-            ],
-            const SizedBox(height: 16),
-            // Security Deposit Details Card
-            Card(
-              elevation: 0,
-              color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: Colors.grey.shade200),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.security_outlined,
-                          size: 20,
-                          color: Colors.indigo.shade600,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Security Deposit',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF0F1724),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    // Deposit Amount
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Deposit Amount',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        Text(
-                          '₹${NumberFormat('#,##0.00').format(securityDeposit)}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey.shade900,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    // Available to Refund (in blue box)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1F2A7A).withOpacity(0.1),
-                        border: Border.all(
-                          color: const Color(0xFF1F2A7A).withOpacity(0.3),
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Available to Refund',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF1F2A7A),
-                            ),
-                          ),
-                          Text(
-                            '₹${NumberFormat('#,##0.00').format(availableToRefund)}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF1F2A7A),
-                            ),
-                          ),
-                        ],
+                    Text(
+                      'Deposit Amount',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    // Total Deductions
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Total Deductions',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        Text(
-                          '-₹${NumberFormat('#,##0.00').format(totalDeductions)}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    // Status
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Status',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: statusColor.shade50,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            refundStatus,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: statusColor.shade700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    // Last Refund (if available)
-                    if (order.securityDepositRefundDate != null) ...[
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Last Refund',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade700,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            DateFormat(
-                              'dd MMM yyyy, hh:mm a',
-                            ).format(order.securityDepositRefundDate!),
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
+                    Text(
+                      '₹${NumberFormat('#,##0.00').format(securityDeposit)}',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey.shade900,
                       ),
-                    ],
-                    // Refund Deposit Button (only show when items are returned and there's amount to refund)
-                    if (_shouldShowRefundButton()) ...[
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _isRefunding
-                              ? null
-                              : () => _handleRefundDeposit(),
-                          icon: _isRefunding
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white,
-                                    ),
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.account_balance_wallet,
-                                  size: 20,
-                                ),
-                          label: Text(
-                            _isRefunding
-                                ? 'Processing Refund...'
-                                : 'Refund Deposit ₹${NumberFormat('#,##0.00').format(amountToRefund)}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green.shade600,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 20),
+                const Divider(),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Status',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: statusColor.withOpacity(0.2)),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: statusColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_shouldShowRefundButton(order)) ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _isRefunding
+                          ? null
+                          : () => _handleRefundDeposit(order),
+                      icon: _isRefunding
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : const Icon(Icons.account_balance_wallet, size: 20),
+                      label: Text(
+                        _isRefunding
+                            ? 'Processing Refund...'
+                            : 'Refund Deposit ₹${NumberFormat('#,##0.00').format(amountToRefund)}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade600,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                if (order.securityDepositRefundDate != null)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Last Refund',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        DateFormat(
+                          'dd MMM yyyy, hh:mm a',
+                        ).format(order.securityDepositRefundDate!),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade900,
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
             ),
-          ],
+          ),
         );
       },
       loading: () => const SizedBox.shrink(),
@@ -4757,113 +4483,7 @@ class _CollectOutstandingAmountSectionState
 }
 
 /// Refund Row Widget for displaying refund line items
-class _RefundRow extends StatelessWidget {
-  final String label;
-  final double amount;
-  final bool isPositive;
-  final bool isBlue;
-
-  const _RefundRow({
-    required this.label,
-    required this.amount,
-    required this.isPositive,
-    this.isBlue = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    Color textColor;
-    if (isBlue) {
-      textColor = const Color(0xFF1F2A7A);
-    } else if (isPositive) {
-      textColor = Colors.green.shade700;
-    } else {
-      textColor = Colors.red.shade700;
-    }
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey.shade700,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        Text(
-          '${amount >= 0 ? '+' : ''}₹${NumberFormat('#,##0.00').format(amount.abs())}',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: textColor,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 /// Item Return Status Row Widget
-class _PricingRow extends StatelessWidget {
-  final String label;
-  final double amount;
-  final bool isTotal;
-  final bool isLateFee;
-
-  const _PricingRow({
-    required this.label,
-    required this.amount,
-    required this.isTotal,
-    this.isLateFee = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            if (isLateFee)
-              Icon(
-                Icons.warning_amber_rounded,
-                size: 16,
-                color: Colors.red.shade600,
-              ),
-            if (isLateFee) const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: isTotal ? 16 : 14,
-                fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
-                color: isLateFee
-                    ? Colors.red.shade700
-                    : isTotal
-                    ? const Color(0xFF0F1724)
-                    : Colors.grey.shade700,
-              ),
-            ),
-          ],
-        ),
-        Text(
-          '₹${NumberFormat('#,##0.00').format(amount)}',
-          style: TextStyle(
-            fontSize: isTotal ? 18 : 14,
-            fontWeight: FontWeight.bold,
-            color: isLateFee
-                ? Colors.red.shade600
-                : isTotal
-                ? Colors.green.shade600
-                : const Color(0xFF0F1724),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _ImagePreviewModal extends StatefulWidget {
   final String imageUrl;
   final String productName;
@@ -5574,8 +5194,6 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
   List<Map<String, dynamic>>? _timelineEvents;
   bool _isLoading = true;
   String? _error;
-  bool _isExpanded = false;
-  static const int _initialItemCount = 3; // Show first 3 items initially
 
   @override
   void initState() {
@@ -5602,6 +5220,237 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
     }
   }
 
+  // Build simplified timeline steps matching website logic
+  List<_TimelineStep> _buildTimelineSteps() {
+    final steps = <_TimelineStep>[];
+    final order = widget.order;
+    final events = _timelineEvents ?? [];
+
+    // Helper to get staff name with fallbacks
+    String getStaffName(Map<String, dynamic>? event) {
+      if (event != null &&
+          event['user_name'] != null &&
+          event['user_name'] != 'Unknown') {
+        return event['user_name'] as String;
+      }
+      if (order.staff != null) {
+        return order.staff!.fullName.isNotEmpty
+            ? order.staff!.fullName
+            : order.staff!.username;
+      }
+      return 'Unknown';
+    }
+
+    // 1. Order Created (always show)
+    final createdEvent = events.firstWhere(
+      (e) => e['action'] == 'order_created',
+      orElse: () => <String, dynamic>{},
+    );
+    steps.add(
+      _TimelineStep(
+        id: 'created',
+        label: 'Order Created',
+        icon: Icons.description_outlined,
+        color: const Color(0xFF1F2A7A),
+        timestamp:
+            createdEvent['created_at'] ?? order.createdAt.toIso8601String(),
+        staffName: getStaffName(createdEvent.isEmpty ? null : createdEvent),
+      ),
+    );
+
+    // 2. Scheduled (if status is scheduled)
+    if (order.status == OrderStatus.scheduled) {
+      final scheduledEvent = events.firstWhere(
+        (e) =>
+            e['action'] == 'order_scheduled' ||
+            (e['action'] == 'status_changed' && e['new_status'] == 'scheduled'),
+        orElse: () => <String, dynamic>{},
+      );
+      steps.add(
+        _TimelineStep(
+          id: 'scheduled',
+          label: 'Scheduled',
+          icon: Icons.calendar_today_outlined,
+          color: Colors.indigo,
+          timestamp:
+              scheduledEvent['created_at'] ?? order.createdAt.toIso8601String(),
+          staffName: getStaffName(
+            scheduledEvent.isEmpty ? null : scheduledEvent,
+          ),
+        ),
+      );
+    }
+
+    // 3. Ongoing (if status is active)
+    if (order.status == OrderStatus.active) {
+      final startedEvent = events.firstWhere(
+        (e) =>
+            e['action'] == 'rental_started' ||
+            (e['action'] == 'status_changed' && e['new_status'] == 'active'),
+        orElse: () => <String, dynamic>{},
+      );
+      steps.add(
+        _TimelineStep(
+          id: 'ongoing',
+          label: 'Ongoing',
+          icon: Icons.play_circle_outlined,
+          color: Colors.green,
+          timestamp:
+              startedEvent['created_at'] ??
+              order.startDatetime ??
+              order.startDate ??
+              order.createdAt.toIso8601String(),
+          staffName: getStaffName(startedEvent.isEmpty ? null : startedEvent),
+        ),
+      );
+    }
+
+    // 4. Returned (if items have been returned)
+    final hasReturns =
+        order.items?.any(
+          (item) =>
+              item.isReturned ||
+              (item.returnedQuantity != null && item.returnedQuantity! > 0),
+        ) ??
+        false;
+    if (hasReturns) {
+      final returnEvent = events.firstWhere(
+        (e) =>
+            e['action'] == 'marked_returned' ||
+            e['action'] == 'item_returned' ||
+            e['action'] == 'all_items_returned' ||
+            (e['action'] == 'status_changed' &&
+                (e['new_status'] == 'completed' ||
+                    e['new_status'] == 'partially_returned')),
+        orElse: () => <String, dynamic>{},
+      );
+      final returnDate =
+          returnEvent['created_at'] ??
+          order.items
+              ?.firstWhere(
+                (item) => item.actualReturnDate != null,
+                orElse: () => OrderItem(
+                  id: '',
+                  photoUrl: '',
+                  productName: '',
+                  quantity: 0,
+                  pricePerDay: 0,
+                  days: 0,
+                  lineTotal: 0,
+                ),
+              )
+              .actualReturnDate
+              ?.toIso8601String() ??
+          order.createdAt.toIso8601String();
+      steps.add(
+        _TimelineStep(
+          id: 'returned',
+          label: 'Returned',
+          icon: Icons.check_circle_outlined,
+          color: Colors.green,
+          timestamp: returnDate,
+          staffName: getStaffName(returnEvent.isEmpty ? null : returnEvent),
+        ),
+      );
+    }
+
+    // 5. Partially Returned (if status is partially_returned)
+    if (order.status == OrderStatus.partiallyReturned) {
+      final partialEvent = events.firstWhere(
+        (e) =>
+            e['action'] == 'partial_return' ||
+            (e['action'] == 'status_changed' &&
+                e['new_status'] == 'partially_returned'),
+        orElse: () => <String, dynamic>{},
+      );
+      steps.add(
+        _TimelineStep(
+          id: 'partially_returned',
+          label: 'Partially Returned',
+          icon: Icons.check_circle_outline,
+          color: Colors.yellow,
+          timestamp:
+              partialEvent['created_at'] ?? order.createdAt.toIso8601String(),
+          staffName: getStaffName(partialEvent.isEmpty ? null : partialEvent),
+        ),
+      );
+    }
+
+    // 6. Flagged/Damaged (if flagged or has damage fees)
+    final hasDamage = (order.damageFeeTotal ?? 0) > 0;
+    if (order.status == OrderStatus.flagged || hasDamage) {
+      final flaggedEvent = events.firstWhere(
+        (e) => e['action'] == 'status_changed' && e['new_status'] == 'flagged',
+        orElse: () => <String, dynamic>{},
+      );
+      steps.add(
+        _TimelineStep(
+          id: 'flagged',
+          label: hasDamage ? 'Damaged' : 'Flagged',
+          icon: Icons.flag_outlined,
+          color: Colors.red,
+          timestamp:
+              flaggedEvent['created_at'] ?? order.createdAt.toIso8601String(),
+          staffName: getStaffName(flaggedEvent.isEmpty ? null : flaggedEvent),
+        ),
+      );
+    }
+
+    // 7. Refunded (if security deposit was refunded)
+    if ((order.securityDepositRefunded == true) ||
+        ((order.securityDepositRefundedAmount ?? 0) > 0)) {
+      final refundEvent = events.firstWhere(
+        (e) => (e['action'] as String?)?.contains('refund') ?? false,
+        orElse: () => <String, dynamic>{},
+      );
+      steps.add(
+        _TimelineStep(
+          id: 'refunded',
+          label: 'Refunded',
+          icon: Icons.rotate_left_outlined,
+          color: Colors.purple,
+          timestamp:
+              refundEvent['created_at'] ??
+              order.securityDepositRefundDate?.toIso8601String() ??
+              order.createdAt.toIso8601String(),
+          staffName: getStaffName(refundEvent.isEmpty ? null : refundEvent),
+        ),
+      );
+    }
+
+    // 8. Completed (if status is completed)
+    if (order.status == OrderStatus.completed ||
+        order.status == OrderStatus.completedWithIssues) {
+      final completedEvent = events.firstWhere(
+        (e) =>
+            e['action'] == 'order_completed' ||
+            (e['action'] == 'status_changed' && e['new_status'] == 'completed'),
+        orElse: () => <String, dynamic>{},
+      );
+      steps.add(
+        _TimelineStep(
+          id: 'completed',
+          label: 'Completed',
+          icon: Icons.check_circle_outlined,
+          color: const Color(0xFF1F2A7A),
+          timestamp:
+              completedEvent['created_at'] ?? order.createdAt.toIso8601String(),
+          staffName: getStaffName(
+            completedEvent.isEmpty ? null : completedEvent,
+          ),
+        ),
+      );
+    }
+
+    // Sort by timestamp (oldest first)
+    steps.sort(
+      (a, b) =>
+          DateTime.parse(a.timestamp).compareTo(DateTime.parse(b.timestamp)),
+    );
+
+    return steps;
+  }
+
   String _formatDateTime12Hour(String dateString) {
     try {
       final date = DateTime.parse(dateString);
@@ -5618,241 +5467,175 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
     }
   }
 
-  IconData _getActionIcon(String action) {
-    switch (action) {
-      case 'order_created':
-        return Icons.description_outlined;
-      case 'order_scheduled':
-        return Icons.calendar_today_outlined;
-      case 'rental_started':
-        return Icons.play_circle_outlined;
-      case 'order_edited':
-        return Icons.edit_outlined;
-      case 'billing_updated':
-        return Icons.attach_money_outlined;
-      case 'status_changed':
-        return Icons.arrow_forward_outlined;
-      case 'marked_returned':
-      case 'item_returned':
-      case 'all_items_returned':
-        return Icons.check_circle_outlined;
-      case 'item_reverted':
-        return Icons.rotate_left_outlined;
-      case 'marked_missing':
-        return Icons.cancel_outlined;
-      case 'partial_return':
-        return Icons.check_circle_outline;
-      case 'order_completed':
-        return Icons.check_circle_outlined;
-      case 'order_cancelled':
-        return Icons.block_outlined;
-      case 'order_pending_return':
-        return Icons.schedule_outlined;
-      case 'updated_return_date':
-        return Icons.access_time_outlined;
-      case 'flagged':
-        return Icons.flag_outlined;
-      default:
-        return Icons.access_time_outlined;
-    }
-  }
-
-  String _getActionLabel(String action, Map<String, dynamic> event) {
-    switch (action) {
-      case 'order_created':
-        return 'Order Created';
-      case 'order_scheduled':
-        return 'Scheduled';
-      case 'rental_started':
-        return 'Rental Started';
-      case 'order_edited':
-        return 'Order Updated';
-      case 'billing_updated':
-        return 'Billing Updated';
-      case 'status_changed':
-        final newStatus = event['new_status'] as String?;
-        if (newStatus == 'completed') {
-          return 'Completed';
-        } else if (newStatus == 'cancelled') {
-          return 'Cancelled';
-        } else if (newStatus == 'partially_returned') {
-          return 'Partial Return';
-        } else if (newStatus == 'flagged') {
-          return 'Flagged';
-        }
-        return 'Status Changed';
-      case 'marked_returned':
-      case 'item_returned':
-      case 'all_items_returned':
-        return 'Items Returned';
-      case 'partial_return':
-        return 'Partial Return';
-      case 'order_completed':
-        return 'Completed';
-      case 'items_reverted':
-        return 'Items Reverted';
-      case 'items_marked_missing':
-        return 'Items Missing';
-      case 'items_updated':
-        return 'Items Updated';
-      case 'order_cancelled':
-        return 'Cancelled';
-      case 'order_pending_return':
-        return 'Pending Return';
-      case 'updated_return_date':
-        return 'Return Date Updated';
-      default:
-        return action
-            .replaceAll('_', ' ')
-            .split(' ')
-            .map((word) {
-              if (word.isEmpty) return word;
-              return word[0].toUpperCase() + word.substring(1);
-            })
-            .join(' ');
-    }
-  }
-
-  Color _getActionColor(String action) {
-    switch (action) {
-      case 'order_created':
-        return Color(0xFF1F2A7A);
-      case 'order_scheduled':
-        return Colors.indigo;
-      case 'rental_started':
-        return Colors.green;
-      case 'order_edited':
-        return Colors.amber;
-      case 'billing_updated':
-        return Colors.purple;
-      case 'status_changed':
-        return Colors.purple;
-      case 'marked_returned':
-      case 'item_returned':
-        return Colors.green;
-      case 'item_reverted':
-        return Colors.orange;
-      case 'marked_missing':
-        return Colors.red;
-      case 'partial_return':
-        return Colors.yellow;
-      case 'order_completed':
-        return Colors.green;
-      case 'order_cancelled':
-        return Colors.red;
-      case 'order_pending_return':
-        return Colors.yellow;
-      default:
-        return Colors.grey;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(20),
-          child: CircularProgressIndicator(),
+      return Card(
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.grey.shade200),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.all(24),
+          child: Center(child: CircularProgressIndicator()),
         ),
       );
     }
 
     if (_error != null) {
-      return Center(
+      return Card(
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.grey.shade200),
+        ),
         child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Text(
-            'Failed to load timeline: $_error',
-            style: const TextStyle(color: Colors.red),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: Colors.grey.shade400),
+              const SizedBox(height: 12),
+              Text(
+                'Failed to load timeline',
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+              ),
+            ],
           ),
         ),
       );
     }
 
-    if (_timelineEvents == null || _timelineEvents!.isEmpty) {
-      return const Center(
+    final timelineSteps = _buildTimelineSteps();
+
+    if (timelineSteps.isEmpty) {
+      return Card(
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.grey.shade200),
+        ),
         child: Padding(
-          padding: EdgeInsets.all(20),
-          child: Text(
-            'No timeline data available',
-            style: TextStyle(color: Colors.grey),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.description_outlined,
+                size: 48,
+                color: Colors.grey.shade300,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'No timeline events yet',
+                style: TextStyle(
+                  color: Colors.grey.shade500,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
       );
     }
 
-    // Determine which items to show
-    final itemsToShow = _isExpanded
-        ? _timelineEvents!
-        : _timelineEvents!.take(_initialItemCount).toList();
-    final hasMoreItems = _timelineEvents!.length > _initialItemCount;
-
-    return Column(
-      children: [
-        ...itemsToShow.asMap().entries.map((entry) {
-          final index = entry.key;
-          final event = entry.value;
-          final isLast = _isExpanded
-              ? (index == itemsToShow.length - 1)
-              : (index == itemsToShow.length - 1 && !hasMoreItems);
-          final action = event['action'] as String;
-          final color = _getActionColor(action);
-          final icon = _getActionIcon(action);
-          final label = _getActionLabel(action, event);
-          final userName = event['user_name'] as String? ?? 'Unknown';
-          final notes = event['notes'] as String?;
-          final createdAt = event['created_at'] as String;
-
-          return _TimelineItemWidget(
-            event: _TimelineEvent(
-              icon: icon,
-              title: label,
-              description: notes ?? '',
-              date: DateTime.parse(createdAt),
-              color: color,
-              isCompleted: true,
-              userName: userName,
-            ),
-            isLast: isLast,
-            formatDateTime: _formatDateTime12Hour,
-          );
-        }),
-        // View All / View Less button
-        if (hasMoreItems)
-          Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: OutlinedButton.icon(
-              onPressed: () {
-                setState(() {
-                  _isExpanded = !_isExpanded;
-                });
-              },
-              icon: Icon(
-                _isExpanded ? Icons.expand_less : Icons.expand_more,
-                size: 18,
-              ),
-              label: Text(
-                _isExpanded
-                    ? 'View Less'
-                    : 'View All (${_timelineEvents!.length - _initialItemCount} more)',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                side: BorderSide(color: Colors.indigo.shade300),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+    return Card(
+      margin: const EdgeInsets.all(16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Order Timeline',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
               ),
             ),
-          ),
-      ],
+            const SizedBox(height: 4),
+            Text(
+              'Key order milestones',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 20),
+            // Timeline container with line
+            Stack(
+              children: [
+                // Vertical line (positioned at left: 20px to align with center of 32px circle)
+                Positioned(
+                  left: 20,
+                  top: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 0.5,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.grey.shade300,
+                          Colors.grey.shade200,
+                          Colors.grey.shade300,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // Timeline steps
+                Column(
+                  children: timelineSteps.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final step = entry.value;
+                    final isLast = index == timelineSteps.length - 1;
+
+                    return _TimelineItemWidget(
+                      event: _TimelineEvent(
+                        icon: step.icon,
+                        title: step.label,
+                        description: '',
+                        date: DateTime.parse(step.timestamp),
+                        color: step.color,
+                        isCompleted: true,
+                        userName: step.staffName,
+                      ),
+                      isLast: isLast,
+                      formatDateTime: _formatDateTime12Hour,
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
+}
+
+class _TimelineStep {
+  final String id;
+  final String label;
+  final IconData icon;
+  final Color color;
+  final String timestamp;
+  final String staffName;
+
+  _TimelineStep({
+    required this.id,
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.timestamp,
+    required this.staffName,
+  });
 }
 
 class _TimelineEvent {
@@ -5888,125 +5671,109 @@ class _TimelineItemWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Timeline indicator
-        Column(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: event.isCompleted ? event.color : Colors.grey.shade300,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: event.isCompleted ? event.color : Colors.grey.shade400,
-                  width: 2,
-                ),
-              ),
-              child: Icon(
-                event.icon,
-                color: event.isCompleted ? Colors.white : Colors.grey.shade600,
-                size: 20,
-              ),
-            ),
-            if (!isLast)
-              Container(
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Timeline dot with icon
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isLast ? const Color(0xFF1F2A7A) : Colors.grey.shade300,
                 width: 2,
-                height: 60,
-                color: event.isCompleted
-                    ? event.color.withOpacity(0.3)
-                    : Colors.grey.shade300,
               ),
-          ],
-        ),
-        const SizedBox(width: 16),
-        // Timeline content
-        Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Badge with title
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: event.color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: event.color.withOpacity(0.3)),
-                      ),
-                      child: Text(
-                        event.title,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: event.color,
-                        ),
-                      ),
-                    ),
-                    if (event.description.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          event.description,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 6),
-                // User name and date
-                Row(
-                  children: [
-                    Icon(
-                      Icons.person_outline,
-                      size: 14,
-                      color: Colors.grey.shade400,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      event.userName ?? 'Unknown',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '•',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade400,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      formatDateTime(event.date.toIso8601String()),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
-                  ],
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 2,
+                  offset: const Offset(0, 1),
                 ),
               ],
             ),
+            child: Center(
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: event.color,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(event.icon, color: Colors.white, size: 14),
+              ),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(width: 12),
+          // Timeline content
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Badge with label
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: event.color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: event.color.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      event.title,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: event.color,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // Timestamp and staff name
+                  Row(
+                    children: [
+                      Text(
+                        formatDateTime(event.date.toIso8601String()),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Text(
+                          '•',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade400,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        event.userName ?? 'Unknown',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
