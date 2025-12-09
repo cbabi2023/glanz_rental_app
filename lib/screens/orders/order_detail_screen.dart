@@ -3751,19 +3751,6 @@ class _SecurityDepositRefundSectionState
     extends ConsumerState<_SecurityDepositRefundSection> {
   bool _isRefunding = false;
 
-  // Helper function to calculate refundable amount (matches website's calculateRefundableAmount)
-  double _calculateRefundableAmount(Order order) {
-    // Use deposit_balance from backend if available, otherwise calculate it
-    final depositBalance =
-        (order.depositBalance ??
-                ((order.securityDepositAmount ?? 0.0) -
-                    (order.securityDepositRefundedAmount ?? 0.0)))
-            .clamp(0.0, double.infinity);
-
-    // Per user request: always refund full remaining deposit balance (no deductions)
-    return depositBalance;
-  }
-
   bool _shouldShowRefundButton(Order order) {
     // Must have collected deposit and not fully refunded (matches website logic)
     if (!(order.securityDepositCollected == true) ||
@@ -3883,20 +3870,20 @@ class _SecurityDepositRefundSectionState
         // Use the latest order data from database
         final order = updatedOrder;
 
-        // Calculate refundable amount using website's formula
-        final refundableAmount = _calculateRefundableAmount(order);
-
-        // Use deposit_balance from backend if available
-        final depositBalance =
-            order.depositBalance ??
-            ((order.securityDepositAmount ?? 0.0) -
-                (order.securityDepositRefundedAmount ?? 0.0));
-
         final securityDeposit = order.securityDepositAmount ?? 0.0;
         final refunded = order.securityDepositRefundedAmount ?? 0.0;
 
-        // Amount to show in refund button
-        final amountToRefund = refundableAmount.clamp(0.0, depositBalance);
+        // Calculate remaining deposit to refund (deposit - already refunded)
+        // This matches the website's simple calculation and what we show in the button
+        final depositAmount = order.securityDepositAmount ?? 0.0;
+        final alreadyRefunded = order.securityDepositRefundedAmount ?? 0.0;
+        final remainingDeposit = (depositAmount - alreadyRefunded).clamp(
+          0.0,
+          double.infinity,
+        );
+
+        // Amount to show in refund button (full remaining deposit)
+        final amountToRefund = remainingDeposit;
 
         // Status mapping to mirror website (matches website logic from order details page)
         String statusLabel;
