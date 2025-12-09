@@ -46,20 +46,12 @@ class OrderItemsWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Items',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            CameraUploadWidget(
-              onUploadComplete: _handleAddItem,
-            ),
-          ],
+        const Text(
+          'Items',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 16),
 
@@ -73,14 +65,15 @@ class OrderItemsWidget extends StatelessWidget {
             ),
             child: const Center(
               child: Text(
-                'No items added. Tap the camera icon to add an item.',
+                'No items added. Use the camera button below to add an item.',
                 style: TextStyle(color: Colors.grey),
                 textAlign: TextAlign.center,
               ),
             ),
           )
         else
-          ...items.asMap().entries.map((entry) {
+          // Reverse display order so newly added items stay below the previous ones
+          ...items.asMap().entries.toList().reversed.map((entry) {
             final index = entry.key;
             final item = entry.value;
             return _OrderItemCard(
@@ -93,6 +86,13 @@ class OrderItemsWidget extends StatelessWidget {
               onImageClick: onImageClick,
             );
           }),
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerRight,
+          child: CameraUploadWidget(
+            onUploadComplete: _handleAddItem,
+          ),
+        ),
       ],
     );
   }

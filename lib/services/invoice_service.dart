@@ -314,20 +314,20 @@ class InvoiceService {
               print('Invoice setting columns missing, using defaults: $e2');
               // Try to get company info without invoice columns
               try {
-                final response = await SupabaseService.client
-                    .from('profiles')
-                    .select('company_name, company_address')
-                    .eq('id', user.id)
-                    .single();
-                
-                companyName =
-                    response['company_name']?.toString() ??
-                    order.branch?.name ??
-                    'GLANZ COSTUMES';
-                companyAddress =
-                    response['company_address']?.toString() ??
-                    order.branch?.address ??
-                    '';
+        final response = await SupabaseService.client
+            .from('profiles')
+            .select('company_name, company_address')
+            .eq('id', user.id)
+            .single();
+
+        companyName =
+            response['company_name']?.toString() ??
+            order.branch?.name ??
+            'GLANZ COSTUMES';
+        companyAddress =
+            response['company_address']?.toString() ??
+            order.branch?.address ??
+            '';
               } catch (e3) {
                 print('Error getting company details: $e3');
                 companyName = order.branch?.name ?? 'GLANZ COSTUMES';
@@ -1003,31 +1003,31 @@ class InvoiceService {
                   // Left: Terms & Conditions (only if enabled)
                   if (showInvoiceTerms)
                     pw.Expanded(
-                      child: pw.Column(
+                child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text(
+                  children: [
+                    pw.Text(
                             'TERMS & CONDITIONS',
-                            style: pw.TextStyle(
-                              fontSize: 10,
-                              fontWeight: pw.FontWeight.bold,
+                      style: pw.TextStyle(
+                        fontSize: 10,
+                        fontWeight: pw.FontWeight.bold,
                               color: PdfColors.black,
-                            ),
-                          ),
+                      ),
+                    ),
                           pw.SizedBox(height: 4),
                           pw.Container(
                             width: double.infinity,
                             height: 1,
-                            color: PdfColors.black,
-                          ),
+                      color: PdfColors.black,
+                    ),
                           pw.SizedBox(height: 8),
                           pw.Row(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
-                              pw.Text(
+                    pw.Text(
                                 '- ',
-                                style: pw.TextStyle(
-                                  fontSize: 8,
+                      style: pw.TextStyle(
+                        fontSize: 8,
                                   color: PdfColors.black,
                                 ),
                               ),
@@ -1039,16 +1039,16 @@ class InvoiceService {
                                     color: PdfColors.black,
                                   ),
                                 ),
-                              ),
+                      ),
                             ],
-                          ),
-                          pw.SizedBox(height: 4),
+                    ),
+                    pw.SizedBox(height: 4),
                           pw.Row(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
-                              pw.Text(
+                    pw.Text(
                                 '- ',
-                                style: pw.TextStyle(
+                      style: pw.TextStyle(
                                   fontSize: 8,
                                   color: PdfColors.black,
                                 ),
@@ -1060,10 +1060,10 @@ class InvoiceService {
                                     fontSize: 8,
                                     color: PdfColors.black,
                                   ),
-                                ),
-                              ),
-                            ],
-                          ),
+                      ),
+                    ),
+                  ],
+                ),
                           pw.SizedBox(height: 4),
                           pw.Row(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -1082,17 +1082,17 @@ class InvoiceService {
                                     fontSize: 8,
                                     color: PdfColors.black,
                                   ),
-                                ),
+              ),
                               ),
                             ],
                           ),
                           pw.SizedBox(height: 4),
                           pw.Row(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              pw.Text(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
                                 '- ',
-                                style: pw.TextStyle(
+                    style: pw.TextStyle(
                                   fontSize: 8,
                                   color: PdfColors.black,
                                 ),
@@ -1104,18 +1104,18 @@ class InvoiceService {
                                     fontSize: 8,
                                     color: PdfColors.black,
                                   ),
-                                ),
+                    ),
                               ),
                             ],
-                          ),
+                  ),
                           pw.SizedBox(height: 4),
                           pw.Row(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
-                              pw.Text(
+                    pw.Text(
                                 '- ',
-                                style: pw.TextStyle(
-                                  fontSize: 8,
+                      style: pw.TextStyle(
+                        fontSize: 8,
                                   color: PdfColors.black,
                                 ),
                               ),
@@ -1127,10 +1127,10 @@ class InvoiceService {
                                     color: PdfColors.black,
                                   ),
                                 ),
-                              ),
+                      ),
                             ],
-                          ),
-                          pw.SizedBox(height: 4),
+                    ),
+                    pw.SizedBox(height: 4),
                           pw.Row(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
@@ -1167,7 +1167,7 @@ class InvoiceService {
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.end,
                         children: [
-                          pw.Text(
+                  pw.Text(
                             'SCAN & PAY',
                             style: pw.TextStyle(
                               fontSize: 10,
@@ -1187,8 +1187,8 @@ class InvoiceService {
                           pw.SizedBox(height: 8),
                           pw.Text(
                             'UPI: $upiId | Amount:',
-                            style: pw.TextStyle(
-                              fontSize: 8,
+                    style: pw.TextStyle(
+                      fontSize: 8,
                               color: PdfColors.black,
                             ),
                             textAlign: pw.TextAlign.right,
@@ -1199,12 +1199,12 @@ class InvoiceService {
                               fontSize: 9,
                               color: PdfColors.black,
                               fontWeight: pw.FontWeight.bold,
-                            ),
-                            textAlign: pw.TextAlign.right,
-                          ),
-                        ],
-                      ),
                     ),
+                            textAlign: pw.TextAlign.right,
+                  ),
+                ],
+              ),
+            ),
                 ],
               ),
             ],
