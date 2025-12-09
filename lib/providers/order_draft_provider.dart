@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/order.dart';
 import '../models/order_item.dart';
 import '../models/user_profile.dart';
+import '../core/supabase_client.dart';
 import 'auth_provider.dart';
 
 /// Order Draft State
@@ -189,10 +190,23 @@ double calculateGstAmount({
   required double subtotal,
   required UserProfile? user,
 }) {
-  if (user?.gstEnabled != true) return 0.0;
+  if (user == null) return 0.0;
+  
+  // Determine if GST should be applied.
+  // Check gstEnabled flag first, then fall back to presence of gstRate or gstNumber
+  bool gstEnabled;
+  if (user.gstEnabled != null) {
+    gstEnabled = user.gstEnabled!;
+  } else {
+    // Infer from gstRate or gstNumber
+    gstEnabled = (user.gstRate != null && user.gstRate! > 0) ||
+        (user.gstNumber != null && user.gstNumber!.isNotEmpty);
+  }
 
-  final gstRate = (user?.gstRate ?? 5.0) / 100;
-  final gstIncluded = user?.gstIncluded ?? false;
+  if (!gstEnabled) return 0.0;
+
+  final gstRate = (user.gstRate ?? 5.0) / 100;
+  final gstIncluded = user.gstIncluded ?? false;
 
   if (gstIncluded) {
     // GST is included in price, so extract it
@@ -208,10 +222,22 @@ double calculateGrandTotal({
   required double subtotal,
   required UserProfile? user,
 }) {
-  if (user?.gstEnabled != true) return subtotal;
+  if (user == null) return subtotal;
+  
+  // Determine if GST should be applied
+  bool gstEnabled;
+  if (user.gstEnabled != null) {
+    gstEnabled = user.gstEnabled!;
+  } else {
+    // Infer from gstRate or gstNumber
+    gstEnabled = (user.gstRate != null && user.gstRate! > 0) ||
+        (user.gstNumber != null && user.gstNumber!.isNotEmpty);
+  }
+  
+  if (!gstEnabled) return subtotal;
 
   final gstAmount = calculateGstAmount(subtotal: subtotal, user: user);
-  final gstIncluded = user?.gstIncluded ?? false;
+  final gstIncluded = user.gstIncluded ?? false;
 
   return gstIncluded ? subtotal : subtotal + gstAmount;
 }
@@ -222,10 +248,59 @@ final orderSubtotalProvider = Provider<double>((ref) {
   return calculateSubtotal(draft.items);
 });
 
+/// Super Admin Profile Provider (for GST settings when staff/branch admin creates orders)
+final superAdminProfileProvider = FutureProvider<UserProfile?>((ref) async {
+  try {
+    final response = await SupabaseService.client
+        .from('profiles')
+        .select()
+        .eq('role', 'super_admin')
+        .limit(1)
+        .maybeSingle();
+    
+    if (response == null) {
+      print('No super admin found');
+      return null;
+    }
+    
+    final admin = UserProfile.fromJson(response);
+    print('Super admin found: ${admin.fullName}, GST enabled: ${admin.gstEnabled}, GST rate: ${admin.gstRate}');
+    return admin;
+  } catch (e) {
+    print('Error fetching super admin profile: $e');
+    return null;
+  }
+});
+
 /// GST Amount Provider
 final orderGstAmountProvider = Provider<double>((ref) {
   final subtotal = ref.watch(orderSubtotalProvider);
   final userProfile = ref.watch(userProfileProvider).value;
+  
+  // If user is staff or branch admin, get super admin's GST settings
+  if (userProfile?.isStaff == true || userProfile?.isBranchAdmin == true) {
+    final superAdminAsync = ref.watch(superAdminProfileProvider);
+    // Handle async state: if loading, wait; if loaded, use it; if error/null, fallback
+    return superAdminAsync.when(
+      data: (superAdmin) {
+        if (superAdmin != null) {
+          return calculateGstAmount(subtotal: subtotal, user: superAdmin);
+        }
+        // Super admin not found, fallback to user profile
+        return calculateGstAmount(subtotal: subtotal, user: userProfile);
+      },
+      loading: () {
+        // While loading, return 0 (will update when loaded)
+        return 0.0;
+      },
+      error: (_, __) {
+        // On error, fallback to user profile
+        return calculateGstAmount(subtotal: subtotal, user: userProfile);
+      },
+    );
+  }
+  
+  // For super admin, use their own GST settings
   return calculateGstAmount(subtotal: subtotal, user: userProfile);
 });
 
@@ -233,6 +308,31 @@ final orderGstAmountProvider = Provider<double>((ref) {
 final orderGrandTotalProvider = Provider<double>((ref) {
   final subtotal = ref.watch(orderSubtotalProvider);
   final userProfile = ref.watch(userProfileProvider).value;
+  
+  // If user is staff or branch admin, get super admin's GST settings
+  if (userProfile?.isStaff == true || userProfile?.isBranchAdmin == true) {
+    final superAdminAsync = ref.watch(superAdminProfileProvider);
+    // Handle async state: if loading, wait; if loaded, use it; if error/null, fallback
+    return superAdminAsync.when(
+      data: (superAdmin) {
+        if (superAdmin != null) {
+          return calculateGrandTotal(subtotal: subtotal, user: superAdmin);
+        }
+        // Super admin not found, fallback to user profile
+        return calculateGrandTotal(subtotal: subtotal, user: userProfile);
+      },
+      loading: () {
+        // While loading, return subtotal (will update when loaded)
+        return subtotal;
+      },
+      error: (_, __) {
+        // On error, fallback to user profile
+        return calculateGrandTotal(subtotal: subtotal, user: userProfile);
+      },
+    );
+  }
+  
+  // For super admin, use their own GST settings
   return calculateGrandTotal(subtotal: subtotal, user: userProfile);
 });
 

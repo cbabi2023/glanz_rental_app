@@ -11,6 +11,7 @@ import '../../widgets/orders/customer_search_widget.dart';
 import '../../widgets/orders/order_datetime_widget.dart';
 import '../../widgets/orders/order_items_widget.dart';
 import '../../widgets/orders/order_summary_widget.dart';
+import '../../models/user_profile.dart';
 
 /// Edit Order Screen
 ///
@@ -151,8 +152,26 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
     try {
       final ordersService = ref.read(ordersServiceProvider);
       final subtotal = ref.read(orderSubtotalProvider);
-      final gstAmount = ref.read(orderGstAmountProvider);
-      final grandTotal = ref.read(orderGrandTotalProvider);
+
+      // If staff or branch admin, use super admin GST settings (await to ensure we have it before submission)
+      UserProfile? gstProfile = ref.read(userProfileProvider).value;
+      if (gstProfile?.isStaff == true || gstProfile?.isBranchAdmin == true) {
+        try {
+          gstProfile = await ref.read(superAdminProfileProvider.future);
+        } catch (_) {
+          // fallback to user profile if super admin lookup fails
+          gstProfile = ref.read(userProfileProvider).value;
+        }
+      }
+
+      final gstAmount = calculateGstAmount(
+        subtotal: subtotal,
+        user: gstProfile,
+      );
+      final grandTotal = calculateGrandTotal(
+        subtotal: subtotal,
+        user: gstProfile,
+      );
 
       // Prepare items for database
       final itemsForDb = draft.items.map((item) {
@@ -181,7 +200,7 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
         endDatetime: draft.endDate,
         totalAmount: grandTotal,
         subtotal: subtotal,
-        gstAmount: userProfile?.gstEnabled == true ? gstAmount : 0,
+        gstAmount: gstAmount,
         securityDeposit: draft.securityDeposit,
         items: itemsForDb,
       );
@@ -231,6 +250,19 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
     final subtotal = ref.watch(orderSubtotalProvider);
     final gstAmount = ref.watch(orderGstAmountProvider);
     final grandTotal = ref.watch(orderGrandTotalProvider);
+
+    // Get branch admin's GST settings if user is staff
+    // Get super admin's GST settings if user is staff or branch admin
+    UserProfile? superAdmin;
+    UserProfile? gstSettingsProfile = userProfile;
+
+    if (userProfile?.isStaff == true || userProfile?.isBranchAdmin == true) {
+      final superAdminAsync = ref.watch(superAdminProfileProvider);
+      superAdmin =
+          superAdminAsync.value; // Get the value (may be null if still loading)
+      // Use super admin's GST settings for display if available, otherwise use user's own settings
+      gstSettingsProfile = superAdmin ?? userProfile;
+    }
 
     // Initialize from order when data is available
     orderAsync.whenData((order) {
@@ -521,9 +553,9 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
                           subtotal: subtotal,
                           gstAmount: gstAmount,
                           grandTotal: grandTotal,
-                          gstEnabled: userProfile?.gstEnabled,
-                          gstRate: userProfile?.gstRate,
-                          gstIncluded: userProfile?.gstIncluded,
+                          gstEnabled: gstSettingsProfile?.gstEnabled,
+                          gstRate: gstSettingsProfile?.gstRate,
+                          gstIncluded: gstSettingsProfile?.gstIncluded,
                           securityDeposit: draft.securityDeposit,
                         ),
                       ),

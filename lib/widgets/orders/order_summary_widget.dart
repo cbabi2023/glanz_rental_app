@@ -25,6 +25,10 @@ class OrderSummaryWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Always show GST if amount > 0 (regardless of flags)
+    // This ensures GST shows for staff using branch admin settings
+    final shouldShowGst = gstAmount > 0;
+    
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -52,8 +56,9 @@ class OrderSummaryWidget extends StatelessWidget {
               ],
             ),
             
-            // GST (if enabled)
-            if (gstEnabled == true && gstAmount > 0) ...[
+            // GST (show if amount > 0)
+            // This handles cases where staff uses branch admin's GST settings
+            if (shouldShowGst) ...[
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -11,6 +11,7 @@ import '../../widgets/orders/customer_search_widget.dart';
 import '../../widgets/orders/order_datetime_widget.dart';
 import '../../widgets/orders/order_items_widget.dart';
 import '../../widgets/orders/order_summary_widget.dart';
+import '../../models/user_profile.dart';
 
 /// Create Order Screen
 ///
@@ -141,8 +142,26 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     try {
       final ordersService = ref.read(ordersServiceProvider);
       final subtotal = ref.read(orderSubtotalProvider);
-      final gstAmount = ref.read(orderGstAmountProvider);
-      final grandTotal = ref.read(orderGrandTotalProvider);
+
+      // If staff or branch admin, use super admin GST settings (await to ensure we have it before submission)
+      UserProfile? gstProfile = ref.read(userProfileProvider).value;
+      if (gstProfile?.isStaff == true || gstProfile?.isBranchAdmin == true) {
+        try {
+          gstProfile = await ref.read(superAdminProfileProvider.future);
+        } catch (_) {
+          // fallback to user profile if super admin lookup fails
+          gstProfile = ref.read(userProfileProvider).value;
+        }
+      }
+
+      final gstAmount = calculateGstAmount(
+        subtotal: subtotal,
+        user: gstProfile,
+      );
+      final grandTotal = calculateGrandTotal(
+        subtotal: subtotal,
+        user: gstProfile,
+      );
 
       // Prepare items for database
       final itemsForDb = draft.items.map((item) {
@@ -174,7 +193,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         endDatetime: draft.endDate,
         totalAmount: grandTotal,
         subtotal: subtotal,
-        gstAmount: userProfile.gstEnabled == true ? gstAmount : 0,
+        gstAmount: gstAmount,
         securityDeposit: draft.securityDeposit,
         items: itemsForDb,
       );
@@ -215,10 +234,22 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   @override
   Widget build(BuildContext context) {
     final draft = ref.watch(orderDraftProvider);
-    final userProfile = ref.read(userProfileProvider).value;
+    final userProfile = ref.watch(userProfileProvider).value;
     final subtotal = ref.watch(orderSubtotalProvider);
     final gstAmount = ref.watch(orderGstAmountProvider);
     final grandTotal = ref.watch(orderGrandTotalProvider);
+    
+    // Get super admin's GST settings if user is staff or branch admin
+    // Watch the async provider to ensure UI updates when super admin loads
+    UserProfile? superAdmin;
+    UserProfile? gstSettingsProfile = userProfile;
+    
+    if (userProfile?.isStaff == true || userProfile?.isBranchAdmin == true) {
+      final superAdminAsync = ref.watch(superAdminProfileProvider);
+      superAdmin = superAdminAsync.value; // Get the value (may be null if still loading)
+      // Use super admin's GST settings for display if available, otherwise use user's own settings
+      gstSettingsProfile = superAdmin ?? userProfile;
+    }
 
     // Calculate days
     final days = draft.startDate.isNotEmpty && draft.endDate.isNotEmpty
@@ -453,9 +484,9 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                       subtotal: subtotal,
                       gstAmount: gstAmount,
                       grandTotal: grandTotal,
-                      gstEnabled: userProfile?.gstEnabled,
-                      gstRate: userProfile?.gstRate,
-                      gstIncluded: userProfile?.gstIncluded,
+                      gstEnabled: gstSettingsProfile?.gstEnabled,
+                      gstRate: gstSettingsProfile?.gstRate,
+                      gstIncluded: gstSettingsProfile?.gstIncluded,
                       securityDeposit: draft.securityDeposit,
                     ),
                   ),
