@@ -27,11 +27,11 @@ class AuthService {
     }
     
     try {
-      final response = await _supabase.auth.signInWithPassword(
+    final response = await _supabase.auth.signInWithPassword(
         email: normalizedEmail,
         password: normalizedPassword,
-      );
-      return response.user;
+    );
+    return response.user;
     } on AuthException {
       // Re-throw auth exceptions as-is (they contain proper error messages)
       rethrow;

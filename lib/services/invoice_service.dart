@@ -259,6 +259,8 @@ class InvoiceService {
     // Get company details and invoice settings from user profile
     String companyName = 'GLANZ COSTUMES';
     String companyAddress = '';
+    String? phoneNumber;
+    String? gstNumber;
     bool showInvoiceTerms = true; // Default to true
     bool showInvoiceQr = true; // Default to true
 
@@ -269,7 +271,7 @@ class InvoiceService {
           // Prefer current column names (show_terms, show_qr_code)
           final response = await SupabaseService.client
               .from('profiles')
-              .select('company_name, company_address, show_terms, show_qr_code')
+              .select('company_name, company_address, phone, gst_number, show_terms, show_qr_code')
               .eq('id', user.id)
               .single();
 
@@ -281,6 +283,8 @@ class InvoiceService {
               response['company_address']?.toString() ??
               order.branch?.address ??
               '';
+          phoneNumber = response['phone']?.toString() ?? order.branch?.phone;
+          gstNumber = response['gst_number']?.toString();
           
           // Get invoice settings from database (null means not set, default to true)
           final invoiceTermsValue = response['show_terms'] as bool?;
@@ -469,10 +473,31 @@ class InvoiceService {
                                     child: pw.Text(
                                       line,
                                       style: pw.TextStyle(
-                                        fontSize: 8.5,
+                                        fontSize: 8,
                                         color: PdfColors.black,
                                       ),
                                     ),
+                                  ),
+                                ),
+                              ],
+                              if (phoneNumber != null && phoneNumber.isNotEmpty) ...[
+                                pw.SizedBox(height: 2),
+                                pw.Text(
+                                  'Phone: $phoneNumber',
+                                  style: pw.TextStyle(
+                                    fontSize: 8,
+                                    color: PdfColors.black,
+                                  ),
+                                ),
+                              ],
+                              if (gstNumber != null && gstNumber.isNotEmpty) ...[
+                                pw.SizedBox(height: 2),
+                                pw.Text(
+                                  'GSTIN: $gstNumber',
+                                  style: pw.TextStyle(
+                                    fontSize: 8,
+                                    color: PdfColors.black,
+                                    fontWeight: pw.FontWeight.bold,
                                   ),
                                 ),
                               ],
@@ -490,7 +515,7 @@ class InvoiceService {
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: [
                         pw.Text(
-                          'ORDERS',
+                          'ORDER',
                           style: pw.TextStyle(
                             fontSize: 26,
                             fontWeight: pw.FontWeight.bold,
@@ -610,20 +635,13 @@ class InvoiceService {
               ),
             ),
 
-            // Products Table
-            pw.Text(
-              'Order Items',
-              style: pw.TextStyle(
-                fontSize: 16,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.black,
-              ),
-            ),
-            pw.SizedBox(height: 12),
 
             // Items Table
             pw.Table(
-              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+              border: pw.TableBorder(
+                top: const pw.BorderSide(color: PdfColors.grey300, width: 1),
+                bottom: const pw.BorderSide(color: PdfColors.grey300, width: 1),
+              ),
               columnWidths: {
                 0: const pw.FlexColumnWidth(0.8), // Sl No
                 1: const pw.FlexColumnWidth(1), // Image column
@@ -635,40 +653,43 @@ class InvoiceService {
               children: [
                 // Header Row
                 pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+                  decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF9FAFB)),
                   children: [
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(10),
                       child: pw.Text(
-                        'Sl No',
+                        'Sl. No.',
                         textAlign: pw.TextAlign.center,
                         style: pw.TextStyle(
-                          fontSize: 9,
+                          fontSize: 8,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.black,
+                          letterSpacing: 0.2,
                         ),
                       ),
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(8),
                       child: pw.Text(
-                        'Image',
+                        'Photo',
                         textAlign: pw.TextAlign.center,
                         style: pw.TextStyle(
-                          fontSize: 9,
+                          fontSize: 8,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.black,
+                          letterSpacing: 0.2,
                         ),
                       ),
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(10),
                       child: pw.Text(
-                        'Item',
+                        'Product Name',
                         style: pw.TextStyle(
-                          fontSize: 9,
+                          fontSize: 8,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.black,
+                          letterSpacing: 0.2,
                         ),
                       ),
                     ),
@@ -687,12 +708,13 @@ class InvoiceService {
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(10),
                       child: pw.Text(
-                        'Price/Day',
+                        'Price',
                         textAlign: pw.TextAlign.right,
                         style: pw.TextStyle(
-                          fontSize: 9,
+                          fontSize: 8,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.black,
+                          letterSpacing: 0.2,
                         ),
                       ),
                     ),
@@ -718,7 +740,11 @@ class InvoiceService {
                       ? productImages[item.id!]
                       : null;
 
+                  final isEven = index % 2 == 0;
                   return pw.TableRow(
+                    decoration: isEven 
+                        ? null 
+                        : const pw.BoxDecoration(color: PdfColor.fromInt(0xFFFAFBFC)),
                     children: [
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(10),
@@ -764,9 +790,10 @@ class InvoiceService {
                         padding: const pw.EdgeInsets.all(10),
                         child: pw.Text(
                           item.productName ?? 'N/A',
-                          style: const pw.TextStyle(
-                            fontSize: 9,
+                          style: pw.TextStyle(
+                            fontSize: 8,
                             color: PdfColors.black,
+                            fontWeight: pw.FontWeight.normal,
                           ),
                         ),
                       ),
@@ -775,9 +802,10 @@ class InvoiceService {
                         child: pw.Text(
                           item.quantity.toString(),
                           textAlign: pw.TextAlign.center,
-                          style: const pw.TextStyle(
-                            fontSize: 9,
+                          style: pw.TextStyle(
+                            fontSize: 8,
                             color: PdfColors.black,
+                            fontWeight: pw.FontWeight.bold,
                           ),
                         ),
                       ),
@@ -786,9 +814,10 @@ class InvoiceService {
                         child: pw.Text(
                           _formatCurrency(item.pricePerDay),
                           textAlign: pw.TextAlign.right,
-                          style: const pw.TextStyle(
-                            fontSize: 9,
+                          style: pw.TextStyle(
+                            fontSize: 8,
                             color: PdfColors.black,
+                            fontWeight: pw.FontWeight.bold,
                           ),
                         ),
                       ),
@@ -798,7 +827,7 @@ class InvoiceService {
                           _formatCurrency(item.lineTotal),
                           textAlign: pw.TextAlign.right,
                           style: pw.TextStyle(
-                            fontSize: 9,
+                            fontSize: 8,
                             fontWeight: pw.FontWeight.bold,
                             color: PdfColors.black,
                           ),
@@ -810,187 +839,160 @@ class InvoiceService {
               ],
             ),
 
-            pw.SizedBox(height: 24),
+            pw.SizedBox(height: 12),
 
-            // Totals Section
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Expanded(child: pw.SizedBox()),
-                pw.Container(
-                  width: 280,
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-                    children: [
-                      // Total Items
-                      pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                        children: [
-                          pw.Text(
-                            'Total Items',
-                            style: pw.TextStyle(
-                              fontSize: 10,
-                              color: PdfColors.black,
-                            ),
-                          ),
-                          pw.Text(
-                            (order.items?.length ?? 0).toString(),
-                            style: pw.TextStyle(
-                              fontSize: 10,
-                              color: PdfColors.black,
-                              fontWeight: pw.FontWeight.normal,
-                            ),
-                          ),
-                        ],
-                      ),
-                      pw.SizedBox(height: 8),
-                      // Subtotal
-                      if (order.subtotal != null) ...[
-                        pw.Row(
-                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                          children: [
-                            pw.Text(
-                              'Subtotal',
-                              style: pw.TextStyle(
-                                fontSize: 10,
-                                color: PdfColors.black,
-                              ),
-                            ),
-                            pw.Text(
-                              _formatCurrency(order.subtotal!),
-                              style: pw.TextStyle(
-                                fontSize: 10,
-                                color: PdfColors.black,
-                                fontWeight: pw.FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                        pw.SizedBox(height: 8),
-                      ],
-                      // CGST (2.5%)
-                      if (order.gstAmount != null && order.gstAmount! > 0) ...[
-                        pw.Row(
-                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                          children: [
-                            pw.Text(
-                              'CGST (2.5%)',
-                              style: pw.TextStyle(
-                                fontSize: 10,
-                                color: PdfColors.black,
-                              ),
-                            ),
-                            pw.Text(
-                              _formatCurrency(order.gstAmount! / 2),
-                              style: pw.TextStyle(
-                                fontSize: 10,
-                                color: PdfColors.black,
-                                fontWeight: pw.FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                        pw.SizedBox(height: 8),
-                        // SGST (2.5%)
-                        pw.Row(
-                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                          children: [
-                            pw.Text(
-                              'SGST (2.5%)',
-                              style: pw.TextStyle(
-                                fontSize: 10,
-                                color: PdfColors.black,
-                              ),
-                            ),
-                            pw.Text(
-                              _formatCurrency(order.gstAmount! / 2),
-                              style: pw.TextStyle(
-                                fontSize: 10,
-                                color: PdfColors.black,
-                                fontWeight: pw.FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                        pw.SizedBox(height: 8),
-                      ],
-                      // Late Fee
-                      if (order.lateFee != null && order.lateFee! > 0) ...[
-                        pw.Row(
-                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                          children: [
-                            pw.Text(
-                              'Late Fee',
-                              style: pw.TextStyle(
-                                fontSize: 10,
-                                color: PdfColors.black,
-                              ),
-                            ),
-                            pw.Text(
-                              _formatCurrency(order.lateFee!),
-                              style: pw.TextStyle(
-                                fontSize: 10,
-                                color: PdfColors.black,
-                                fontWeight: pw.FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                        pw.SizedBox(height: 8),
-                      ],
-                      // Security Deposit
-                      if (order.securityDeposit != null && order.securityDeposit! > 0) ...[
-                        pw.Row(
-                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                          children: [
-                            pw.Text(
-                              'Security Deposit',
-                              style: pw.TextStyle(
-                                fontSize: 10,
-                                color: PdfColors.black,
-                              ),
-                            ),
-                            pw.Text(
-                              _formatCurrency(order.securityDeposit!),
-                              style: pw.TextStyle(
-                                fontSize: 10,
-                                color: PdfColors.black,
-                                fontWeight: pw.FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                        pw.SizedBox(height: 8),
-                      ],
-                      // Divider
-                      pw.Divider(color: PdfColors.black, height: 1.5),
-                      pw.SizedBox(height: 8),
-                      // Total
-                      pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                        children: [
-                          pw.Text(
-                            'Total Amount',
-                            style: pw.TextStyle(
-                              fontSize: 12,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.black,
-                            ),
-                          ),
-                          pw.Text(
-                            _formatCurrency(order.totalAmount),
-                            style: pw.TextStyle(
-                              fontSize: 12,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.black,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+            // Summary Section - Matching website design
+            pw.Container(
+              margin: const pw.EdgeInsets.only(top: 12),
+              padding: const pw.EdgeInsets.only(top: 8),
+              decoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  top: pw.BorderSide(color: PdfColors.grey300, width: 1),
                 ),
-              ],
+              ),
+              child: pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Expanded(child: pw.SizedBox()),
+                  pw.Container(
+                    width: 240,
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                      children: [
+                        // Total Amount
+                        pw.Container(
+                          padding: const pw.EdgeInsets.symmetric(vertical: 3),
+                          decoration: const pw.BoxDecoration(
+                            border: pw.Border(
+                              bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                            ),
+                          ),
+                          child: pw.Row(
+                            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                            children: [
+                              pw.Text(
+                                'Total Amount',
+                                style: pw.TextStyle(
+                                  fontSize: 6,
+                                  color: PdfColors.black,
+                                  fontWeight: pw.FontWeight.normal,
+                                ),
+                              ),
+                              pw.Text(
+                                _formatCurrency(order.subtotal ?? 0),
+                                style: pw.TextStyle(
+                                  fontSize: 6,
+                                  color: PdfColors.black,
+                                  fontWeight: pw.FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // GST
+                        if (order.gstAmount != null && order.gstAmount! > 0) ...[
+                          pw.Container(
+                            padding: const pw.EdgeInsets.symmetric(vertical: 3),
+                            margin: const pw.EdgeInsets.only(bottom: 3),
+                            decoration: const pw.BoxDecoration(
+                              border: pw.Border(
+                                bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                              ),
+                            ),
+                            child: pw.Row(
+                              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                              children: [
+                                pw.Text(
+                                  'GST (${((order.gstAmount! / (order.subtotal ?? 1)) * 100).toStringAsFixed(2)}%)',
+                                  style: pw.TextStyle(
+                                    fontSize: 6,
+                                    color: PdfColors.black,
+                                    fontWeight: pw.FontWeight.normal,
+                                  ),
+                                ),
+                                pw.Text(
+                                  _formatCurrency(order.gstAmount!),
+                                  style: pw.TextStyle(
+                                    fontSize: 6,
+                                    color: PdfColors.black,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        // Final Amount
+                        pw.Container(
+                          padding: const pw.EdgeInsets.only(top: 6, bottom: 2),
+                          margin: const pw.EdgeInsets.only(top: 4),
+                          decoration: const pw.BoxDecoration(
+                            border: pw.Border(
+                              top: pw.BorderSide(color: PdfColors.black, width: 1),
+                            ),
+                          ),
+                          child: pw.Row(
+                            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                            children: [
+                              pw.Text(
+                                'Final Amount',
+                                style: pw.TextStyle(
+                                  fontSize: 7,
+                                  color: PdfColor.fromInt(0xFFDC2626), // Red color
+                                  fontWeight: pw.FontWeight.bold,
+                                ),
+                              ),
+                              pw.Text(
+                                _formatCurrency((order.subtotal ?? 0) + (order.gstAmount ?? 0)),
+                                style: pw.TextStyle(
+                                  fontSize: 9,
+                                  color: PdfColor.fromInt(0xFFDC2626), // Red color
+                                  fontWeight: pw.FontWeight.bold,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Security Deposit (separate, in green)
+                        if (order.securityDepositAmount != null && order.securityDepositAmount! > 0) ...[
+                          pw.Container(
+                            padding: const pw.EdgeInsets.only(top: 8, bottom: 3),
+                            margin: const pw.EdgeInsets.only(top: 8),
+                            decoration: const pw.BoxDecoration(
+                              border: pw.Border(
+                                top: pw.BorderSide(color: PdfColors.grey300, width: 1),
+                              ),
+                            ),
+                            child: pw.Row(
+                              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                              children: [
+                                pw.Text(
+                                  'Security Deposit',
+                                  style: pw.TextStyle(
+                                    fontSize: 6,
+                                    color: PdfColor.fromInt(0xFF16A34A), // Green color
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+                                pw.Text(
+                                  _formatCurrency(order.securityDepositAmount!),
+                                  style: pw.TextStyle(
+                                    fontSize: 6,
+                                    color: PdfColor.fromInt(0xFF16A34A), // Green color
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             pw.SizedBox(height: 32),
