@@ -367,12 +367,12 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
                                       decoration: BoxDecoration(
                                         color: const Color(
                                           0xFF1F2A7A,
-                                        ).withOpacity(0.1),
+                                        ).withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(8),
                                         border: Border.all(
                                           color: const Color(
                                             0xFF1F2A7A,
-                                          ).withOpacity(0.3),
+                                          ).withValues(alpha: 0.3),
                                         ),
                                       ),
                                       child: Column(
@@ -1120,13 +1120,13 @@ class _QuantityInputFieldState extends State<_QuantityInputField> {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(
-            color: const Color(0xFF1F2A7A).withOpacity(0.5),
+            color: const Color(0xFF1F2A7A).withValues(alpha: 0.5),
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(
-            color: const Color(0xFF1F2A7A).withOpacity(0.5),
+            color: const Color(0xFF1F2A7A).withValues(alpha: 0.5),
           ),
         ),
         focusedBorder: OutlineInputBorder(

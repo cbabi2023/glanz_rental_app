@@ -1056,15 +1056,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                           vertical: 6,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: categoryColor.withOpacity(
-                                            0.12,
+                                          color: categoryColor.withValues(
+                                            alpha: 0.12,
                                           ),
                                           borderRadius: BorderRadius.circular(
                                             8,
                                           ),
                                           border: Border.all(
-                                            color: categoryColor.withOpacity(
-                                              0.3,
+                                            color: categoryColor.withValues(
+                                              alpha: 0.3,
                                             ),
                                           ),
                                         ),
@@ -1555,7 +1555,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                 decoration: BoxDecoration(
                                   color: const Color(
                                     0xFF1F2A7A,
-                                  ).withOpacity(0.1),
+                                  ).withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Row(
@@ -1774,7 +1774,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     overallStatus = 'Partial';
                                     statusBgColor = const Color(
                                       0xFF1F2A7A,
-                                    ).withOpacity(0.1);
+                                    ).withValues(alpha: 0.1);
                                     statusValueColor = const Color(0xFF1F2A7A);
                                   } else if (hasSomeReturns &&
                                       !hasPendingQuantity) {
@@ -2816,7 +2816,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       color: Colors.white,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
+                          color: Colors.black.withValues(alpha: 0.1),
                           blurRadius: 10,
                           offset: const Offset(0, -2),
                         ),
@@ -3106,7 +3106,7 @@ class _OrderItemCardState extends State<_OrderItemCard> {
       context: context,
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: Colors.black.withOpacity(0.85),
+      barrierColor: Colors.black.withValues(alpha: 0.85),
       transitionDuration: const Duration(milliseconds: 300),
       pageBuilder: (context, animation, secondaryAnimation) {
         return _ImagePreviewModal(
@@ -3450,7 +3450,7 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.7),
+                      color: Colors.white.withValues(alpha: 0.7),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: Colors.grey.shade300),
                     ),
@@ -3975,9 +3975,11 @@ class _SecurityDepositRefundSectionState
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
+                        color: statusColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: statusColor.withOpacity(0.2)),
+                        border: Border.all(
+                          color: statusColor.withValues(alpha: 0.2),
+                        ),
                       ),
                       child: Text(
                         statusLabel,
@@ -4537,7 +4539,7 @@ class _ImagePreviewModalState extends State<_ImagePreviewModal> {
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   blurRadius: 30,
                   spreadRadius: 5,
                 ),
@@ -4567,15 +4569,15 @@ class _ImagePreviewModalState extends State<_ImagePreviewModal> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
+                          color: Colors.white.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                           ),
                         ),
                         child: Icon(
                           Icons.image_outlined,
-                          color: const Color(0xFF1F2A7A).withOpacity(0.5),
+                          color: const Color(0xFF1F2A7A).withValues(alpha: 0.5),
                           size: 24,
                         ),
                       ),
@@ -4620,10 +4622,10 @@ class _ImagePreviewModalState extends State<_ImagePreviewModal> {
                       ),
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
+                          color: Colors.white.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                           ),
                         ),
                         child: IconButton(
@@ -4711,7 +4713,9 @@ class _ImagePreviewModalState extends State<_ImagePreviewModal> {
                                       Container(
                                         padding: const EdgeInsets.all(20),
                                         decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.1),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.1,
+                                          ),
                                           shape: BoxShape.circle,
                                         ),
                                         child: Icon(
@@ -4829,23 +4833,23 @@ class _ModernActionButton extends StatelessWidget {
             gradient: isActive
                 ? LinearGradient(
                     colors: [
-                      const Color(0xFF1F2A7A).withOpacity(0.7),
+                      const Color(0xFF1F2A7A).withValues(alpha: 0.7),
                       const Color(0xFF1F2A7A),
                     ],
                   )
                 : null,
-            color: isActive ? null : Colors.white.withOpacity(0.1),
+            color: isActive ? null : Colors.white.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: isActive
-                  ? const Color(0xFF1F2A7A).withOpacity(0.5)
-                  : Colors.white.withOpacity(0.2),
+                  ? const Color(0xFF1F2A7A).withValues(alpha: 0.5)
+                  : Colors.white.withValues(alpha: 0.2),
               width: isActive ? 1.5 : 1,
             ),
             boxShadow: isActive
                 ? [
                     BoxShadow(
-                      color: Color(0xFF1F2A7A).withOpacity(0.3),
+                      color: Color(0xFF1F2A7A).withValues(alpha: 0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -5010,7 +5014,10 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                    colors: [
+                      Colors.black.withValues(alpha: 0.7),
+                      Colors.transparent,
+                    ],
                   ),
                 ),
                 child: SafeArea(
@@ -5021,10 +5028,10 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
+                              color: Colors.white.withValues(alpha: 0.3),
                             ),
                           ),
                           child: IconButton(
@@ -5066,10 +5073,10 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
+                              color: Colors.white.withValues(alpha: 0.3),
                             ),
                           ),
                           child: IconButton(
@@ -5114,7 +5121,10 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                   gradient: LinearGradient(
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
-                    colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                    colors: [
+                      Colors.black.withValues(alpha: 0.7),
+                      Colors.transparent,
+                    ],
                   ),
                 ),
                 child: Row(
@@ -5126,10 +5136,10 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.3),
+                          color: Colors.white.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Row(
@@ -5676,7 +5686,7 @@ class _TimelineItemWidget extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 2,
                   offset: const Offset(0, 1),
                 ),
@@ -5709,10 +5719,10 @@ class _TimelineItemWidget extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: event.color.withOpacity(0.1),
+                      color: event.color.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(
-                        color: event.color.withOpacity(0.3),
+                        color: event.color.withValues(alpha: 0.3),
                         width: 1,
                       ),
                     ),

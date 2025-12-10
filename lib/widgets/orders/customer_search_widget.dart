@@ -136,7 +136,7 @@ class _CustomerSearchWidgetState
               border: Border.all(color: Colors.grey.shade300),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -361,10 +361,10 @@ class _CustomerSearchWidgetState
             margin: const EdgeInsets.only(top: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF1F2A7A).withOpacity(0.1),
+              color: const Color(0xFF1F2A7A).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: const Color(0xFF1F2A7A).withOpacity(0.3),
+                color: const Color(0xFF1F2A7A).withValues(alpha: 0.3),
               ),
             ),
             child: Row(

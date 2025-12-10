@@ -117,7 +117,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 2),
                         ),
@@ -142,7 +142,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           color: Colors.grey.shade700,
                         ),
                         todayDecoration: BoxDecoration(
-                          color: const Color(0xFF1F2A7A).withOpacity(0.2),
+                          color: const Color(0xFF1F2A7A).withValues(alpha: 0.2),
                           shape: BoxShape.circle,
                         ),
                         selectedDecoration: const BoxDecoration(
@@ -243,7 +243,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1F2A7A).withOpacity(0.1),
+                              color: const Color(0xFF1F2A7A).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
@@ -402,10 +402,10 @@ class _OrderCard extends StatelessWidget {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.1),
+                            color: Colors.orange.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
-                              color: Colors.orange.withOpacity(0.3),
+                              color: Colors.orange.withValues(alpha: 0.3),
                               width: 1,
                             ),
                           ),

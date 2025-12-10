@@ -428,7 +428,7 @@ class _EditCustomerScreenState extends ConsumerState<EditCustomerScreen> {
                                   Text(
                                     _customer!.name,
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.9),
+                                      color: Colors.white.withValues(alpha: 0.9),
                                       fontSize: 14,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -760,7 +760,7 @@ class _SectionCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1F2A7A).withOpacity(0.1),
+                    color: const Color(0xFF1F2A7A).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: const Color(0xFF1F2A7A), size: 20),
@@ -989,7 +989,7 @@ class _EditImageUploadCard extends StatelessWidget {
                           end: Alignment.bottomCenter,
                           colors: [
                             Colors.transparent,
-                            Colors.black.withOpacity(0.7),
+                            Colors.black.withValues(alpha: 0.7),
                           ],
                         ),
                         borderRadius: const BorderRadius.only(
@@ -1060,7 +1060,7 @@ class _EditImageUploadCard extends StatelessWidget {
                           end: Alignment.bottomCenter,
                           colors: [
                             Colors.transparent,
-                            Colors.black.withOpacity(0.7),
+                            Colors.black.withValues(alpha: 0.7),
                           ],
                         ),
                         borderRadius: const BorderRadius.only(
@@ -1147,9 +1147,9 @@ class _ImageSourceButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Column(
           children: [

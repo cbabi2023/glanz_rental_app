@@ -162,7 +162,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
+                            color: Colors.black.withValues(alpha: 0.08),
                             blurRadius: 18,
                             offset: const Offset(0, 10),
                           ),
@@ -181,7 +181,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 width: 90,
                                 padding: const EdgeInsets.all(6),
                                 decoration: BoxDecoration(
-                                  color: _brandBlue.withOpacity(0.06),
+                                  color: _brandBlue.withValues(alpha: 0.06),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Image.asset(

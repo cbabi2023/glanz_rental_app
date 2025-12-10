@@ -407,7 +407,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     borderRadius: BorderRadius.circular(18),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: Colors.black.withValues(alpha: 0.08),
                         blurRadius: 24,
                         offset: const Offset(0, 6),
                         spreadRadius: 0,
@@ -872,7 +872,7 @@ class _ModernStatCard extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade200, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -935,7 +935,7 @@ class _ModernStatCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: iconColor.withOpacity(0.1),
+                    color: iconColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(icon, color: iconColor, size: 24),
@@ -980,9 +980,9 @@ class _PremiumStatCard extends StatelessWidget {
         'cardBg': Colors.white,
       },
       'primary': {
-        'iconBg': const Color(0xFF1F2A7A).withOpacity(0.1),
+        'iconBg': const Color(0xFF1F2A7A).withValues(alpha: 0.1),
         'iconColor': const Color(0xFF1F2A7A),
-        'border': const Color(0xFF1F2A7A).withOpacity(0.2),
+        'border': const Color(0xFF1F2A7A).withValues(alpha: 0.2),
         'accent': const Color(0xFF1F2A7A),
         'cardBg': Colors.white,
       },
@@ -1060,13 +1060,13 @@ class _PremiumStatCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            const Color(0xFF1F2A7A).withOpacity(0.1),
-                            const Color(0xFF1F2A7A).withOpacity(0.05),
+                            const Color(0xFF1F2A7A).withValues(alpha: 0.1),
+                            const Color(0xFF1F2A7A).withValues(alpha: 0.05),
                           ],
                         ),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
-                          color: const Color(0xFF1F2A7A).withOpacity(0.2),
+                          color: const Color(0xFF1F2A7A).withValues(alpha: 0.2),
                         ),
                       ),
                       child: Text(
@@ -1345,10 +1345,10 @@ class _ModernOrderCard extends StatelessWidget {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.1),
+                            color: statusColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
-                              color: statusColor.withOpacity(0.3),
+                              color: statusColor.withValues(alpha: 0.3),
                               width: 1,
                             ),
                           ),
@@ -1591,7 +1591,7 @@ class _ModernFilterChipState extends State<_ModernFilterChip>
             boxShadow: widget.selected
                 ? [
                     BoxShadow(
-                      color: const Color(0xFF6366F1).withOpacity(0.3),
+                      color: const Color(0xFF6366F1).withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                       spreadRadius: 0,

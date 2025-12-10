@@ -968,7 +968,7 @@ class _OrdersTabChip extends StatelessWidget {
           color: selected
               ? (isWarning ? warningColor : const Color(0xFF1F2A7A))
               : (isWarning
-                    ? warningColor.withOpacity(0.5)
+                    ? warningColor.withValues(alpha: 0.5)
                     : Colors.grey.shade300),
         ),
       ),
@@ -1447,10 +1447,10 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                                   vertical: 5,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: statusColor.withOpacity(0.12),
+                                  color: statusColor.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
-                                    color: statusColor.withOpacity(0.3),
+                                    color: statusColor.withValues(alpha: 0.3),
                                     width: 1,
                                   ),
                                 ),
@@ -1650,7 +1650,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Color(0xFF1F2A7A).withOpacity(0.1),
+                            color: Color(0xFF1F2A7A).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(

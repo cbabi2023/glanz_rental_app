@@ -206,7 +206,7 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
         if (showOverlay && isLoading)
           Positioned.fill(
             child: Container(
-              color: Colors.white.withOpacity(0.7),
+              color: Colors.white.withValues(alpha: 0.7),
               child: const Center(
                 child: CircularProgressIndicator(
                   valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1F2A7A)),
@@ -393,7 +393,7 @@ class _CustomerFilterChip extends StatelessWidget {
         side: BorderSide(
           color: selected
               ? (isWarning ? warningColor : const Color(0xFF1F2A7A))
-              : (isWarning ? warningColor.withOpacity(0.5) : Colors.grey.shade300),
+              : (isWarning ? warningColor.withValues(alpha: 0.5) : Colors.grey.shade300),
         ),
       ),
     );
@@ -702,7 +702,7 @@ class _CustomerCardItem extends StatelessWidget {
                               child: Container(
                                 padding: const EdgeInsets.all(6),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF25D366).withOpacity(0.1),
+                                  color: const Color(0xFF25D366).withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: const FaIcon(
@@ -747,7 +747,7 @@ class _CustomerCardItem extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: Color(0xFF1F2A7A).withOpacity(0.1),
+                            color: Color(0xFF1F2A7A).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Row(

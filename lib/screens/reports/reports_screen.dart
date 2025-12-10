@@ -344,7 +344,7 @@ class _QuickFilterChip extends StatelessWidget {
     return FilterChip(
       label: Text(label),
       onSelected: (_) => onTap(),
-      selectedColor: const Color(0xFF1F2A7A).withOpacity(0.2),
+      selectedColor: const Color(0xFF1F2A7A).withValues(alpha: 0.2),
       checkmarkColor: const Color(0xFF1F2A7A),
       labelStyle: const TextStyle(
         fontWeight: FontWeight.w500,
@@ -508,7 +508,7 @@ class _StatCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: color.withOpacity(0.2), width: 1.5),
+        side: BorderSide(color: color.withValues(alpha: 0.2), width: 1.5),
       ),
       child: Container(
         decoration: BoxDecoration(
@@ -518,7 +518,7 @@ class _StatCard extends StatelessWidget {
             end: Alignment.bottomRight,
             colors: [
               Colors.white,
-              color.withOpacity(0.03),
+              color.withValues(alpha: 0.03),
             ],
           ),
         ),
@@ -530,7 +530,7 @@ class _StatCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(icon, color: color, size: 24),

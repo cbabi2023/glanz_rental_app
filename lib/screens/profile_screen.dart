@@ -678,7 +678,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                             vertical: 4,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(0.3),
+                                            color: Colors.white.withValues(alpha: 0.3),
                                             borderRadius: BorderRadius.circular(12),
                                           ),
                                           child: Text(
@@ -1356,7 +1356,7 @@ class _SectionCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1F2A7A).withOpacity(0.1),
+                    color: const Color(0xFF1F2A7A).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -1541,7 +1541,7 @@ class _ModernSwitch extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: value ? const Color(0xFF1F2A7A).withOpacity(0.1) : Colors.grey.shade50,
+        color: value ? const Color(0xFF1F2A7A).withValues(alpha: 0.1) : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: value ? const Color(0xFF1F2A7A) : Colors.grey.shade300,
@@ -1618,7 +1618,7 @@ class _ModernRadioOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1F2A7A).withOpacity(0.1) : Colors.grey.shade50,
+          color: isSelected ? const Color(0xFF1F2A7A).withValues(alpha: 0.1) : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? const Color(0xFF1F2A7A) : Colors.grey.shade300,

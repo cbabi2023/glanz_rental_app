@@ -351,7 +351,7 @@ class _BranchCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1F2A7A).withOpacity(0.1),
+                    color: const Color(0xFF1F2A7A).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
