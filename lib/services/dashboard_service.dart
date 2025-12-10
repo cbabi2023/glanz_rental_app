@@ -50,14 +50,16 @@ class DashboardService {
       }
 
       final ordersResponse = await baseQuery;
-      
+
       // Get total orders count
       int totalOrdersCount = ordersResponse is List ? ordersResponse.length : 0;
-      
+
       // Get total customers count (all customers, not filtered by branch)
       int totalCustomersCount = 0;
       try {
-        final customersResponse = await _supabase.from('customers').select('id');
+        final customersResponse = await _supabase
+            .from('customers')
+            .select('id');
         totalCustomersCount = (customersResponse as List).length;
       } catch (e) {
         AppLogger.error('Error fetching customers count', e);
@@ -111,11 +113,14 @@ class DashboardService {
           default:
             break;
         }
-        
+
         // Check if order is late (past end date but not completed/cancelled/partially returned)
-        if (status != 'completed' && status != 'cancelled' && status != 'partially_returned') {
+        if (status != 'completed' &&
+            status != 'cancelled' &&
+            status != 'partially_returned') {
           try {
-            final endStr = map['end_datetime']?.toString() ?? map['end_date']?.toString();
+            final endStr =
+                map['end_datetime']?.toString() ?? map['end_date']?.toString();
             if (endStr != null && endStr.isNotEmpty) {
               final endDate = DateTime.parse(endStr);
               if (now.isAfter(endDate)) {
@@ -141,17 +146,17 @@ class DashboardService {
       );
     } catch (e) {
       AppLogger.error('Error fetching dashboard stats', e);
-        return DashboardStats(
-          active: 0,
-          pendingReturn: 0,
-          todayCollection: 0.0,
-          completed: 0,
-          scheduled: 0,
-          partiallyReturned: 0,
-          totalOrders: 0,
-          totalCustomers: 0,
-          lateReturn: 0,
-        );
+      return DashboardStats(
+        active: 0,
+        pendingReturn: 0,
+        todayCollection: 0.0,
+        completed: 0,
+        scheduled: 0,
+        partiallyReturned: 0,
+        totalOrders: 0,
+        totalCustomers: 0,
+        lateReturn: 0,
+      );
     }
   }
 
@@ -238,7 +243,10 @@ class DashboardService {
           .eq('status', 'partially_returned');
 
       if (branchId != null) {
-        partiallyReturnedQuery = partiallyReturnedQuery.eq('branch_id', branchId);
+        partiallyReturnedQuery = partiallyReturnedQuery.eq(
+          'branch_id',
+          branchId,
+        );
       }
 
       final partiallyReturnedResponse = await partiallyReturnedQuery;
@@ -250,8 +258,10 @@ class DashboardService {
       try {
         final allOrdersResponse = await _supabase.from('orders').select('id');
         totalOrdersCount = (allOrdersResponse as List).length;
-        
-        final allCustomersResponse = await _supabase.from('customers').select('id');
+
+        final allCustomersResponse = await _supabase
+            .from('customers')
+            .select('id');
         totalCustomersCount = (allCustomersResponse as List).length;
       } catch (e) {
         AppLogger.error('Error fetching total counts', e);
@@ -266,7 +276,8 @@ class DashboardService {
         partiallyReturned: partiallyReturnedCount,
         totalOrders: totalOrdersCount,
         totalCustomers: totalCustomersCount,
-        lateReturn: 0, // Late return requires date checking, skip in legacy method
+        lateReturn:
+            0, // Late return requires date checking, skip in legacy method
       );
     } catch (e) {
       AppLogger.error('Error fetching dashboard stats', e);
@@ -317,7 +328,9 @@ class DashboardService {
       }
 
       if (response is! List) {
-        AppLogger.warning('Recent orders query returned non-list: ${response.runtimeType}');
+        AppLogger.warning(
+          'Recent orders query returned non-list: ${response.runtimeType}',
+        );
         return [];
       }
 
@@ -325,7 +338,9 @@ class DashboardService {
           .map((json) {
             try {
               if (json is! Map<String, dynamic>) {
-                AppLogger.warning('Order item is not a map: ${json.runtimeType}');
+                AppLogger.warning(
+                  'Order item is not a map: ${json.runtimeType}',
+                );
                 return null;
               }
               return Order.fromJson(json);

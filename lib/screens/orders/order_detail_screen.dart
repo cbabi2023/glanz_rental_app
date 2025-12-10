@@ -1729,7 +1729,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                       order.damageFeeTotal ?? 0.0;
 
                                   // Debug: Check damage fee total value
-                                  AppLogger.debug('Order Damage Fee Total: ${order.damageFeeTotal}');
+                                  AppLogger.debug(
+                                    'Order Damage Fee Total: ${order.damageFeeTotal}',
+                                  );
                                   AppLogger.debug('Total Damage: $totalDamage');
 
                                   // Determine overall status
@@ -1796,9 +1798,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     statusDetail =
                                         'Damage: ₹${order.damageFeeTotal!.toStringAsFixed(2)}';
                                     statusDetailColor = Colors.red.shade700;
-                                    AppLogger.success('Setting damage detail: $statusDetail');
+                                    AppLogger.success(
+                                      'Setting damage detail: $statusDetail',
+                                    );
                                   } else {
-                                    AppLogger.warning('Damage not shown - damageFeeTotal: ${order.damageFeeTotal}, totalDamage: $totalDamage');
+                                    AppLogger.warning(
+                                      'Damage not shown - damageFeeTotal: ${order.damageFeeTotal}, totalDamage: $totalDamage',
+                                    );
                                   }
 
                                   // 2x2 Grid Layout for symmetric design
