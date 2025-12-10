@@ -1,5 +1,6 @@
 import 'dart:math';
 import '../core/supabase_client.dart';
+import '../core/logger.dart';
 import '../models/order.dart';
 
 /// Item Return Model for processing returns
@@ -129,8 +130,7 @@ class OrdersService {
 
       return Order.fromJson(response);
     } catch (e, stackTrace) {
-      print('Error fetching order $orderId: $e');
-      print('Stack trace: $stackTrace');
+      AppLogger.error('Error fetching order $orderId', e, stackTrace);
       return null;
     }
   }
@@ -408,7 +408,7 @@ class OrdersService {
       }
       return updatedOrder;
     } catch (e) {
-      print('Error updating late fee: $e');
+      AppLogger.error('Error updating late fee', e);
       rethrow;
     }
   }
@@ -500,7 +500,7 @@ class OrdersService {
           params: {'p_order_id': orderId},
         );
       } catch (rpcError) {
-        print('Warning: Failed to recalculate balances: $rpcError');
+        AppLogger.warning('Failed to recalculate balances: $rpcError');
         // Continue even if RPC fails - balances may be calculated by triggers
       }
 
@@ -531,7 +531,7 @@ class OrdersService {
       }
       return updatedOrder;
     } catch (e) {
-      print('Error refunding security deposit: $e');
+      AppLogger.error('Error refunding security deposit', e);
       rethrow;
     }
   }
@@ -601,7 +601,7 @@ class OrdersService {
       }
       return updatedOrder;
     } catch (e) {
-      print('Error collecting outstanding amount: $e');
+      AppLogger.error('Error collecting outstanding amount', e);
       rethrow;
     }
   }
@@ -634,7 +634,7 @@ class OrdersService {
         return {'success': true, 'data': response};
       }
     } catch (e) {
-      print('Error processing order return: $e');
+      AppLogger.error('Error processing order return', e);
       rethrow;
     }
   }
@@ -735,7 +735,7 @@ class OrdersService {
 
       return events;
     } catch (e) {
-      print('Error fetching order timeline: $e');
+      AppLogger.error('Error fetching order timeline', e);
       return [];
     }
   }
@@ -809,7 +809,7 @@ class OrdersService {
           })
           .eq('id', orderId);
     } catch (e) {
-      print('Error updating item quantity: $e');
+      AppLogger.error('Error updating item quantity', e);
       rethrow;
     }
   }
@@ -866,7 +866,7 @@ class OrdersService {
           .update({'damage_fee_total': totalDamage})
           .eq('id', orderId);
     } catch (e) {
-      print('Error updating item damage: $e');
+      AppLogger.error('Error updating item damage', e);
       rethrow;
     }
   }

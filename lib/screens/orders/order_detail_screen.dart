@@ -10,6 +10,7 @@ import '../../models/order.dart';
 import '../../models/order_item.dart';
 import '../../services/invoice_service.dart';
 import '../../services/orders_service.dart';
+import '../../core/logger.dart';
 
 /// Order Detail Screen
 ///
@@ -676,7 +677,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
               );
             }
           } catch (e) {
-            print('Error parsing late fee: $e');
+            AppLogger.error('Error parsing late fee', e);
             // Continue with other updates even if late fee parsing fails
           }
         } else if ((order.lateFee ?? 0) > 0) {
@@ -1728,10 +1729,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                       order.damageFeeTotal ?? 0.0;
 
                                   // Debug: Check damage fee total value
-                                  print(
-                                    '🔍 Order Damage Fee Total: ${order.damageFeeTotal}',
-                                  );
-                                  print('🔍 Total Damage: $totalDamage');
+                                  AppLogger.debug('Order Damage Fee Total: ${order.damageFeeTotal}');
+                                  AppLogger.debug('Total Damage: $totalDamage');
 
                                   // Determine overall status
                                   String overallStatus;
@@ -1797,13 +1796,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     statusDetail =
                                         'Damage: ₹${order.damageFeeTotal!.toStringAsFixed(2)}';
                                     statusDetailColor = Colors.red.shade700;
-                                    print(
-                                      '✅ Setting damage detail: $statusDetail',
-                                    );
+                                    AppLogger.success('Setting damage detail: $statusDetail');
                                   } else {
-                                    print(
-                                      '⚠️ Damage not shown - damageFeeTotal: ${order.damageFeeTotal}, totalDamage: $totalDamage',
-                                    );
+                                    AppLogger.warning('Damage not shown - damageFeeTotal: ${order.damageFeeTotal}, totalDamage: $totalDamage');
                                   }
 
                                   // 2x2 Grid Layout for symmetric design

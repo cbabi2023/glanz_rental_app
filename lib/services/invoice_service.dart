@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:postgrest/postgrest.dart';
 import '../models/order.dart';
 import '../core/supabase_client.dart';
+import '../core/logger.dart';
 
 /// Invoice Service - Updated to match website design
 ///
@@ -20,7 +21,7 @@ class InvoiceService {
     if (imageUrl.isEmpty) return null;
 
     try {
-      print('🔄 Loading product image from URL: $imageUrl');
+      AppLogger.debug('Loading product image from URL: $imageUrl');
       final uri = Uri.parse(imageUrl);
       final client = HttpClient();
       final request = await client.getUrl(uri);
@@ -34,13 +35,15 @@ class InvoiceService {
         client.close();
 
         if (bytes.isNotEmpty) {
-          print('✅ Successfully loaded product image (${bytes.length} bytes)');
+          AppLogger.success(
+            'Successfully loaded product image (${bytes.length} bytes)',
+          );
           return pw.MemoryImage(Uint8List.fromList(bytes));
         }
       }
       client.close();
     } catch (e) {
-      print('❌ Failed to load product image from URL: $e');
+      AppLogger.error('Failed to load product image from URL', e);
     }
 
     return null;
@@ -61,7 +64,7 @@ class InvoiceService {
         final logoUrl = response['company_logo_url']?.toString();
         if (logoUrl != null && logoUrl.isNotEmpty) {
           try {
-            print('🔄 Loading logo from profile URL: $logoUrl');
+            AppLogger.debug('Loading logo from profile URL: $logoUrl');
             final uri = Uri.parse(logoUrl);
             final client = HttpClient();
             final request = await client.getUrl(uri);
@@ -72,21 +75,21 @@ class InvoiceService {
                 bytes.addAll(chunk);
               }
               if (bytes.isNotEmpty) {
-                print(
-                  '✅ Successfully loaded logo from profile URL (${bytes.length} bytes)',
+                AppLogger.success(
+                  'Successfully loaded logo from profile URL (${bytes.length} bytes)',
                 );
                 return pw.MemoryImage(Uint8List.fromList(bytes));
               }
             }
             client.close();
           } catch (e) {
-            print('❌ Failed to load logo from URL: $e');
+            AppLogger.error('Failed to load logo from URL', e);
             // Continue to fallback
           }
         }
       }
     } catch (e) {
-      print('❌ Error fetching logo URL from profile: $e');
+      AppLogger.error('Error fetching logo URL from profile', e);
       // Continue to fallback
     }
 
@@ -103,13 +106,13 @@ class InvoiceService {
         final byteData = await rootBundle.load(path);
         final imageBytes = byteData.buffer.asUint8List();
         if (imageBytes.isNotEmpty && imageBytes.length > 100) {
-          print(
-            '✅ Successfully loaded logo from asset: $path (${imageBytes.length} bytes)',
+          AppLogger.success(
+            'Successfully loaded logo from asset: $path (${imageBytes.length} bytes)',
           );
           return pw.MemoryImage(imageBytes);
         }
       } catch (e) {
-        print('❌ Failed to load logo from asset $path: $e');
+        AppLogger.error('Failed to load logo from asset $path', e);
         continue;
       }
     }
@@ -128,18 +131,18 @@ class InvoiceService {
         if (await file.exists()) {
           final imageBytes = await file.readAsBytes();
           if (imageBytes.isNotEmpty && imageBytes.length > 100) {
-            print(
-              '✅ Successfully loaded logo from file system: $filePath (${imageBytes.length} bytes)',
+            AppLogger.success(
+              'Successfully loaded logo from file system: $filePath (${imageBytes.length} bytes)',
             );
             return pw.MemoryImage(imageBytes);
           }
         }
       }
     } catch (e) {
-      print('❌ Failed to load logo from file system: $e');
+      AppLogger.error('Failed to load logo from file system', e);
     }
 
-    print('⚠️ Warning: Could not load logo image from any source');
+    AppLogger.warning('Could not load logo image from any source');
     return null;
   }
 
@@ -202,7 +205,7 @@ class InvoiceService {
         }
       }
     } catch (e) {
-      print('Error getting UPI ID: $e');
+      AppLogger.error('Error getting UPI ID', e);
     }
     return null;
   }
@@ -212,14 +215,14 @@ class InvoiceService {
     final pdf = pw.Document();
 
     // Load logo - ensure it's loaded before building PDF
-    print('🔄 Loading logo image for PDF...');
+    AppLogger.debug('Loading logo image for PDF...');
     final logoImage = await _loadLogoImage();
     if (logoImage == null) {
-      print(
-        '⚠️ Warning: Logo image is null, PDF will be generated without logo',
+      AppLogger.warning(
+        'Logo image is null, PDF will be generated without logo',
       );
     } else {
-      print('✅ Logo image loaded successfully for PDF generation');
+      AppLogger.success('Logo image loaded successfully for PDF generation');
     }
 
     // Get UPI ID
@@ -271,7 +274,9 @@ class InvoiceService {
           // Prefer current column names (show_terms, show_qr_code)
           final response = await SupabaseService.client
               .from('profiles')
-              .select('company_name, company_address, phone, gst_number, show_terms, show_qr_code')
+              .select(
+                'company_name, company_address, phone, gst_number, show_terms, show_qr_code',
+              )
               .eq('id', user.id)
               .single();
 
@@ -285,7 +290,7 @@ class InvoiceService {
               '';
           phoneNumber = response['phone']?.toString() ?? order.branch?.phone;
           gstNumber = response['gst_number']?.toString();
-          
+
           // Get invoice settings from database (null means not set, default to true)
           final invoiceTermsValue = response['show_terms'] as bool?;
           final invoiceQrValue = response['show_qr_code'] as bool?;
@@ -293,14 +298,18 @@ class InvoiceService {
           showInvoiceQr = invoiceQrValue ?? true;
         } on PostgrestException catch (e) {
           // If columns don't exist, try old names, else fall back to defaults
-          if (e.code == 'PGRST204' || e.message.contains('Could not find') || e.message.contains('column')) {
+          if (e.code == 'PGRST204' ||
+              e.message.contains('Could not find') ||
+              e.message.contains('column')) {
             try {
               final response = await SupabaseService.client
                   .from('profiles')
-                  .select('company_name, company_address, show_invoice_terms, show_invoice_qr')
+                  .select(
+                    'company_name, company_address, show_invoice_terms, show_invoice_qr',
+                  )
                   .eq('id', user.id)
                   .single();
-              
+
               companyName =
                   response['company_name']?.toString() ??
                   order.branch?.name ??
@@ -309,31 +318,33 @@ class InvoiceService {
                   response['company_address']?.toString() ??
                   order.branch?.address ??
                   '';
-              
+
               final invoiceTermsValue = response['show_invoice_terms'] as bool?;
               final invoiceQrValue = response['show_invoice_qr'] as bool?;
               showInvoiceTerms = invoiceTermsValue ?? true;
               showInvoiceQr = invoiceQrValue ?? true;
             } catch (e2) {
-              print('Invoice setting columns missing, using defaults: $e2');
+              AppLogger.warning(
+                'Invoice setting columns missing, using defaults: $e2',
+              );
               // Try to get company info without invoice columns
               try {
-        final response = await SupabaseService.client
-            .from('profiles')
-            .select('company_name, company_address')
-            .eq('id', user.id)
-            .single();
+                final response = await SupabaseService.client
+                    .from('profiles')
+                    .select('company_name, company_address')
+                    .eq('id', user.id)
+                    .single();
 
-        companyName =
-            response['company_name']?.toString() ??
-            order.branch?.name ??
-            'GLANZ COSTUMES';
-        companyAddress =
-            response['company_address']?.toString() ??
-            order.branch?.address ??
-            '';
+                companyName =
+                    response['company_name']?.toString() ??
+                    order.branch?.name ??
+                    'GLANZ COSTUMES';
+                companyAddress =
+                    response['company_address']?.toString() ??
+                    order.branch?.address ??
+                    '';
               } catch (e3) {
-                print('Error getting company details: $e3');
+                AppLogger.error('Error getting company details', e3);
                 companyName = order.branch?.name ?? 'GLANZ COSTUMES';
                 companyAddress = order.branch?.address ?? '';
               }
@@ -350,7 +361,7 @@ class InvoiceService {
         companyAddress = order.branch?.address ?? '';
       }
     } catch (e) {
-      print('Error getting company details: $e');
+      AppLogger.error('Error getting company details', e);
       // Fallback to branch info
       companyName = order.branch?.name ?? 'GLANZ COSTUMES';
       companyAddress = order.branch?.address ?? '';
@@ -368,7 +379,11 @@ class InvoiceService {
     // Calculate rental days
     // Normalize to date only (midnight) to ensure accurate day calculation
     // For rental: same day = 1 day, next day = 1 day (overnight), etc.
-    final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
+    final startDateOnly = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+    );
     final endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
     final daysDifference = endDateOnly.difference(startDateOnly).inDays;
     final rentalDays = daysDifference < 1 ? 1 : daysDifference;
@@ -380,7 +395,7 @@ class InvoiceService {
         .toList();
 
     // Load all product images before building PDF
-    print('🔄 Loading product images for PDF...');
+    AppLogger.debug('Loading product images for PDF...');
     final Map<String, pw.MemoryImage?> productImages = {};
     if (order.items != null && order.items!.isNotEmpty) {
       await Future.wait(
@@ -389,8 +404,8 @@ class InvoiceService {
             final image = await _loadProductImage(item.photoUrl);
             productImages[item.id!] = image;
             if (image != null) {
-              print(
-                '✅ Loaded product image for item: ${item.productName ?? item.id}',
+              AppLogger.success(
+                'Loaded product image for item: ${item.productName ?? item.id}',
               );
             }
           }
@@ -480,7 +495,8 @@ class InvoiceService {
                                   ),
                                 ),
                               ],
-                              if (phoneNumber != null && phoneNumber.isNotEmpty) ...[
+                              if (phoneNumber != null &&
+                                  phoneNumber.isNotEmpty) ...[
                                 pw.SizedBox(height: 2),
                                 pw.Text(
                                   'Phone: $phoneNumber',
@@ -490,7 +506,8 @@ class InvoiceService {
                                   ),
                                 ),
                               ],
-                              if (gstNumber != null && gstNumber.isNotEmpty) ...[
+                              if (gstNumber != null &&
+                                  gstNumber.isNotEmpty) ...[
                                 pw.SizedBox(height: 2),
                                 pw.Text(
                                   'GSTIN: $gstNumber',
@@ -635,7 +652,6 @@ class InvoiceService {
               ),
             ),
 
-
             // Items Table
             pw.Table(
               border: pw.TableBorder(
@@ -653,7 +669,9 @@ class InvoiceService {
               children: [
                 // Header Row
                 pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF9FAFB)),
+                  decoration: const pw.BoxDecoration(
+                    color: PdfColor.fromInt(0xFFF9FAFB),
+                  ),
                   children: [
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(10),
@@ -742,9 +760,11 @@ class InvoiceService {
 
                   final isEven = index % 2 == 0;
                   return pw.TableRow(
-                    decoration: isEven 
-                        ? null 
-                        : const pw.BoxDecoration(color: PdfColor.fromInt(0xFFFAFBFC)),
+                    decoration: isEven
+                        ? null
+                        : const pw.BoxDecoration(
+                            color: PdfColor.fromInt(0xFFFAFBFC),
+                          ),
                     children: [
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(10),
@@ -865,11 +885,15 @@ class InvoiceService {
                           padding: const pw.EdgeInsets.symmetric(vertical: 3),
                           decoration: const pw.BoxDecoration(
                             border: pw.Border(
-                              bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                              bottom: pw.BorderSide(
+                                color: PdfColors.grey300,
+                                width: 0.5,
+                              ),
                             ),
                           ),
                           child: pw.Row(
-                            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment:
+                                pw.MainAxisAlignment.spaceBetween,
                             children: [
                               pw.Text(
                                 'Total Amount',
@@ -891,17 +915,22 @@ class InvoiceService {
                           ),
                         ),
                         // GST
-                        if (order.gstAmount != null && order.gstAmount! > 0) ...[
+                        if (order.gstAmount != null &&
+                            order.gstAmount! > 0) ...[
                           pw.Container(
                             padding: const pw.EdgeInsets.symmetric(vertical: 3),
                             margin: const pw.EdgeInsets.only(bottom: 3),
                             decoration: const pw.BoxDecoration(
                               border: pw.Border(
-                                bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                                bottom: pw.BorderSide(
+                                  color: PdfColors.grey300,
+                                  width: 0.5,
+                                ),
                               ),
                             ),
                             child: pw.Row(
-                              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment:
+                                  pw.MainAxisAlignment.spaceBetween,
                               children: [
                                 pw.Text(
                                   'GST (${((order.gstAmount! / (order.subtotal ?? 1)) * 100).toStringAsFixed(2)}%)',
@@ -929,25 +958,36 @@ class InvoiceService {
                           margin: const pw.EdgeInsets.only(top: 4),
                           decoration: const pw.BoxDecoration(
                             border: pw.Border(
-                              top: pw.BorderSide(color: PdfColors.black, width: 1),
+                              top: pw.BorderSide(
+                                color: PdfColors.black,
+                                width: 1,
+                              ),
                             ),
                           ),
                           child: pw.Row(
-                            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment:
+                                pw.MainAxisAlignment.spaceBetween,
                             children: [
                               pw.Text(
                                 'Final Amount',
                                 style: pw.TextStyle(
                                   fontSize: 7,
-                                  color: PdfColor.fromInt(0xFFDC2626), // Red color
+                                  color: PdfColor.fromInt(
+                                    0xFFDC2626,
+                                  ), // Red color
                                   fontWeight: pw.FontWeight.bold,
                                 ),
                               ),
                               pw.Text(
-                                _formatCurrency((order.subtotal ?? 0) + (order.gstAmount ?? 0)),
+                                _formatCurrency(
+                                  (order.subtotal ?? 0) +
+                                      (order.gstAmount ?? 0),
+                                ),
                                 style: pw.TextStyle(
                                   fontSize: 9,
-                                  color: PdfColor.fromInt(0xFFDC2626), // Red color
+                                  color: PdfColor.fromInt(
+                                    0xFFDC2626,
+                                  ), // Red color
                                   fontWeight: pw.FontWeight.bold,
                                   letterSpacing: -0.3,
                                 ),
@@ -956,23 +996,33 @@ class InvoiceService {
                           ),
                         ),
                         // Security Deposit (separate, in green)
-                        if (order.securityDepositAmount != null && order.securityDepositAmount! > 0) ...[
+                        if (order.securityDepositAmount != null &&
+                            order.securityDepositAmount! > 0) ...[
                           pw.Container(
-                            padding: const pw.EdgeInsets.only(top: 8, bottom: 3),
+                            padding: const pw.EdgeInsets.only(
+                              top: 8,
+                              bottom: 3,
+                            ),
                             margin: const pw.EdgeInsets.only(top: 8),
                             decoration: const pw.BoxDecoration(
                               border: pw.Border(
-                                top: pw.BorderSide(color: PdfColors.grey300, width: 1),
+                                top: pw.BorderSide(
+                                  color: PdfColors.grey300,
+                                  width: 1,
+                                ),
                               ),
                             ),
                             child: pw.Row(
-                              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment:
+                                  pw.MainAxisAlignment.spaceBetween,
                               children: [
                                 pw.Text(
                                   'Security Deposit',
                                   style: pw.TextStyle(
                                     fontSize: 6,
-                                    color: PdfColor.fromInt(0xFF16A34A), // Green color
+                                    color: PdfColor.fromInt(
+                                      0xFF16A34A,
+                                    ), // Green color
                                     fontWeight: pw.FontWeight.bold,
                                   ),
                                 ),
@@ -980,7 +1030,9 @@ class InvoiceService {
                                   _formatCurrency(order.securityDepositAmount!),
                                   style: pw.TextStyle(
                                     fontSize: 6,
-                                    color: PdfColor.fromInt(0xFF16A34A), // Green color
+                                    color: PdfColor.fromInt(
+                                      0xFF16A34A,
+                                    ), // Green color
                                     fontWeight: pw.FontWeight.bold,
                                   ),
                                 ),
@@ -1005,31 +1057,31 @@ class InvoiceService {
                   // Left: Terms & Conditions (only if enabled)
                   if (showInvoiceTerms)
                     pw.Expanded(
-                child: pw.Column(
+                      child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
+                        children: [
+                          pw.Text(
                             'TERMS & CONDITIONS',
-                      style: pw.TextStyle(
-                        fontSize: 10,
-                        fontWeight: pw.FontWeight.bold,
+                            style: pw.TextStyle(
+                              fontSize: 10,
+                              fontWeight: pw.FontWeight.bold,
                               color: PdfColors.black,
-                      ),
-                    ),
+                            ),
+                          ),
                           pw.SizedBox(height: 4),
                           pw.Container(
                             width: double.infinity,
                             height: 1,
-                      color: PdfColors.black,
-                    ),
+                            color: PdfColors.black,
+                          ),
                           pw.SizedBox(height: 8),
                           pw.Row(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
-                    pw.Text(
+                              pw.Text(
                                 '- ',
-                      style: pw.TextStyle(
-                        fontSize: 8,
+                                style: pw.TextStyle(
+                                  fontSize: 8,
                                   color: PdfColors.black,
                                 ),
                               ),
@@ -1041,16 +1093,16 @@ class InvoiceService {
                                     color: PdfColors.black,
                                   ),
                                 ),
-                      ),
+                              ),
                             ],
-                    ),
-                    pw.SizedBox(height: 4),
+                          ),
+                          pw.SizedBox(height: 4),
                           pw.Row(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
-                    pw.Text(
+                              pw.Text(
                                 '- ',
-                      style: pw.TextStyle(
+                                style: pw.TextStyle(
                                   fontSize: 8,
                                   color: PdfColors.black,
                                 ),
@@ -1062,10 +1114,10 @@ class InvoiceService {
                                     fontSize: 8,
                                     color: PdfColors.black,
                                   ),
-                      ),
-                    ),
-                  ],
-                ),
+                                ),
+                              ),
+                            ],
+                          ),
                           pw.SizedBox(height: 4),
                           pw.Row(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -1084,17 +1136,17 @@ class InvoiceService {
                                     fontSize: 8,
                                     color: PdfColors.black,
                                   ),
-              ),
+                                ),
                               ),
                             ],
                           ),
                           pw.SizedBox(height: 4),
                           pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              pw.Text(
                                 '- ',
-                    style: pw.TextStyle(
+                                style: pw.TextStyle(
                                   fontSize: 8,
                                   color: PdfColors.black,
                                 ),
@@ -1106,18 +1158,18 @@ class InvoiceService {
                                     fontSize: 8,
                                     color: PdfColors.black,
                                   ),
-                    ),
+                                ),
                               ),
                             ],
-                  ),
+                          ),
                           pw.SizedBox(height: 4),
                           pw.Row(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
-                    pw.Text(
+                              pw.Text(
                                 '- ',
-                      style: pw.TextStyle(
-                        fontSize: 8,
+                                style: pw.TextStyle(
+                                  fontSize: 8,
                                   color: PdfColors.black,
                                 ),
                               ),
@@ -1129,10 +1181,10 @@ class InvoiceService {
                                     color: PdfColors.black,
                                   ),
                                 ),
-                      ),
+                              ),
                             ],
-                    ),
-                    pw.SizedBox(height: 4),
+                          ),
+                          pw.SizedBox(height: 4),
                           pw.Row(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
@@ -1169,7 +1221,7 @@ class InvoiceService {
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.end,
                         children: [
-                  pw.Text(
+                          pw.Text(
                             'SCAN & PAY',
                             style: pw.TextStyle(
                               fontSize: 10,
@@ -1189,8 +1241,8 @@ class InvoiceService {
                           pw.SizedBox(height: 8),
                           pw.Text(
                             'UPI: $upiId | Amount:',
-                    style: pw.TextStyle(
-                      fontSize: 8,
+                            style: pw.TextStyle(
+                              fontSize: 8,
                               color: PdfColors.black,
                             ),
                             textAlign: pw.TextAlign.right,
@@ -1201,12 +1253,12 @@ class InvoiceService {
                               fontSize: 9,
                               color: PdfColors.black,
                               fontWeight: pw.FontWeight.bold,
-                    ),
+                            ),
                             textAlign: pw.TextAlign.right,
-                  ),
-                ],
-              ),
-            ),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ],

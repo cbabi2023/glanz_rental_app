@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/orders_service.dart';
+import '../../core/logger.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/orders_provider.dart';
 
@@ -969,7 +970,7 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
             lateFee: 0.0, // Don't add late fee again
           );
         } catch (e) {
-          print('Error processing missing items: $e');
+          AppLogger.error('Error processing missing items', e);
           // Show user-friendly error message about database constraint
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

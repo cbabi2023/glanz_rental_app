@@ -1,4 +1,5 @@
 import '../core/supabase_client.dart';
+import '../core/logger.dart';
 import '../models/branch.dart';
 
 /// Branches Service
@@ -30,7 +31,7 @@ class BranchesService {
 
       return Branch.fromJson(response);
     } catch (e) {
-      print('Error fetching branch $branchId: $e');
+      AppLogger.error('Error fetching branch $branchId', e);
       return null;
     }
   }

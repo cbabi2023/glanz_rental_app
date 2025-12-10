@@ -1,4 +1,5 @@
 import '../core/supabase_client.dart';
+import '../core/logger.dart';
 import '../models/user_profile.dart';
 
 /// Staff Service
@@ -37,7 +38,7 @@ class StaffService {
 
       return UserProfile.fromJson(response);
     } catch (e) {
-      print('Error fetching staff member $staffId: $e');
+      AppLogger.error('Error fetching staff member $staffId', e);
       return null;
     }
   }

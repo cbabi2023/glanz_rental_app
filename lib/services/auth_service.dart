@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/supabase_client.dart';
+import '../core/logger.dart';
 import '../models/user_profile.dart';
 
 /// Authentication Service
@@ -69,7 +70,7 @@ class AuthService {
 
       return UserProfile.fromJson(response);
     } catch (e) {
-      print('Error fetching user profile: $e');
+      AppLogger.error('Error fetching user profile', e);
       return null;
     }
   }
@@ -89,7 +90,7 @@ class AuthService {
       final profile = UserProfile.fromJson(response);
       return profile;
     } catch (e) {
-      print('Error fetching user profile with branch: $e');
+      AppLogger.error('Error fetching user profile with branch', e);
       return null;
     }
   }
@@ -150,7 +151,7 @@ class AuthService {
       }
       return updatedProfile;
     } catch (e) {
-      print('Error updating GST settings: $e');
+      AppLogger.error('Error updating GST settings', e);
       rethrow;
     }
   }
@@ -175,7 +176,7 @@ class AuthService {
       }
       return updatedProfile;
     } catch (e) {
-      print('Error updating branch: $e');
+      AppLogger.error('Error updating branch', e);
       rethrow;
     }
   }
@@ -218,7 +219,7 @@ class AuthService {
       }
       return updatedProfile;
     } catch (e) {
-      print('Error updating company details: $e');
+      AppLogger.error('Error updating company details', e);
       rethrow;
     }
   }
@@ -265,7 +266,7 @@ class AuthService {
       }
       return updatedProfile;
     } catch (e) {
-      print('Error updating invoice settings: $e');
+      AppLogger.error('Error updating invoice settings', e);
       rethrow;
     }
   }

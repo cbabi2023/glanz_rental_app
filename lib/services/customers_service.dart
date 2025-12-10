@@ -1,4 +1,5 @@
 import '../core/supabase_client.dart';
+import '../core/logger.dart';
 import '../models/customer.dart';
 
 /// Customers Service
@@ -58,7 +59,7 @@ class CustomersService {
         }
       } catch (e) {
         // If query fails, skip dues calculation - customers will show 0 dues
-        print('Error fetching orders for dues calculation: $e');
+        AppLogger.error('Error fetching orders for dues calculation', e);
       }
 
       // Add due amounts to customers
@@ -105,7 +106,7 @@ class CustomersService {
 
       return Customer.fromJson(response);
     } catch (e) {
-      print('Error fetching customer: $e');
+      AppLogger.error('Error fetching customer', e);
       return null;
     }
   }

@@ -1,4 +1,5 @@
 import '../core/supabase_client.dart';
+import '../core/logger.dart';
 import '../models/dashboard_stats.dart';
 import '../models/order.dart';
 
@@ -59,7 +60,7 @@ class DashboardService {
         final customersResponse = await _supabase.from('customers').select('id');
         totalCustomersCount = (customersResponse as List).length;
       } catch (e) {
-        print('Error fetching customers count: $e');
+        AppLogger.error('Error fetching customers count', e);
       }
 
       if (ordersResponse == null || ordersResponse is! List) {
@@ -139,7 +140,7 @@ class DashboardService {
         lateReturn: lateReturnCount,
       );
     } catch (e) {
-      print('Error fetching dashboard stats: $e');
+      AppLogger.error('Error fetching dashboard stats', e);
         return DashboardStats(
           active: 0,
           pendingReturn: 0,
@@ -253,7 +254,7 @@ class DashboardService {
         final allCustomersResponse = await _supabase.from('customers').select('id');
         totalCustomersCount = (allCustomersResponse as List).length;
       } catch (e) {
-        print('Error fetching total counts: $e');
+        AppLogger.error('Error fetching total counts', e);
       }
 
       return DashboardStats(
@@ -268,7 +269,7 @@ class DashboardService {
         lateReturn: 0, // Late return requires date checking, skip in legacy method
       );
     } catch (e) {
-      print('Error fetching dashboard stats: $e');
+      AppLogger.error('Error fetching dashboard stats', e);
       return DashboardStats(
         active: 0,
         pendingReturn: 0,
@@ -311,12 +312,12 @@ class DashboardService {
       final response = await query;
 
       if (response == null) {
-        print('Recent orders query returned null');
+        AppLogger.warning('Recent orders query returned null');
         return [];
       }
 
       if (response is! List) {
-        print('Recent orders query returned non-list: ${response.runtimeType}');
+        AppLogger.warning('Recent orders query returned non-list: ${response.runtimeType}');
         return [];
       }
 
@@ -324,24 +325,23 @@ class DashboardService {
           .map((json) {
             try {
               if (json is! Map<String, dynamic>) {
-                print('Order item is not a map: ${json.runtimeType}');
+                AppLogger.warning('Order item is not a map: ${json.runtimeType}');
                 return null;
               }
               return Order.fromJson(json);
             } catch (e) {
-              print('Error parsing order: $e');
-              print('Order JSON: $json');
+              AppLogger.error('Error parsing order', e);
+              AppLogger.debug('Order JSON: $json');
               return null;
             }
           })
           .whereType<Order>()
           .toList();
 
-      print('Successfully fetched ${orders.length} recent orders');
+      AppLogger.success('Successfully fetched ${orders.length} recent orders');
       return orders;
     } catch (e, stackTrace) {
-      print('Error fetching recent orders: $e');
-      print('Stack trace: $stackTrace');
+      AppLogger.error('Error fetching recent orders', e, stackTrace);
       return [];
     }
   }

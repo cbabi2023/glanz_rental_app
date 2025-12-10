@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/customers_provider.dart';
 import '../../models/customer.dart';
 import '../../core/supabase_client.dart';
+import '../../core/logger.dart';
 import '../../services/permission_service.dart';
 import 'dart:io';
 
@@ -182,10 +183,10 @@ class _EditCustomerScreenState extends ConsumerState<EditCustomerScreen> {
           .from('customer-id-proofs')
           .getPublicUrl(filePath);
 
-      print('Image uploaded successfully: $url');
+      AppLogger.success('Image uploaded successfully: $url');
       return url;
     } catch (e) {
-      print('Error uploading image: $e');
+      AppLogger.error('Error uploading image', e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/supabase_client.dart';
 import 'core/config.dart';
+import 'core/logger.dart';
 import 'routes/app_router.dart';
 
 void main() async {
@@ -10,10 +11,12 @@ void main() async {
   // Initialize Supabase
   try {
     await SupabaseService.initialize();
-    print('✅ Supabase initialized successfully');
+    AppLogger.success('Supabase initialized successfully');
   } catch (e) {
-    print('❌ Error initializing Supabase: $e');
-    print('⚠️ Please check your Supabase credentials in lib/core/config.dart');
+    AppLogger.error('Error initializing Supabase', e);
+    AppLogger.warning(
+      'Please check your Supabase credentials in lib/core/config.dart',
+    );
   }
 
   runApp(const ProviderScope(child: GlanzRentalApp()));

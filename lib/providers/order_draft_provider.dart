@@ -3,6 +3,7 @@ import '../models/order.dart';
 import '../models/order_item.dart';
 import '../models/user_profile.dart';
 import '../core/supabase_client.dart';
+import '../core/logger.dart';
 import 'auth_provider.dart';
 
 /// Order Draft State
@@ -259,15 +260,15 @@ final superAdminProfileProvider = FutureProvider<UserProfile?>((ref) async {
         .maybeSingle();
     
     if (response == null) {
-      print('No super admin found');
+      AppLogger.warning('No super admin found');
       return null;
     }
     
     final admin = UserProfile.fromJson(response);
-    print('Super admin found: ${admin.fullName}, GST enabled: ${admin.gstEnabled}, GST rate: ${admin.gstRate}');
+    AppLogger.info('Super admin found: ${admin.fullName}, GST enabled: ${admin.gstEnabled}, GST rate: ${admin.gstRate}');
     return admin;
   } catch (e) {
-    print('Error fetching super admin profile: $e');
+    AppLogger.error('Error fetching super admin profile', e);
     return null;
   }
 });
