@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/customers_provider.dart';
 import '../../models/customer.dart';
 import '../../core/supabase_client.dart';
+import '../../services/permission_service.dart';
 import 'dart:io';
 
 /// Edit Customer Screen
@@ -83,6 +84,28 @@ class _EditCustomerScreenState extends ConsumerState<EditCustomerScreen> {
   }
 
   Future<void> _pickImage(ImageSource source, bool isFront) async {
+    // Check and request permission before picking image
+    bool hasPermission = false;
+    
+    if (source == ImageSource.camera) {
+      hasPermission = await PermissionService.isCameraPermissionGranted();
+      if (!hasPermission) {
+        hasPermission = await PermissionService.requestCameraPermission();
+      }
+    } else {
+      hasPermission = await PermissionService.isGalleryPermissionGranted();
+      if (!hasPermission) {
+        hasPermission = await PermissionService.requestGalleryPermission();
+      }
+    }
+    
+    if (!hasPermission) {
+      if (mounted) {
+        _showPermissionDeniedDialog(source == ImageSource.camera ? 'camera' : 'gallery');
+      }
+      return;
+    }
+
     try {
       final picker = ImagePicker();
       final image = await picker.pickImage(
@@ -113,6 +136,31 @@ class _EditCustomerScreenState extends ConsumerState<EditCustomerScreen> {
         );
       }
     }
+  }
+
+  void _showPermissionDeniedDialog(String permissionType) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Permission Required'),
+        content: Text(
+          'This app needs $permissionType permission to add ID proof photos. Please grant the permission in app settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await PermissionService.openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<String?> _uploadImage(File imageFile) async {

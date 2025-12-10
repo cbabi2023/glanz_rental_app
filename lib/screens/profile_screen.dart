@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../providers/branches_provider.dart';
 import '../models/user_profile.dart';
 import '../core/supabase_client.dart';
+import '../services/permission_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 /// Profile Screen
@@ -198,6 +199,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _pickLogoImage(ImageSource source) async {
+    // Check and request permission before picking image
+    bool hasPermission = false;
+    
+    if (source == ImageSource.camera) {
+      hasPermission = await PermissionService.isCameraPermissionGranted();
+      if (!hasPermission) {
+        hasPermission = await PermissionService.requestCameraPermission();
+      }
+    } else {
+      hasPermission = await PermissionService.isGalleryPermissionGranted();
+      if (!hasPermission) {
+        hasPermission = await PermissionService.requestGalleryPermission();
+      }
+    }
+    
+    if (!hasPermission) {
+      if (mounted) {
+        _showPermissionDeniedDialog(source == ImageSource.camera ? 'camera' : 'gallery');
+      }
+      return;
+    }
+
     try {
       final picker = ImagePicker();
       final image = await picker.pickImage(
@@ -222,6 +245,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         );
       }
     }
+  }
+
+  void _showPermissionDeniedDialog(String permissionType) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Permission Required'),
+        content: Text(
+          'This app needs $permissionType permission to change the company logo. Please grant the permission in app settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await PermissionService.openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<String?> _uploadLogo(File imageFile) async {
