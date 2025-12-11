@@ -1,0 +1,15 @@
+# This is an example file. Copy this to key.properties and fill in your actual values.
+# DO NOT commit key.properties to version control!
+
+storePassword=supportta@kottayam
+keyPassword=supportta@kottayam
+keyAlias=upload
+storeFile=../keystore.jks
+
+
+
+
+
+
+
+

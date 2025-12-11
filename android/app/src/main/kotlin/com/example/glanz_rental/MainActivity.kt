@@ -1,4 +1,4 @@
-package com.example.glanz_rental
+package com.supportta.glanz_rental
 
 import io.flutter.embedding.android.FlutterActivity
 
