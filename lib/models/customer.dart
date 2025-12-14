@@ -38,11 +38,31 @@ class Customer {
     }
 
     // Helper function to parse datetime
+    // Handles timezone correctly - Supabase returns datetimes in UTC
+    // If no timezone info, assume UTC (common in databases)
     DateTime? safeDateTime(dynamic value) {
       if (value == null) return null;
-      if (value is DateTime) return value;
+      if (value is DateTime) return value.toLocal(); // Convert to local time
       try {
-        return DateTime.parse(value.toString());
+        final dateString = value.toString().trim();
+        
+        // Check if string has timezone info (ends with Z or has timezone offset)
+        final hasTimezone = dateString.endsWith('Z') || 
+                           RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(dateString);
+        
+        if (hasTimezone) {
+          // Has timezone info - DateTime.parse will handle conversion to local time
+          return DateTime.parse(dateString).toLocal();
+        } else {
+          // No timezone info - assume it's UTC from database
+          final parsed = DateTime.parse(dateString);
+          final utcDate = DateTime.utc(
+            parsed.year, parsed.month, parsed.day,
+            parsed.hour, parsed.minute, parsed.second, 
+            parsed.millisecond, parsed.microsecond
+          );
+          return utcDate.toLocal(); // Convert UTC to local time
+        }
       } catch (e) {
         return null;
       }

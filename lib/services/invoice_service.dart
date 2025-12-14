@@ -184,6 +184,90 @@ class InvoiceService {
     return DateFormat('dd MMM yyyy').format(date);
   }
 
+  /// Helper function to parse datetime with timezone handling
+  static DateTime _parseDateTimeWithTimezone(String dateString) {
+    try {
+      final trimmed = dateString.trim();
+      final hasTimezone = trimmed.endsWith('Z') || 
+                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+      
+      if (hasTimezone) {
+        return DateTime.parse(trimmed).toLocal();
+      } else {
+        final parsed = DateTime.parse(trimmed);
+        final utcDate = DateTime.utc(
+          parsed.year, parsed.month, parsed.day,
+          parsed.hour, parsed.minute, parsed.second, 
+          parsed.millisecond, parsed.microsecond
+        );
+        return utcDate.toLocal();
+      }
+    } catch (e) {
+      return DateTime.now();
+    }
+  }
+
+  /// Build terms & conditions widgets from invoice terms text
+  static List<pw.Widget> _buildInvoiceTerms(String? invoiceTerms) {
+    final termsList = <pw.Widget>[];
+
+    // Default terms if no custom terms provided
+    final defaultTerms = [
+      'All items must be returned in good condition',
+      'Late returns may incur additional charges as per policy',
+      'Damage or loss of items will be charged at replacement cost',
+      'Rental period must be strictly adhered to',
+      'Please contact us for any queries or concerns',
+      'This invoice is valid for accounting and tax purposes',
+    ];
+
+    // Use custom terms if available, otherwise use defaults
+    final termsToDisplay = (invoiceTerms != null && invoiceTerms.trim().isNotEmpty)
+        ? invoiceTerms.split('\n').where((line) => line.trim().isNotEmpty).toList()
+        : defaultTerms;
+
+    for (final term in termsToDisplay) {
+      final cleanTerm = term.trim();
+      // Handle bullet points (starts with - or •)
+      final isBulletPoint = cleanTerm.startsWith('-') || cleanTerm.startsWith('•');
+      final termText = isBulletPoint ? cleanTerm.substring(1).trim() : cleanTerm;
+
+      if (termText.isNotEmpty) {
+        termsList.add(
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                '- ',
+                style: pw.TextStyle(
+                  fontSize: 8,
+                  color: PdfColors.black,
+                ),
+              ),
+              pw.Expanded(
+                child: pw.Text(
+                  termText,
+                  style: pw.TextStyle(
+                    fontSize: 8,
+                    color: PdfColors.black,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        termsList.add(pw.SizedBox(height: 4));
+      }
+    }
+
+    // Remove the last SizedBox
+    if (termsList.isNotEmpty && termsList.last is pw.SizedBox) {
+      termsList.removeLast();
+    }
+
+    return termsList;
+  }
+
   /// Get UPI ID from staff profile or current user profile
   static Future<String?> _getUpiIdForOrder(Order order) async {
     try {
@@ -264,8 +348,9 @@ class InvoiceService {
     String companyAddress = '';
     String? phoneNumber;
     String? gstNumber;
-    bool showInvoiceTerms = true; // Default to true
-    bool showInvoiceQr = true; // Default to true
+    String? invoiceTerms; // Custom terms & conditions text
+    bool showInvoiceTerms = false; // Default to false (matches website)
+    bool showInvoiceQr = false; // Default to false (matches website)
 
     try {
       final user = SupabaseService.currentUser;
@@ -275,7 +360,7 @@ class InvoiceService {
           final response = await SupabaseService.client
               .from('profiles')
               .select(
-                'company_name, company_address, phone, gst_number, show_terms, show_qr_code',
+                'company_name, company_address, phone, gst_number, invoice_terms, show_terms, show_qr_code',
               )
               .eq('id', user.id)
               .single();
@@ -290,12 +375,13 @@ class InvoiceService {
               '';
           phoneNumber = response['phone']?.toString() ?? order.branch?.phone;
           gstNumber = response['gst_number']?.toString();
+          invoiceTerms = response['invoice_terms']?.toString();
 
-          // Get invoice settings from database (null means not set, default to true)
+          // Get invoice settings from database (null means not set, default to false to match website)
           final invoiceTermsValue = response['show_terms'] as bool?;
           final invoiceQrValue = response['show_qr_code'] as bool?;
-          showInvoiceTerms = invoiceTermsValue ?? true;
-          showInvoiceQr = invoiceQrValue ?? true;
+          showInvoiceTerms = invoiceTermsValue ?? false;
+          showInvoiceQr = invoiceQrValue ?? false;
         } on PostgrestException catch (e) {
           // If columns don't exist, try old names, else fall back to defaults
           if (e.code == 'PGRST204' ||
@@ -305,7 +391,7 @@ class InvoiceService {
               final response = await SupabaseService.client
                   .from('profiles')
                   .select(
-                    'company_name, company_address, show_invoice_terms, show_invoice_qr',
+                    'company_name, company_address, invoice_terms, show_invoice_terms, show_invoice_qr',
                   )
                   .eq('id', user.id)
                   .single();
@@ -318,11 +404,12 @@ class InvoiceService {
                   response['company_address']?.toString() ??
                   order.branch?.address ??
                   '';
+              invoiceTerms = response['invoice_terms']?.toString();
 
               final invoiceTermsValue = response['show_invoice_terms'] as bool?;
               final invoiceQrValue = response['show_invoice_qr'] as bool?;
-              showInvoiceTerms = invoiceTermsValue ?? true;
-              showInvoiceQr = invoiceQrValue ?? true;
+              showInvoiceTerms = invoiceTermsValue ?? false;
+              showInvoiceQr = invoiceQrValue ?? false;
             } catch (e2) {
               AppLogger.warning(
                 'Invoice setting columns missing, using defaults: $e2',
@@ -348,8 +435,8 @@ class InvoiceService {
                 companyName = order.branch?.name ?? 'GLANZ COSTUMES';
                 companyAddress = order.branch?.address ?? '';
               }
-              showInvoiceTerms = true;
-              showInvoiceQr = true;
+              showInvoiceTerms = false;
+              showInvoiceQr = false;
             }
           } else {
             rethrow;
@@ -370,11 +457,11 @@ class InvoiceService {
     // Get dates
     final bookingDate = order.createdAt;
     final startDate = order.startDatetime != null
-        ? DateTime.parse(order.startDatetime!)
-        : (DateTime.parse(order.startDate));
+        ? _parseDateTimeWithTimezone(order.startDatetime!)
+        : _parseDateTimeWithTimezone(order.startDate);
     final endDate = order.endDatetime != null
-        ? DateTime.parse(order.endDatetime!)
-        : (DateTime.parse(order.endDate));
+        ? _parseDateTimeWithTimezone(order.endDatetime!)
+        : _parseDateTimeWithTimezone(order.endDate);
 
     // Calculate rental days
     // Normalize to date only (midnight) to ensure accurate day calculation
@@ -1075,137 +1162,8 @@ class InvoiceService {
                             color: PdfColors.black,
                           ),
                           pw.SizedBox(height: 8),
-                          pw.Row(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              pw.Text(
-                                '- ',
-                                style: pw.TextStyle(
-                                  fontSize: 8,
-                                  color: PdfColors.black,
-                                ),
-                              ),
-                              pw.Expanded(
-                                child: pw.Text(
-                                  'All items must be returned in good condition',
-                                  style: pw.TextStyle(
-                                    fontSize: 8,
-                                    color: PdfColors.black,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          pw.SizedBox(height: 4),
-                          pw.Row(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              pw.Text(
-                                '- ',
-                                style: pw.TextStyle(
-                                  fontSize: 8,
-                                  color: PdfColors.black,
-                                ),
-                              ),
-                              pw.Expanded(
-                                child: pw.Text(
-                                  'Late returns may incur additional charges as per policy',
-                                  style: pw.TextStyle(
-                                    fontSize: 8,
-                                    color: PdfColors.black,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          pw.SizedBox(height: 4),
-                          pw.Row(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              pw.Text(
-                                '- ',
-                                style: pw.TextStyle(
-                                  fontSize: 8,
-                                  color: PdfColors.black,
-                                ),
-                              ),
-                              pw.Expanded(
-                                child: pw.Text(
-                                  'Damage or loss of items will be charged at replacement cost',
-                                  style: pw.TextStyle(
-                                    fontSize: 8,
-                                    color: PdfColors.black,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          pw.SizedBox(height: 4),
-                          pw.Row(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              pw.Text(
-                                '- ',
-                                style: pw.TextStyle(
-                                  fontSize: 8,
-                                  color: PdfColors.black,
-                                ),
-                              ),
-                              pw.Expanded(
-                                child: pw.Text(
-                                  'Rental period must be strictly adhered to',
-                                  style: pw.TextStyle(
-                                    fontSize: 8,
-                                    color: PdfColors.black,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          pw.SizedBox(height: 4),
-                          pw.Row(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              pw.Text(
-                                '- ',
-                                style: pw.TextStyle(
-                                  fontSize: 8,
-                                  color: PdfColors.black,
-                                ),
-                              ),
-                              pw.Expanded(
-                                child: pw.Text(
-                                  'Please contact us for any queries or concerns',
-                                  style: pw.TextStyle(
-                                    fontSize: 8,
-                                    color: PdfColors.black,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          pw.SizedBox(height: 4),
-                          pw.Row(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              pw.Text(
-                                '- ',
-                                style: pw.TextStyle(
-                                  fontSize: 8,
-                                  color: PdfColors.black,
-                                ),
-                              ),
-                              pw.Expanded(
-                                child: pw.Text(
-                                  'This invoice is valid for accounting and tax purposes',
-                                  style: pw.TextStyle(
-                                    fontSize: 8,
-                                    color: PdfColors.black,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                          // Build terms dynamically from invoice_terms or use defaults
+                          ..._buildInvoiceTerms(invoiceTerms),
                         ],
                       ),
                     ),

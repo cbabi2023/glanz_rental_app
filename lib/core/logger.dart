@@ -26,9 +26,12 @@ class AppLogger {
   }
 
   /// Log warning messages
-  static void warning(String message) {
+  static void warning(String message, [Object? error]) {
     if (kDebugMode) {
       debugPrint('⚠️ [WARNING] $message');
+      if (error != null) {
+        debugPrint('   Error: $error');
+      }
     }
   }
 

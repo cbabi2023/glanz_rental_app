@@ -42,6 +42,29 @@ class ItemReturn {
 class OrdersService {
   final _supabase = SupabaseService.client;
   
+  /// Helper function to parse datetime with timezone handling
+  static DateTime _parseDateTimeWithTimezone(String dateString) {
+    try {
+      final trimmed = dateString.trim();
+      final hasTimezone = trimmed.endsWith('Z') || 
+                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+      
+      if (hasTimezone) {
+        return DateTime.parse(trimmed).toLocal();
+      } else {
+        final parsed = DateTime.parse(trimmed);
+        final utcDate = DateTime.utc(
+          parsed.year, parsed.month, parsed.day,
+          parsed.hour, parsed.minute, parsed.second, 
+          parsed.millisecond, parsed.microsecond
+        );
+        return utcDate.toLocal();
+      }
+    } catch (e) {
+      return DateTime.now();
+    }
+  }
+  
   /// Generate auto invoice number in format: GLAORD-YYYYMMDD-XXXX
   String generateInvoiceNumber() {
     final now = DateTime.now();
@@ -728,8 +751,8 @@ class OrdersService {
 
       // Sort by created_at ascending (oldest first for timeline flow)
       events.sort((a, b) {
-        final dateA = DateTime.parse(a['created_at'] as String);
-        final dateB = DateTime.parse(b['created_at'] as String);
+        final dateA = _parseDateTimeWithTimezone(a['created_at'] as String);
+        final dateB = _parseDateTimeWithTimezone(b['created_at'] as String);
         return dateA.compareTo(dateB);
       });
 

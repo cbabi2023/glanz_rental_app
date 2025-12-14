@@ -7,6 +7,10 @@ import '../../models/order_item.dart';
 import '../../providers/order_draft_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/orders_provider.dart';
+import '../../providers/branches_provider.dart';
+import '../../core/supabase_client.dart';
+import '../../core/logger.dart';
+import '../../models/branch.dart';
 import '../../widgets/orders/customer_search_widget.dart';
 import '../../widgets/orders/order_datetime_widget.dart';
 import '../../widgets/orders/order_items_widget.dart';
@@ -27,6 +31,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   final _scrollController = ScrollController();
   final _invoiceNumberController = TextEditingController();
   Customer? _selectedCustomer;
+  String? _selectedBranch; // For super admin branch selection
   bool _isLoading = false;
   bool _invoiceNumberInitialized = false;
 
@@ -36,7 +41,57 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     // Generate and display auto invoice number when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeInvoiceNumber();
+      _initializeBranchSelection();
     });
+  }
+
+  void _initializeBranchSelection() {
+    // Set default branch for super admin (matches website logic - lines 116-118)
+    // This runs on mount, but actual default selection happens when branches load
+    // to ensure we have the branches list available
+  }
+
+  void _setDefaultBranch(List<Branch> branches, UserProfile? userProfile) {
+    // If branch not selected yet, set default (matches website behavior)
+    // This ensures a branch is always selected by default
+    if (_selectedBranch == null && branches.isNotEmpty && userProfile?.isSuperAdmin == true) {
+      // Priority (matches website logic):
+      // 1. user.branch_id if exists and valid
+      // 2. Main branch (is_main = true) if exists
+      // 3. First branch in list
+      String? defaultBranchId;
+      
+      // Priority 1: User's assigned branch_id
+      if (userProfile?.branchId != null) {
+        final userBranchExists = branches.any((b) => b.id == userProfile!.branchId);
+        if (userBranchExists) {
+          defaultBranchId = userProfile!.branchId;
+        }
+      }
+      
+      // Priority 2: Main branch (is_main = true) if user branch not found
+      if (defaultBranchId == null) {
+        try {
+          final mainBranch = branches.firstWhere((b) => b.isMain == true);
+          defaultBranchId = mainBranch.id;
+        } catch (_) {
+          // No main branch found, will use first branch below
+        }
+      }
+      
+      // Priority 3: First branch as fallback
+      if (defaultBranchId == null && branches.isNotEmpty) {
+        defaultBranchId = branches.first.id;
+      }
+      
+      if (defaultBranchId != null && mounted) {
+        final selectedBranchObj = branches.firstWhere((b) => b.id == defaultBranchId);
+        setState(() {
+          _selectedBranch = defaultBranchId;
+        });
+        AppLogger.debug('Default branch selected: $defaultBranchId (${selectedBranchObj.name}, isMain: ${selectedBranchObj.isMain})');
+      }
+    }
   }
 
   void _initializeInvoiceNumber() {
@@ -73,7 +128,25 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
   Future<void> _handleSaveOrder() async {
     final draft = ref.read(orderDraftProvider);
-    final userProfile = ref.read(userProfileProvider).value;
+    
+    // Get user profile - wait for it to be available (matches website logic)
+    final authService = ref.read(authServiceProvider);
+    UserProfile? userProfile;
+    try {
+      userProfile = await authService.getUserProfile();
+      AppLogger.debug('User profile loaded: id=${userProfile?.id}, branchId=${userProfile?.branchId}, role=${userProfile?.role.value}');
+    } catch (e) {
+      AppLogger.error('Failed to load user profile', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load user profile: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
     // Validation
     if (_selectedCustomer == null || _selectedCustomer!.id.isEmpty) {
@@ -109,15 +182,45 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
     // Invoice number is optional - will be auto-generated if empty
 
-    if (userProfile?.branchId == null || userProfile?.id == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('User information missing'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    // Validate user information (matches website logic - line 190)
+    if (userProfile == null || userProfile.id.isEmpty) {
+      AppLogger.warning('User information not found: userProfile=$userProfile, id=${userProfile?.id}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('User information not found. Please ensure you are logged in.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       return;
     }
+
+    // Determine effective branch ID (matches website logic - lines 198-200)
+    // For super admin: use selected branch or their default branch
+    // For other roles: use their assigned branch_id
+    final effectiveBranchId = userProfile.isSuperAdmin
+        ? (_selectedBranch ?? userProfile.branchId)
+        : userProfile.branchId;
+
+    // Validate branch ID exists (matches website logic - lines 202-205)
+    if (effectiveBranchId == null || effectiveBranchId.isEmpty) {
+      AppLogger.warning('Branch information missing: userId=${userProfile.id}, role=${userProfile.role.value}, branchId=${userProfile.branchId}, selectedBranch=$_selectedBranch');
+      if (mounted) {
+        final errorMessage = userProfile.isSuperAdmin
+            ? 'Please select a branch before creating an order.'
+            : 'Branch information is required to create an order. Please ensure you have a branch assigned in your profile.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    AppLogger.debug('Using branch ID: $effectiveBranchId for user: ${userProfile.id}');
 
     // Validate all items have required fields
     final invalidItems = draft.items.where(
@@ -144,13 +247,25 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       final subtotal = ref.read(orderSubtotalProvider);
 
       // If staff or branch admin, use super admin GST settings (await to ensure we have it before submission)
-      UserProfile? gstProfile = ref.read(userProfileProvider).value;
-      if (gstProfile?.isStaff == true || gstProfile?.isBranchAdmin == true) {
+      UserProfile? gstProfile = userProfile;
+      if (gstProfile.isStaff == true || gstProfile.isBranchAdmin == true) {
         try {
-          gstProfile = await ref.read(superAdminProfileProvider.future);
+          // Get super admin profile - need to fetch directly since provider async handling is complex
+          final supabase = SupabaseService.client;
+          final superAdminResponse = await supabase
+              .from('profiles')
+              .select()
+              .eq('role', 'super_admin')
+              .limit(1)
+              .maybeSingle();
+          
+          if (superAdminResponse != null) {
+            gstProfile = UserProfile.fromJson(superAdminResponse);
+          }
+          // If super admin not found, gstProfile remains as userProfile (fallback)
         } catch (_) {
           // fallback to user profile if super admin lookup fails
-          gstProfile = ref.read(userProfileProvider).value;
+          gstProfile = userProfile;
         }
       }
 
@@ -179,8 +294,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         };
       }).toList();
 
-      // Create order
-      final branchId = userProfile!.branchId!;
+      // Create order - use effective branch ID (already validated above)
+      final branchId = effectiveBranchId;
       final invoiceNumber = _invoiceNumberController.text.trim();
       await ordersService.createOrder(
         branchId: branchId,
@@ -362,6 +477,124 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Branch Selection (Super Admin Only) - matches website
+                  if (userProfile?.isSuperAdmin == true) ...[
+                    _SectionCard(
+                      title: 'Select Branch',
+                      icon: Icons.store,
+                      isRequired: true,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Choose which branch this order belongs to',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          ref.watch(branchesProvider).when(
+                            data: (branches) {
+                              // Set default branch when branches load (matches website behavior)
+                              // Ensures a branch is always selected by default
+                              final currentUserProfile = ref.read(userProfileProvider).value;
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                _setDefaultBranch(branches, currentUserProfile);
+                              });
+                              
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  DropdownButtonFormField<String>(
+                                    value: _selectedBranch,
+                                    decoration: InputDecoration(
+                                      labelText: 'Branch',
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      prefixIcon: const Icon(Icons.store),
+                                    ),
+                                    items: [
+                                      const DropdownMenuItem<String>(
+                                        value: null,
+                                        child: Text('-- Select a branch --'),
+                                      ),
+                                      ...branches.map((branch) {
+                                        return DropdownMenuItem<String>(
+                                          value: branch.id,
+                                          child: Text(
+                                            '${branch.name}${branch.isMain == true ? ' (Main)' : ''}',
+                                          ),
+                                        );
+                                      }),
+                                    ],
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _selectedBranch = value;
+                                      });
+                                    },
+                                  ),
+                                  if (_selectedBranch != null) ...[
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: Colors.green.shade200,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.check_circle,
+                                            color: Colors.green.shade700,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'Branch selected: ${branches.firstWhere((b) => b.id == _selectedBranch).name}',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.green.shade700,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              );
+                            },
+                            loading: () => const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(20),
+                                child: CircularProgressIndicator(),
+                              ),
+                            ),
+                            error: (error, stack) => Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'Error loading branches: ${error.toString()}',
+                                style: TextStyle(color: Colors.red.shade700),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
                   // Customer Selection Card
                   _SectionCard(
                     title: 'Customer Information',
@@ -582,11 +815,13 @@ class _SectionCard extends StatelessWidget {
   final String title;
   final IconData icon;
   final Widget child;
+  final bool isRequired;
 
   const _SectionCard({
     required this.title,
     required this.icon,
     required this.child,
+    this.isRequired = false,
   });
 
   @override
@@ -627,6 +862,25 @@ class _SectionCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (isRequired)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1F2A7A),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'Required',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 20),

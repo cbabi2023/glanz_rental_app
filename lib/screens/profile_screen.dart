@@ -29,11 +29,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _upiIdController = TextEditingController();
   final _companyNameController = TextEditingController();
   final _companyAddressController = TextEditingController();
+  final _invoiceTermsController = TextEditingController();
 
   bool _gstEnabled = false;
   bool _gstIncluded = false;
-  bool _showInvoiceTerms = true; // Show terms & conditions in invoice
-  bool _showInvoiceQr = true; // Show QR code in invoice
+  bool _showInvoiceTerms = false; // Show terms & conditions in invoice
+  bool _showInvoiceQr = false; // Show QR code in invoice
   bool _isLoadingPassword = false;
   bool _isLoadingGst = false;
   bool _isLoadingBranch = false;
@@ -54,6 +55,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _upiIdController.dispose();
     _companyNameController.dispose();
     _companyAddressController.dispose();
+    _invoiceTermsController.dispose();
     super.dispose();
   }
 
@@ -66,10 +68,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _companyNameController.text = profile.companyName ?? '';
     _companyAddressController.text = profile.companyAddress ?? '';
     _logoPreviewUrl = profile.companyLogoUrl;
-    // Read invoice settings from profile (null means not set, default to true for backward compatibility)
-    // But if explicitly false, use false
-    _showInvoiceTerms = profile.showInvoiceTerms ?? true;
-    _showInvoiceQr = profile.showInvoiceQr ?? true;
+    _invoiceTermsController.text = profile.invoiceTerms ?? '';
+    // Read invoice settings from profile (null means not set, default to false to match website)
+    _showInvoiceTerms = profile.showInvoiceTerms ?? false;
+    _showInvoiceQr = profile.showInvoiceQr ?? false;
     _fieldsInitialized = true;
   }
 
@@ -353,12 +355,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     try {
       final authService = ref.read(authServiceProvider);
       await authService.updateInvoiceSettings(
+        invoiceTerms: _invoiceTermsController.text,
         showInvoiceTerms: _showInvoiceTerms,
         showInvoiceQr: _showInvoiceQr,
       );
 
+      // Invalidate and wait for profile refresh
       ref.invalidate(userProfileProvider);
       _fieldsInitialized = false;
+      
+      // Force re-initialization from fresh profile data
+      final refreshedProfile = await ref.read(userProfileProvider.future);
+      if (refreshedProfile != null && mounted) {
+        _initializeFields(refreshedProfile);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1101,6 +1111,75 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Invoice Terms Text Field
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.description_outlined,
+                                        size: 18,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Terms & Conditions (Optional)',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: _invoiceTermsController,
+                                    maxLines: 6,
+                                    decoration: InputDecoration(
+                                      hintText: 'Enter custom terms and conditions for invoices\n\nExample:\n• All items must be returned in good condition\n• Late returns may incur additional charges\n• Damage or loss will be charged at replacement cost',
+                                      hintStyle: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey.shade400,
+                                        height: 1.5,
+                                      ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide(color: Colors.grey.shade300),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide(color: Colors.grey.shade300),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: const BorderSide(
+                                          color: Color(0xFF1F2A7A),
+                                          width: 2,
+                                        ),
+                                      ),
+                                      contentPadding: const EdgeInsets.all(16),
+                                      filled: true,
+                                      fillColor: Colors.grey.shade50,
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade900,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Custom terms will appear in invoice PDFs when enabled',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
                               _ModernSwitch(
                                 value: _showInvoiceTerms,
                                 onChanged: (value) {

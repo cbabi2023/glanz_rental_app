@@ -226,6 +226,7 @@ class AuthService {
 
   /// Update invoice settings
   Future<UserProfile> updateInvoiceSettings({
+    String? invoiceTerms,
     required bool showInvoiceTerms,
     required bool showInvoiceQr,
   }) async {
@@ -240,6 +241,7 @@ class AuthService {
         await _supabase
             .from('profiles')
             .update({
+              'invoice_terms': invoiceTerms?.trim().isEmpty ?? true ? null : invoiceTerms?.trim(),
               'show_terms': showInvoiceTerms,
               'show_qr_code': showInvoiceQr,
             })
@@ -250,6 +252,7 @@ class AuthService {
           await _supabase
               .from('profiles')
               .update({
+                'invoice_terms': invoiceTerms?.trim().isEmpty ?? true ? null : invoiceTerms?.trim(),
                 'show_invoice_terms': showInvoiceTerms,
                 'show_invoice_qr': showInvoiceQr,
               })

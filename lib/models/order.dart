@@ -126,17 +126,32 @@ class Order {
     }
 
     // Helper function to parse datetime string
-    // Handles timezone correctly - if string is UTC (ends with Z) or has timezone, 
-    // it will be converted to local time. If no timezone, treats as local.
+    // Handles timezone correctly - Supabase returns datetimes in UTC (with Z or timezone offset)
+    // If no timezone info, assume UTC (common in databases)
     DateTime safeDateTime(dynamic value) {
       if (value == null) return DateTime.now();
-      if (value is DateTime) return value;
+      if (value is DateTime) return value.toLocal(); // Convert to local time
       try {
-        final dateString = value.toString();
-        // Parse the datetime string
-        DateTime parsed = DateTime.parse(dateString);
-        // DateTime.parse already handles timezone conversion correctly
-        return parsed;
+        final dateString = value.toString().trim();
+        
+        // Check if string has timezone info (ends with Z or has timezone offset like +05:30, -05:00)
+        final hasTimezone = dateString.endsWith('Z') || 
+                           RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(dateString);
+        
+        if (hasTimezone) {
+          // Has timezone info - DateTime.parse will handle conversion to local time
+          return DateTime.parse(dateString).toLocal();
+        } else {
+          // No timezone info - assume it's UTC from database
+          // Parse the components and create as UTC, then convert to local
+          final parsed = DateTime.parse(dateString);
+          final utcDate = DateTime.utc(
+            parsed.year, parsed.month, parsed.day,
+            parsed.hour, parsed.minute, parsed.second, 
+            parsed.millisecond, parsed.microsecond
+          );
+          return utcDate.toLocal(); // Convert UTC to local time
+        }
       } catch (e) {
         return DateTime.now();
       }
@@ -300,6 +315,29 @@ class Order {
     };
   }
 
+  /// Helper function to parse datetime string with timezone handling
+  static DateTime _parseDateTimeWithTimezone(String dateString) {
+    try {
+      final trimmed = dateString.trim();
+      final hasTimezone = trimmed.endsWith('Z') || 
+                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+      
+      if (hasTimezone) {
+        return DateTime.parse(trimmed).toLocal();
+      } else {
+        final parsed = DateTime.parse(trimmed);
+        final utcDate = DateTime.utc(
+          parsed.year, parsed.month, parsed.day,
+          parsed.hour, parsed.minute, parsed.second, 
+          parsed.millisecond, parsed.microsecond
+        );
+        return utcDate.toLocal();
+      }
+    } catch (e) {
+      return DateTime.now();
+    }
+  }
+
   // Helper methods
   bool get isScheduled => status == OrderStatus.scheduled;
   bool get isActive => status == OrderStatus.active;
@@ -351,7 +389,7 @@ class Order {
     if (isActive) {
       // Use start_datetime as the timestamp when rental became active
       final activeSince = startDatetime != null 
-        ? DateTime.parse(startDatetime!)
+        ? Order._parseDateTimeWithTimezone(startDatetime!)
         : createdAt;
         
       final now = DateTime.now();

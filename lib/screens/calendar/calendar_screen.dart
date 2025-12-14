@@ -372,6 +372,29 @@ class _OrderCard extends StatelessWidget {
 
   const _OrderCard({required this.order});
 
+  // Helper function to parse datetime with timezone handling
+  DateTime _parseDateTimeWithTimezone(String dateString) {
+    try {
+      final trimmed = dateString.trim();
+      final hasTimezone = trimmed.endsWith('Z') || 
+                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+      
+      if (hasTimezone) {
+        return DateTime.parse(trimmed).toLocal();
+      } else {
+        final parsed = DateTime.parse(trimmed);
+        final utcDate = DateTime.utc(
+          parsed.year, parsed.month, parsed.day,
+          parsed.hour, parsed.minute, parsed.second, 
+          parsed.millisecond, parsed.microsecond
+        );
+        return utcDate.toLocal();
+      }
+    } catch (e) {
+      return DateTime.now();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -438,7 +461,7 @@ class _OrderCard extends StatelessWidget {
                   if (order.startDatetime != null)
                     Text(
                       DateFormat('hh:mm a').format(
-                        DateTime.parse(order.startDatetime!),
+                        _parseDateTimeWithTimezone(order.startDatetime!),
                       ),
                       style: TextStyle(
                         fontSize: 12,

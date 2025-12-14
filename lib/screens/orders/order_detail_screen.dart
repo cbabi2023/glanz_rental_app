@@ -40,6 +40,29 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _itemsSectionKey = GlobalKey();
 
+  // Helper function to parse datetime with timezone handling
+  DateTime _parseDateTimeWithTimezone(String dateString) {
+    try {
+      final trimmed = dateString.trim();
+      final hasTimezone = trimmed.endsWith('Z') || 
+                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+      
+      if (hasTimezone) {
+        return DateTime.parse(trimmed).toLocal();
+      } else {
+        final parsed = DateTime.parse(trimmed);
+        final utcDate = DateTime.utc(
+          parsed.year, parsed.month, parsed.day,
+          parsed.hour, parsed.minute, parsed.second, 
+          parsed.millisecond, parsed.microsecond
+        );
+        return utcDate.toLocal();
+      }
+    } catch (e) {
+      return DateTime.now();
+    }
+  }
+
   // State for item return management
   final Map<String, bool> _itemCheckboxes = {}; // itemId -> isChecked
   final Map<String, int> _returnedQuantities =
@@ -1103,7 +1126,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                       const SizedBox(height: 4),
                                       if (order.bookingDate != null) ...[
                                         Text(
-                                          'Booking Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(order.bookingDate!))}',
+                                          'Booking Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(_parseDateTimeWithTimezone(order.bookingDate!))}',
                                           style: TextStyle(
                                             fontSize: 13,
                                             color: Colors.grey.shade600,
@@ -5192,6 +5215,28 @@ class _OrderTimelineWidget extends StatefulWidget {
 }
 
 class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
+  // Helper function to parse datetime with timezone handling
+  DateTime _parseDateTimeWithTimezone(String dateString) {
+    try {
+      final trimmed = dateString.trim();
+      final hasTimezone = trimmed.endsWith('Z') || 
+                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+      
+      if (hasTimezone) {
+        return DateTime.parse(trimmed).toLocal();
+      } else {
+        final parsed = DateTime.parse(trimmed);
+        final utcDate = DateTime.utc(
+          parsed.year, parsed.month, parsed.day,
+          parsed.hour, parsed.minute, parsed.second, 
+          parsed.millisecond, parsed.microsecond
+        );
+        return utcDate.toLocal();
+      }
+    } catch (e) {
+      return DateTime.now();
+    }
+  }
   List<Map<String, dynamic>>? _timelineEvents;
   bool _isLoading = true;
   String? _error;
@@ -5454,7 +5499,7 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
 
   String _formatDateTime12Hour(String dateString) {
     try {
-      final date = DateTime.parse(dateString);
+      final date = _parseDateTimeWithTimezone(dateString);
       final hour = date.hour;
       final minute = date.minute;
       final period = hour >= 12 ? 'PM' : 'AM';

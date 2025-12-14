@@ -44,6 +44,29 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
   DateTime? _customStartDate;
   DateTime? _customEndDate;
 
+  // Helper function to parse datetime with timezone handling
+  DateTime _parseDateTimeWithTimezone(String dateString) {
+    try {
+      final trimmed = dateString.trim();
+      final hasTimezone = trimmed.endsWith('Z') || 
+                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+      
+      if (hasTimezone) {
+        return DateTime.parse(trimmed).toLocal();
+      } else {
+        final parsed = DateTime.parse(trimmed);
+        final utcDate = DateTime.utc(
+          parsed.year, parsed.month, parsed.day,
+          parsed.hour, parsed.minute, parsed.second, 
+          parsed.millisecond, parsed.microsecond
+        );
+        return utcDate.toLocal();
+      }
+    } catch (e) {
+      return DateTime.now();
+    }
+  }
+
   DateTime? _startForFilter(_DateFilter filter) {
     if (filter == _DateFilter.allTime) return null;
 
@@ -704,7 +727,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
 
     try {
       final endStr = order.endDatetime ?? order.endDate;
-      endDate = DateTime.parse(endStr);
+      endDate = _parseDateTimeWithTimezone(endStr);
     } catch (e) {
       // If parsing fails, treat as ongoing
       return _OrderCategory.ongoing;
@@ -1139,6 +1162,29 @@ class _OrderCardItem extends ConsumerStatefulWidget {
 class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
   bool _isUpdating = false;
 
+  // Helper function to parse datetime with timezone handling
+  DateTime _parseDateTimeWithTimezone(String dateString) {
+    try {
+      final trimmed = dateString.trim();
+      final hasTimezone = trimmed.endsWith('Z') || 
+                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+      
+      if (hasTimezone) {
+        return DateTime.parse(trimmed).toLocal();
+      } else {
+        final parsed = DateTime.parse(trimmed);
+        final utcDate = DateTime.utc(
+          parsed.year, parsed.month, parsed.day,
+          parsed.hour, parsed.minute, parsed.second, 
+          parsed.millisecond, parsed.microsecond
+        );
+        return utcDate.toLocal();
+      }
+    } catch (e) {
+      return DateTime.now();
+    }
+  }
+
   _OrderCategory _getOrderCategory(Order order) {
     final status = order.status;
 
@@ -1174,7 +1220,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
 
     try {
       final endStr = order.endDatetime ?? order.endDate;
-      endDate = DateTime.parse(endStr);
+      endDate = _parseDateTimeWithTimezone(endStr);
     } catch (e) {
       // If parsing fails, treat as ongoing
       return _OrderCategory.ongoing;
@@ -1202,14 +1248,14 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
 
     try {
       final startStr = order.startDatetime ?? order.startDate;
-      startDate = DateTime.parse(startStr);
+      startDate = _parseDateTimeWithTimezone(startStr);
     } catch (e) {
       return {'error': 'Invalid start date'};
     }
 
     try {
       final endStr = order.endDatetime ?? order.endDate;
-      endDate = DateTime.parse(endStr);
+      endDate = _parseDateTimeWithTimezone(endStr);
     } catch (e) {
       return {'error': 'Invalid end date'};
     }

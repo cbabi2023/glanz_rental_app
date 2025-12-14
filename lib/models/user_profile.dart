@@ -16,6 +16,7 @@ class UserProfile {
   final String? companyName;
   final String? companyAddress;
   final String? companyLogoUrl;
+  final String? invoiceTerms; // Custom terms & conditions text for invoices
   final bool? showInvoiceTerms; // Show terms & conditions in invoice PDF
   final bool? showInvoiceQr; // Show QR code in invoice PDF
 
@@ -34,6 +35,7 @@ class UserProfile {
     this.companyName,
     this.companyAddress,
     this.companyLogoUrl,
+    this.invoiceTerms,
     this.showInvoiceTerms,
     this.showInvoiceQr,
   });
@@ -60,6 +62,7 @@ class UserProfile {
       companyName: json['company_name']?.toString(),
       companyAddress: json['company_address']?.toString(),
       companyLogoUrl: json['company_logo_url']?.toString(),
+      invoiceTerms: json['invoice_terms']?.toString(),
       // Support both new column names (show_terms/show_qr_code) and old ones for backward compatibility
       showInvoiceTerms: (json['show_terms'] as bool?) ?? json['show_invoice_terms'] as bool?, // Read actual value (null if not set)
       showInvoiceQr: (json['show_qr_code'] as bool?) ?? json['show_invoice_qr'] as bool?, // Read actual value (null if not set)
@@ -82,6 +85,7 @@ class UserProfile {
       'company_name': companyName,
       'company_address': companyAddress,
       'company_logo_url': companyLogoUrl,
+      'invoice_terms': invoiceTerms,
       // Write both keys for compatibility; backend will store matching columns
       'show_terms': showInvoiceTerms,
       'show_qr_code': showInvoiceQr,

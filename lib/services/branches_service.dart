@@ -12,8 +12,8 @@ class BranchesService {
   Future<List<Branch>> getBranches() async {
     final response = await _supabase
         .from('branches')
-        .select()
-        .order('created_at', ascending: false);
+        .select('id, name, address, phone, is_main, created_at')
+        .order('name', ascending: true); // Match website: order by name
 
     return (response as List)
         .map((json) => Branch.fromJson(json as Map<String, dynamic>))
