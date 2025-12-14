@@ -270,14 +270,14 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
 
     try {
       final startStr = order.startDatetime ?? order.startDate;
-      startDate = DateTime.parse(startStr);
+      startDate = _parseDateTimeWithTimezone(startStr);
     } catch (e) {
       return {'error': 'Invalid start date'};
     }
 
     try {
       final endStr = order.endDatetime ?? order.endDate;
-      endDate = DateTime.parse(endStr);
+      endDate = _parseDateTimeWithTimezone(endStr);
     } catch (e) {
       return {'error': 'Invalid end date'};
     }

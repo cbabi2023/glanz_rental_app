@@ -224,16 +224,48 @@ class OrdersService {
     final startDateOnlyStr = startDate.split('T')[0];
     final endDateOnlyStr = endDate.split('T')[0];
 
+    // Convert local times to UTC for database storage
+    // Database stores times in UTC, so we need to convert local time to UTC
+    final bookingDateUtc = DateTime.now().toUtc().toIso8601String();
+    
+    // Ensure start_datetime and end_datetime are in UTC
+    String? startDatetimeUtc;
+    String? endDatetimeUtc;
+    
+    if (startDatetime != null) {
+      try {
+        // Parse as local time, then convert to UTC
+        final parsed = DateTime.parse(startDatetime);
+        final localTime = parsed.isUtc ? parsed.toLocal() : parsed;
+        startDatetimeUtc = localTime.toUtc().toIso8601String();
+      } catch (e) {
+        AppLogger.error('Error parsing start_datetime for UTC conversion', e);
+        startDatetimeUtc = startDatetime; // Fallback to original
+      }
+    }
+    
+    if (endDatetime != null) {
+      try {
+        // Parse as local time, then convert to UTC
+        final parsed = DateTime.parse(endDatetime);
+        final localTime = parsed.isUtc ? parsed.toLocal() : parsed;
+        endDatetimeUtc = localTime.toUtc().toIso8601String();
+      } catch (e) {
+        AppLogger.error('Error parsing end_datetime for UTC conversion', e);
+        endDatetimeUtc = endDatetime; // Fallback to original
+      }
+    }
+
     final orderData = {
       'branch_id': branchId,
       'staff_id': staffId,
       'customer_id': customerId,
       'invoice_number': finalInvoiceNumber,
-      'booking_date': DateTime.now().toIso8601String(), // Always set booking date
+      'booking_date': bookingDateUtc, // Store as UTC
       'start_date': startDateOnlyStr,
       'end_date': endDateOnlyStr,
-      'start_datetime': startDatetime,
-      'end_datetime': endDatetime,
+      'start_datetime': startDatetimeUtc, // Store as UTC
+      'end_datetime': endDatetimeUtc, // Store as UTC
       'status': orderStatus.value, // Use calculated status
       'total_amount': totalAmount,
       'subtotal': subtotal,
