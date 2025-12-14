@@ -767,14 +767,47 @@ class OrdersService {
         });
 
         // Wait for all item updates to complete
-      final itemUpdateResults = await Future.wait(itemUpdatePromises);
+        // Supabase will throw an exception if there's an error, so we don't need to check status
+        await Future.wait(itemUpdatePromises);
+      }
+
+      // Fetch updated order to check current item return status
+      final updatedOrderForStatus = await getOrder(orderId);
+      if (updatedOrderForStatus == null) {
+        throw Exception('Failed to retrieve updated order for status check');
+      }
+
+      // Determine new order status based on item return state
+      OrderStatus? newStatus;
+      final allItems = updatedOrderForStatus.items ?? [];
       
-        // Check for errors
-        for (final result in itemUpdateResults) {
-          if (result.status != 200 && result.status != 204) {
-            throw Exception('Error updating order items: ${result.statusText}');
-          }
+      if (allItems.isNotEmpty) {
+        // Check if all items are fully returned
+        final allItemsFullyReturned = allItems.every((item) {
+          final returnedQty = item.returnedQuantity ?? 0;
+          return returnedQty >= item.quantity;
+        });
+
+        // Check if any items are returned (partially or fully)
+        final hasAnyReturns = allItems.any((item) {
+          final returnedQty = item.returnedQuantity ?? 0;
+          return returnedQty > 0;
+        });
+
+        // Check if there's any damage
+        final hasDamage = calcDamageFeeTotal > 0 || 
+                         allItems.any((item) => item.damageCost != null && item.damageCost! > 0);
+
+        if (allItemsFullyReturned) {
+          // All items returned - mark as completed (or completed_with_issues if damage)
+          newStatus = hasDamage 
+              ? OrderStatus.completedWithIssues 
+              : OrderStatus.completed;
+        } else if (hasAnyReturns) {
+          // Some items returned but not all - mark as partially returned
+          newStatus = OrderStatus.partiallyReturned;
         }
+        // If no returns, status stays as is (active, pending_return, etc.)
       }
 
       // Calculate base total: Subtotal + GST (if not included)
@@ -787,10 +820,15 @@ class OrdersService {
       final discountAmount = discount ?? 0.0;
       final newTotal = baseWithGst + calcDamageFeeTotal + lateFee - discountAmount;
 
-      // Update order with late fee, discount, damage fees, and new total (matching website logic)
+      // Update order with late fee, discount, damage fees, new total, and status (matching website logic)
       final orderUpdate = <String, dynamic>{
         'total_amount': newTotal,
       };
+      
+      // Update status if determined
+      if (newStatus != null) {
+        orderUpdate['status'] = newStatus.value;
+      }
       
       if (calcDamageFeeTotal > 0) {
         orderUpdate['damage_fee_total'] = calcDamageFeeTotal;

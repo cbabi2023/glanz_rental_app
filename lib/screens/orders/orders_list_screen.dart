@@ -1668,26 +1668,34 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                         ],
                       ),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '₹${NumberFormat('#,##0').format(order.totalAmount)}',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green,
-                          ),
-                        ),
-                        if (itemsCount > 0)
-                          Text(
-                            '$itemsCount ${itemsCount == 1 ? 'item' : 'items'}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade500,
+                    Builder(
+                      builder: (context) {
+                        // Calculate grand total to match order detail screen
+                        final userProfile = ref.watch(userProfileProvider).value;
+                        final grandTotal = order.calculateGrandTotal(userProfile: userProfile);
+                        
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '₹${NumberFormat('#,##0').format(grandTotal)}',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
                             ),
-                          ),
-                      ],
+                            if (itemsCount > 0)
+                              Text(
+                                '$itemsCount ${itemsCount == 1 ? 'item' : 'items'}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),

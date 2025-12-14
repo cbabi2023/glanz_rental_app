@@ -1202,27 +1202,35 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     ],
                                   ),
                                 ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      'Total Amount',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade600,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '₹${NumberFormat('#,##0.00').format(order.totalAmount)}',
-                                      style: const TextStyle(
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green,
-                                      ),
-                                    ),
-                                  ],
+                                Builder(
+                                  builder: (context) {
+                                    // Calculate grand total to match summary
+                                    final userProfile = ref.watch(userProfileProvider).value;
+                                    final grandTotal = order.calculateGrandTotal(userProfile: userProfile);
+                                    
+                                    return Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          'Total Amount',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey.shade600,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '₹${NumberFormat('#,##0.00').format(grandTotal)}',
+                                          style: const TextStyle(
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.green,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
                                 ),
                               ],
                             ),
@@ -2440,16 +2448,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         final userProfile = ref.watch(userProfileProvider).value;
                         final gstRate = userProfile?.gstRate ?? 5.0;
                         
-                        // Calculate display total matching website logic:
-                        // baseTotal + damage_fee_total + late_fee - discount_amount
+                        // Calculate display total using Order's method for consistency
+                        final displayTotalAmount = order.calculateGrandTotal(userProfile: userProfile);
+                        
+                        // Get individual amounts for display
                         final baseTotal = order.subtotal ?? 0.0;
                         final gstAmount = order.gstAmount ?? 0.0;
-                        final gstIncluded = userProfile?.gstIncluded ?? false;
-                        final baseWithGst = gstIncluded ? baseTotal : baseTotal + gstAmount;
                         final damageFees = order.damageFeeTotal ?? 0.0;
                         final lateFee = order.lateFee ?? 0.0;
                         final discountAmount = order.discountAmount ?? 0.0;
-                        final displayTotalAmount = baseWithGst + damageFees + lateFee - discountAmount;
                         
                         return Card(
                           elevation: 0,

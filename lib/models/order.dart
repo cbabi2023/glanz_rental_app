@@ -82,6 +82,25 @@ class Order {
   // Returns the security deposit amount (not the boolean flags)
   double? get securityDeposit => securityDepositAmount;
   
+  /// Calculate the grand total amount (display total)
+  /// Formula: baseWithGst + damageFees + lateFee - discountAmount
+  /// This ensures consistent display across the app
+  double calculateGrandTotal({UserProfile? userProfile}) {
+    final baseTotal = subtotal ?? 0.0;
+    final gstAmt = gstAmount ?? 0.0;
+    
+    // Determine if GST is included in baseTotal
+    // Use userProfile if provided, otherwise use staff profile, otherwise default to false
+    final gstIncluded = userProfile?.gstIncluded ?? staff?.gstIncluded ?? false;
+    final baseWithGst = gstIncluded ? baseTotal : baseTotal + gstAmt;
+    
+    final damageFees = damageFeeTotal ?? 0.0;
+    final lateFeeAmt = lateFee ?? 0.0;
+    final discountAmt = discountAmount ?? 0.0;
+    
+    return baseWithGst + damageFees + lateFeeAmt - discountAmt;
+  }
+  
   // Relations
   final Customer? customer;
   final UserProfile? staff;
