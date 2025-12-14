@@ -132,8 +132,9 @@ class _OrderItemCardState extends State<_OrderItemCard> {
   void initState() {
     super.initState();
     _productNameController = TextEditingController(text: widget.item.productName ?? '');
-    _quantityController = TextEditingController(text: widget.item.quantity.toString());
-    _priceController = TextEditingController(text: _formatPrice(widget.item.pricePerDay));
+    _quantityController = TextEditingController(text: widget.item.quantity > 0 ? widget.item.quantity.toString() : '');
+    // Don't show default 0 - leave empty if price is 0
+    _priceController = TextEditingController(text: widget.item.pricePerDay > 0 ? _formatPrice(widget.item.pricePerDay) : '');
   }
 
   // Format price without unnecessary decimals
@@ -153,8 +154,9 @@ class _OrderItemCardState extends State<_OrderItemCard> {
     if (oldWidget.item.photoUrl != widget.item.photoUrl) {
       // Photo changed - this is a completely new item, reset controllers
       _productNameController.text = widget.item.productName ?? '';
-      _quantityController.text = widget.item.quantity.toString();
-      _priceController.text = _formatPrice(widget.item.pricePerDay);
+      _quantityController.text = widget.item.quantity > 0 ? widget.item.quantity.toString() : '';
+      // Don't show default 0 - leave empty if price is 0
+      _priceController.text = widget.item.pricePerDay > 0 ? _formatPrice(widget.item.pricePerDay) : '';
     }
     // Otherwise, let the user type freely without any interference
   }
@@ -197,6 +199,12 @@ class _OrderItemCardState extends State<_OrderItemCard> {
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -244,6 +252,14 @@ class _OrderItemCardState extends State<_OrderItemCard> {
               onChanged: (value) {
                 _updateItem('product_name', value);
               },
+              onEditingComplete: () {
+                // Dismiss keyboard
+                FocusScope.of(context).unfocus();
+              },
+              onTapOutside: (_) {
+                // Dismiss keyboard
+                FocusScope.of(context).unfocus();
+              },
             ),
             const SizedBox(height: 16),
 
@@ -272,16 +288,20 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                     onEditingComplete: () {
                       // When done editing, ensure field has a valid value
                       if (_quantityController.text.isEmpty || _quantityController.text.trim().isEmpty) {
-                        _quantityController.text = '0';
-                        _updateItem('quantity', 0);
+                        _quantityController.text = '1';
+                        _updateItem('quantity', 1);
                       }
+                      // Dismiss keyboard
+                      FocusScope.of(context).unfocus();
                     },
                     onTapOutside: (_) {
                       // When user taps outside, ensure field has a valid value
                       if (_quantityController.text.isEmpty || _quantityController.text.trim().isEmpty) {
-                        _quantityController.text = '0';
-                        _updateItem('quantity', 0);
+                        _quantityController.text = '1';
+                        _updateItem('quantity', 1);
                       }
+                      // Dismiss keyboard
+                      FocusScope.of(context).unfocus();
                     },
                   ),
                 ),
@@ -290,7 +310,7 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                   child: TextField(
                     controller: _priceController,
                     decoration: const InputDecoration(
-                      labelText: 'Price per Day',
+                      labelText: 'Price',
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -317,38 +337,46 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                       }
                     },
                     onEditingComplete: () {
-                      // When done editing, ensure field has a valid value
+                      // When done editing, format if valid, otherwise leave empty
                       final text = _priceController.text.trim();
                       if (text.isEmpty || text == '.' || text == '0.') {
-                        _priceController.text = '0';
+                        // Leave empty - don't set default 0
+                        _priceController.text = '';
                         _updateItem('price_per_day', 0.0);
                       } else {
                         final price = double.tryParse(text);
                         if (price == null || price < 0) {
-                          _priceController.text = '0';
+                          // Invalid input - leave empty
+                          _priceController.text = '';
                           _updateItem('price_per_day', 0.0);
                         } else {
                           // Format without unnecessary decimals
                           _priceController.text = _formatPrice(price);
                         }
                       }
+                      // Dismiss keyboard
+                      FocusScope.of(context).unfocus();
                     },
                     onTapOutside: (_) {
-                      // When user taps outside, ensure field has a valid value
+                      // When user taps outside, format if valid, otherwise leave empty
                       final text = _priceController.text.trim();
                       if (text.isEmpty || text == '.' || text == '0.') {
-                        _priceController.text = '0';
+                        // Leave empty - don't set default 0
+                        _priceController.text = '';
                         _updateItem('price_per_day', 0.0);
                       } else {
                         final price = double.tryParse(text);
                         if (price == null || price < 0) {
-                          _priceController.text = '0';
+                          // Invalid input - leave empty
+                          _priceController.text = '';
                           _updateItem('price_per_day', 0.0);
                         } else {
                           // Format without unnecessary decimals
                           _priceController.text = _formatPrice(price);
                         }
                       }
+                      // Dismiss keyboard
+                      FocusScope.of(context).unfocus();
                     },
                   ),
                 ),
