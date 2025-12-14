@@ -3914,15 +3914,28 @@ class _SecurityDepositRefundSectionState
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      Text(
-                        DateFormat(
-                          'dd MMM yyyy, hh:mm a',
-                        ).format(order.securityDepositRefundDate!),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade900,
-                        ),
+                      Builder(
+                        builder: (context) {
+                          // Handle timezone conversion properly
+                          // The DateTime from safeDateTime should already be in local time,
+                          // but if it's showing wrong, ensure it's converted correctly
+                          final refundDate = order.securityDepositRefundDate!;
+                          // If the DateTime is in UTC (timezoneOffset is 0), convert to local
+                          final localDate = refundDate.isUtc 
+                              ? refundDate.toLocal() 
+                              : refundDate;
+                          
+                          return Text(
+                            DateFormat(
+                              'dd MMM yyyy, hh:mm a',
+                            ).format(localDate),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade900,
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
