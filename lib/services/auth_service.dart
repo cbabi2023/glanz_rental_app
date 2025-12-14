@@ -108,7 +108,6 @@ class AuthService {
     required bool gstEnabled,
     double? gstRate,
     required bool gstIncluded,
-    String? upiId,
   }) async {
     final user = currentUser;
     if (user == null) {
@@ -133,6 +132,35 @@ class AuthService {
         updateData['gst_rate'] = null;
       }
 
+      await _supabase
+          .from('profiles')
+          .update(updateData)
+          .eq('id', user.id);
+
+      // Return updated profile
+      final updatedProfile = await getUserProfile();
+      if (updatedProfile == null) {
+        throw Exception('Failed to retrieve updated profile');
+      }
+      return updatedProfile;
+    } catch (e) {
+      AppLogger.error('Error updating GST settings', e);
+      rethrow;
+    }
+  }
+
+  /// Update UPI settings
+  Future<UserProfile> updateUpiSettings({
+    required String? upiId,
+  }) async {
+    final user = currentUser;
+    if (user == null) {
+      throw Exception('User not authenticated');
+    }
+
+    try {
+      final updateData = <String, dynamic>{};
+
       if (upiId != null && upiId.trim().isNotEmpty) {
         updateData['upi_id'] = upiId.trim();
       } else {
@@ -151,7 +179,7 @@ class AuthService {
       }
       return updatedProfile;
     } catch (e) {
-      AppLogger.error('Error updating GST settings', e);
+      AppLogger.error('Error updating UPI settings', e);
       rethrow;
     }
   }

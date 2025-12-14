@@ -37,6 +37,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _showInvoiceQr = false; // Show QR code in invoice
   bool _isLoadingPassword = false;
   bool _isLoadingGst = false;
+  bool _isLoadingUpi = false;
   bool _isLoadingBranch = false;
   bool _isLoadingCompany = false;
   bool _isLoadingInvoiceSettings = false;
@@ -158,7 +159,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         gstEnabled: _gstEnabled,
         gstRate: _gstEnabled ? double.parse(_gstRateController.text) : null,
         gstIncluded: _gstIncluded,
-        upiId: _upiIdController.text,
       );
 
       ref.invalidate(userProfileProvider);
@@ -195,6 +195,56 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (mounted) {
         setState(() {
           _isLoadingGst = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleSaveUpi() async {
+    setState(() {
+      _isLoadingUpi = true;
+    });
+
+    try {
+      final authService = ref.read(authServiceProvider);
+      await authService.updateUpiSettings(
+        upiId: _upiIdController.text,
+      );
+
+      ref.invalidate(userProfileProvider);
+      _fieldsInitialized = false;
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('UPI settings saved successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        final errorMessage = e.toString();
+        String displayMessage = 'Failed to save UPI settings';
+        
+        if (errorMessage.contains('column') || errorMessage.contains('does not exist')) {
+          displayMessage = 'Database migration not run. Please run supabase-gst-migration.sql in Supabase SQL editor';
+        } else {
+          displayMessage = errorMessage;
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(displayMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingUpi = false;
         });
       }
     }
@@ -997,14 +1047,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 icon: Icons.numbers,
                                 maxLength: 15,
                               ),
-                              const SizedBox(height: 16),
-                              _ModernTextField(
-                                controller: _upiIdController,
-                                label: 'UPI ID',
-                                hint: 'yourname@paytm or yourname@upi',
-                                icon: Icons.qr_code,
-                                helperText: 'Enter your UPI ID for payment QR codes',
-                              ),
                               const SizedBox(height: 24),
                               _ModernSwitch(
                                 value: _gstEnabled,
@@ -1090,6 +1132,59 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                         )
                                       : const Text(
                                           'Save GST Settings',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ],
+
+                        // UPI Settings Card (not for staff)
+                        if (!profile.isStaff) ...[
+                          _SectionCard(
+                          icon: Icons.qr_code,
+                          title: 'UPI Settings',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _ModernTextField(
+                                controller: _upiIdController,
+                                label: 'UPI ID',
+                                hint: 'yourname@paytm or yourname@upi',
+                                icon: Icons.qr_code_scanner,
+                                helperText: 'Enter your UPI ID for payment QR codes in invoices',
+                              ),
+                              const SizedBox(height: 24),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: _isLoadingUpi ? null : _handleSaveUpi,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF1F2A7A),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: 0,
+                                  ),
+                                  child: _isLoadingUpi
+                                      ? const SizedBox(
+                                          height: 24,
+                                          width: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Save UPI Settings',
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,

@@ -475,8 +475,14 @@ class InvoiceService {
     final daysDifference = endDateOnly.difference(startDateOnly).inDays;
     final rentalDays = daysDifference < 1 ? 1 : daysDifference;
 
-    // Parse address lines
-    final addressLines = companyAddress
+    // Parse address lines - ensure address is always shown if available
+    // If company address is empty, try branch address as fallback
+    String finalCompanyAddress = companyAddress.trim();
+    if (finalCompanyAddress.isEmpty && order.branch?.address != null) {
+      finalCompanyAddress = order.branch!.address.trim();
+    }
+    
+    final addressLines = finalCompanyAddress
         .split('\n')
         .where((line) => line.trim().isNotEmpty)
         .toList();
@@ -651,7 +657,7 @@ class InvoiceService {
               ),
             ),
 
-            // Bill To Section
+            // Bill To and Rental Period Section (side by side)
             pw.Container(
               margin: const pw.EdgeInsets.only(bottom: 14),
               padding: const pw.EdgeInsets.only(bottom: 14),
@@ -660,79 +666,91 @@ class InvoiceService {
                   bottom: pw.BorderSide(color: PdfColors.grey200, width: 1),
                 ),
               ),
-              child: pw.Column(
+              child: pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text(
-                    'BILL TO',
-                    style: pw.TextStyle(
-                      fontSize: 7,
-                      color: PdfColors.black,
-                      fontWeight: pw.FontWeight.bold,
-                      letterSpacing: 1.2,
+                  // Left: Bill To Section
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          'BILL TO',
+                          style: pw.TextStyle(
+                            fontSize: 7,
+                            color: PdfColors.black,
+                            fontWeight: pw.FontWeight.bold,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        pw.SizedBox(height: 8),
+                        pw.Text(
+                          order.customer?.name ?? 'N/A',
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.black,
+                          ),
+                        ),
+                        if (order.customer?.customerNumber != null) ...[
+                          pw.SizedBox(height: 3),
+                          pw.Text(
+                            'ID: ${order.customer!.customerNumber}',
+                            style: pw.TextStyle(
+                              fontSize: 8.5,
+                              color: PdfColors.black,
+                            ),
+                          ),
+                        ],
+                        if (order.customer?.phone != null) ...[
+                          pw.SizedBox(height: 5),
+                          pw.Text(
+                            order.customer!.phone,
+                            style: pw.TextStyle(
+                              fontSize: 8.5,
+                              color: PdfColors.black,
+                            ),
+                          ),
+                        ],
+                        if (order.customer?.address != null) ...[
+                          pw.SizedBox(height: 3),
+                          pw.Text(
+                            order.customer!.address!,
+                            style: pw.TextStyle(
+                              fontSize: 8.5,
+                              color: PdfColors.black,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  pw.SizedBox(height: 8),
-                  pw.Text(
-                    order.customer?.name ?? 'N/A',
-                    style: pw.TextStyle(
-                      fontSize: 12,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.black,
-                    ),
-                  ),
-                  if (order.customer?.phone != null) ...[
-                    pw.SizedBox(height: 5),
-                    pw.Text(
-                      order.customer!.phone,
-                      style: pw.TextStyle(
-                        fontSize: 8.5,
-                        color: PdfColors.black,
-                      ),
-                    ),
-                  ],
-                  if (order.customer?.address != null) ...[
-                    pw.SizedBox(height: 3),
-                    pw.Text(
-                      order.customer!.address!,
-                      style: pw.TextStyle(
-                        fontSize: 8.5,
-                        color: PdfColors.black,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-
-            // Rental Period
-            pw.Container(
-              margin: const pw.EdgeInsets.only(bottom: 14),
-              padding: const pw.EdgeInsets.only(bottom: 14),
-              decoration: const pw.BoxDecoration(
-                border: pw.Border(
-                  bottom: pw.BorderSide(color: PdfColors.grey200, width: 1),
-                ),
-              ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'RENTAL PERIOD',
-                    style: pw.TextStyle(
-                      fontSize: 7,
-                      color: PdfColors.black,
-                      fontWeight: pw.FontWeight.bold,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    '${_formatDate(startDate)} to ${_formatDate(endDate)} ($rentalDays ${rentalDays == 1 ? 'day' : 'days'})',
-                    style: pw.TextStyle(
-                      fontSize: 8,
-                      color: PdfColors.black,
-                      fontWeight: pw.FontWeight.normal,
+                  // Right: Rental Period Section
+                  pw.Container(
+                    width: 200,
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Text(
+                          'RENTAL PERIOD',
+                          style: pw.TextStyle(
+                            fontSize: 7,
+                            color: PdfColors.black,
+                            fontWeight: pw.FontWeight.bold,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          '${_formatDate(startDate)} to ${_formatDate(endDate)} ($rentalDays ${rentalDays == 1 ? 'day' : 'days'})',
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                            fontSize: 8,
+                            color: PdfColors.black,
+                            fontWeight: pw.FontWeight.normal,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -1039,7 +1057,120 @@ class InvoiceService {
                             ),
                           ),
                         ],
-                        // Final Amount
+                        // Damage Fees
+                        if (order.damageFeeTotal != null &&
+                            order.damageFeeTotal! > 0) ...[
+                          pw.Container(
+                            padding: const pw.EdgeInsets.symmetric(vertical: 3),
+                            margin: const pw.EdgeInsets.only(bottom: 3),
+                            decoration: const pw.BoxDecoration(
+                              border: pw.Border(
+                                bottom: pw.BorderSide(
+                                  color: PdfColors.grey300,
+                                  width: 0.5,
+                                ),
+                              ),
+                            ),
+                            child: pw.Row(
+                              mainAxisAlignment:
+                                  pw.MainAxisAlignment.spaceBetween,
+                              children: [
+                                pw.Text(
+                                  'Damage Fees',
+                                  style: pw.TextStyle(
+                                    fontSize: 6,
+                                    color: PdfColors.black,
+                                    fontWeight: pw.FontWeight.normal,
+                                  ),
+                                ),
+                                pw.Text(
+                                  _formatCurrency(order.damageFeeTotal!),
+                                  style: pw.TextStyle(
+                                    fontSize: 6,
+                                    color: PdfColors.black,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        // Late Fee
+                        if (order.lateFee != null && order.lateFee! > 0) ...[
+                          pw.Container(
+                            padding: const pw.EdgeInsets.symmetric(vertical: 3),
+                            margin: const pw.EdgeInsets.only(bottom: 3),
+                            decoration: const pw.BoxDecoration(
+                              border: pw.Border(
+                                bottom: pw.BorderSide(
+                                  color: PdfColors.grey300,
+                                  width: 0.5,
+                                ),
+                              ),
+                            ),
+                            child: pw.Row(
+                              mainAxisAlignment:
+                                  pw.MainAxisAlignment.spaceBetween,
+                              children: [
+                                pw.Text(
+                                  'Late Fee',
+                                  style: pw.TextStyle(
+                                    fontSize: 6,
+                                    color: PdfColors.black,
+                                    fontWeight: pw.FontWeight.normal,
+                                  ),
+                                ),
+                                pw.Text(
+                                  _formatCurrency(order.lateFee!),
+                                  style: pw.TextStyle(
+                                    fontSize: 6,
+                                    color: PdfColors.black,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        // Discount
+                        if (order.discountAmount != null &&
+                            order.discountAmount! > 0) ...[
+                          pw.Container(
+                            padding: const pw.EdgeInsets.symmetric(vertical: 3),
+                            margin: const pw.EdgeInsets.only(bottom: 3),
+                            decoration: const pw.BoxDecoration(
+                              border: pw.Border(
+                                bottom: pw.BorderSide(
+                                  color: PdfColors.grey300,
+                                  width: 0.5,
+                                ),
+                              ),
+                            ),
+                            child: pw.Row(
+                              mainAxisAlignment:
+                                  pw.MainAxisAlignment.spaceBetween,
+                              children: [
+                                pw.Text(
+                                  'Discount',
+                                  style: pw.TextStyle(
+                                    fontSize: 6,
+                                    color: PdfColors.black,
+                                    fontWeight: pw.FontWeight.normal,
+                                  ),
+                                ),
+                                pw.Text(
+                                  _formatCurrency(order.discountAmount!),
+                                  style: pw.TextStyle(
+                                    fontSize: 6,
+                                    color: PdfColors.black,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        // Final Amount (Grand Total)
                         pw.Container(
                           padding: const pw.EdgeInsets.only(top: 6, bottom: 2),
                           margin: const pw.EdgeInsets.only(top: 4),
@@ -1056,7 +1187,7 @@ class InvoiceService {
                                 pw.MainAxisAlignment.spaceBetween,
                             children: [
                               pw.Text(
-                                'Final Amount',
+                                'Grand Total',
                                 style: pw.TextStyle(
                                   fontSize: 7,
                                   color: PdfColor.fromInt(
@@ -1067,8 +1198,7 @@ class InvoiceService {
                               ),
                               pw.Text(
                                 _formatCurrency(
-                                  (order.subtotal ?? 0) +
-                                      (order.gstAmount ?? 0),
+                                  order.calculateGrandTotal(userProfile: null),
                                 ),
                                 style: pw.TextStyle(
                                   fontSize: 9,
