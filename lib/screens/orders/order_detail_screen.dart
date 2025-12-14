@@ -828,15 +828,17 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       }
     });
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FB),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF0F1724)),
-          onPressed: () => context.pop(),
-        ),
+    return PopScope(
+      canPop: true,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7F9FB),
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: Colors.white,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Color(0xFF0F1724)),
+            onPressed: () => context.pop(),
+          ),
         title: const Text(
           'Order Details',
           style: TextStyle(
@@ -3002,6 +3004,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

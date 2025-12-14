@@ -3,9 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/dashboard_provider.dart';
-import '../../providers/branches_provider.dart';
 import '../../models/dashboard_stats.dart';
-import '../../models/branch.dart';
 
 /// Reports Screen
 ///
@@ -20,7 +18,6 @@ class ReportsScreen extends ConsumerStatefulWidget {
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
-  String? _selectedBranchId;
 
   @override
   void initState() {
@@ -102,14 +99,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final userProfile = ref.watch(userProfileProvider);
-    final isSuperAdmin = userProfile.value?.isSuperAdmin ?? false;
-    final userBranchId = userProfile.value?.branchId;
-
-    // Use selected branch or user's branch
-    final branchId = isSuperAdmin ? _selectedBranchId : userBranchId;
-
-    // Fetch branches for super admin
-    final branchesAsync = ref.watch(branchesProvider);
+    final branchId = userProfile.value?.branchId;
 
     // Fetch dashboard stats with date range
     final dashboardStats = ref.watch(
@@ -122,7 +112,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       ),
     );
 
-    return Scaffold(
+    return PopScope(
+      canPop: true,
+      child: Scaffold(
       backgroundColor: const Color(0xFFF7F9FB),
       appBar: AppBar(
         elevation: 0,
@@ -168,25 +160,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Branch Filter (Super Admin only)
-              if (isSuperAdmin) ...[
-                branchesAsync.when(
-                  data: (branches) => _BranchFilter(
-                    branches: branches,
-                    selectedBranchId: _selectedBranchId,
-                    onBranchSelected: (branchId) {
-                      setState(() {
-                        _selectedBranchId = branchId;
-                      });
-                      ref.invalidate(dashboardStatsProvider);
-                    },
-                  ),
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
-                ),
-                const SizedBox(height: 16),
-              ],
-
               // Statistics Cards
               dashboardStats.when(
                 data: (stats) => _StatsGrid(stats: stats),
@@ -217,6 +190,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -353,79 +327,6 @@ class _QuickFilterChip extends StatelessWidget {
       side: BorderSide(
         color: Colors.grey.shade300,
         width: 1,
-      ),
-    );
-  }
-}
-
-/// Branch Filter (Super Admin only)
-class _BranchFilter extends StatelessWidget {
-  final List<Branch> branches;
-  final String? selectedBranchId;
-  final Function(String?) onBranchSelected;
-
-  const _BranchFilter({
-    required this.branches,
-    required this.selectedBranchId,
-    required this.onBranchSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.store, color: Colors.grey.shade600, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Branch',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: selectedBranchId,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-              ),
-              items: [
-                const DropdownMenuItem<String>(
-                  value: null,
-                  child: Text('All Branches'),
-                ),
-                ...branches.map((branch) {
-                  return DropdownMenuItem<String>(
-                    value: branch.id,
-                    child: Text(branch.name),
-                  );
-                }),
-              ],
-              onChanged: (value) => onBranchSelected(value),
-            ),
-          ],
-        ),
       ),
     );
   }

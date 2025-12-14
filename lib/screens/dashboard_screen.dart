@@ -44,6 +44,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Future<void> _handleBackPress() async {
+    final router = GoRouter.of(context);
+
+    // First check if we can pop (e.g., from a detail screen)
+    if (Navigator.canPop(context) || router.canPop()) {
+      if (Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      } else {
+        router.pop();
+      }
+      return;
+    }
+
     final now = DateTime.now();
 
     // Check if this is the second back press within the exit interval
@@ -302,7 +314,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, dynamic result) async {
-        // Handle gesture back directly in dashboard screen
         if (!didPop) {
           await _handleBackPress();
         }
@@ -836,114 +847,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Modern Stat Card with left border accent
-class _ModernStatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color borderColor;
-  final Color iconColor;
-  final Color bgColor;
-  final Color? textColor;
-  final bool blinking;
-
-  const _ModernStatCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.borderColor,
-    required this.iconColor,
-    required this.bgColor,
-    this.textColor,
-    this.blinking = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // Colored left border
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            child: Container(
-              width: 4,
-              decoration: BoxDecoration(
-                color: borderColor,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  bottomLeft: Radius.circular(12),
-                ),
-              ),
-            ),
-          ),
-          // Content
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey.shade600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        value,
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: textColor ?? Colors.grey.shade900,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: iconColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, color: iconColor, size: 24),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

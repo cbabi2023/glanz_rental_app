@@ -151,8 +151,12 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
     final uri = GoRouterState.of(context).uri;
     final tabParam = uri.queryParameters['tab'];
     
-    if (tabParam != null) {
-      _OrdersTab? targetTab;
+    _OrdersTab targetTab;
+    
+    if (tabParam == null || tabParam.isEmpty) {
+      // No tab parameter means "All" tab
+      targetTab = _OrdersTab.all;
+    } else {
       switch (tabParam) {
         case 'scheduled':
           targetTab = _OrdersTab.scheduled;
@@ -169,19 +173,25 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
         case 'completed':
           targetTab = _OrdersTab.returned;
           break;
+        case 'cancelled':
+          targetTab = _OrdersTab.cancelled;
+          break;
+        case 'flagged':
+          targetTab = _OrdersTab.flagged;
+          break;
         default:
-          targetTab = null;
+          targetTab = _OrdersTab.all;
       }
-      
-      if (targetTab != null && _selectedTab != targetTab) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            setState(() {
-              _selectedTab = targetTab!;
-            });
-          }
-        });
-      }
+    }
+    
+    if (_selectedTab != targetTab) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _selectedTab = targetTab;
+          });
+        }
+      });
     }
     final userProfile = ref.watch(userProfileProvider);
     final branchId = userProfile.value?.branchId;
@@ -199,9 +209,11 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
       ),
     );
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FB),
-      appBar: AppBar(
+    return PopScope(
+      canPop: true,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7F9FB),
+        appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
         leadingWidth: 60,
@@ -577,9 +589,40 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                               _OrdersTabs(
                                 selected: _selectedTab,
                                 onChanged: (tab) {
-                                  setState(() {
-                                    _selectedTab = tab;
-                                  });
+                                  // Update URL to reflect tab change
+                                  String tabParam = '';
+                                  switch (tab) {
+                                    case _OrdersTab.all:
+                                      tabParam = '';
+                                      break;
+                                    case _OrdersTab.scheduled:
+                                      tabParam = 'scheduled';
+                                      break;
+                                    case _OrdersTab.ongoing:
+                                      tabParam = 'ongoing';
+                                      break;
+                                    case _OrdersTab.late:
+                                      tabParam = 'late';
+                                      break;
+                                    case _OrdersTab.returned:
+                                      tabParam = 'completed';
+                                      break;
+                                    case _OrdersTab.partiallyReturned:
+                                      tabParam = 'partially_returned';
+                                      break;
+                                    case _OrdersTab.cancelled:
+                                      tabParam = 'cancelled';
+                                      break;
+                                    case _OrdersTab.flagged:
+                                      tabParam = 'flagged';
+                                      break;
+                                  }
+                                  
+                                  if (tabParam.isEmpty) {
+                                    context.go('/orders');
+                                  } else {
+                                    context.go('/orders?tab=$tabParam');
+                                  }
                                 },
                               ),
                               const SizedBox(height: 12),
@@ -619,6 +662,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
             ref.invalidate(ordersProvider(OrdersParams(branchId: branchId)));
           },
         ),
+      ),
       ),
     );
   }

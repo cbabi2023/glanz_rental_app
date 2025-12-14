@@ -356,7 +356,9 @@ class _EditCustomerScreenState extends ConsumerState<EditCustomerScreen> {
               .toUpperCase()
         : 'CU';
 
-    return Scaffold(
+    return PopScope(
+      canPop: true,
+      child: Scaffold(
       backgroundColor: const Color(0xFFF7F9FB),
       body: CustomScrollView(
         controller: _scrollController,
@@ -649,6 +651,7 @@ class _EditCustomerScreenState extends ConsumerState<EditCustomerScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

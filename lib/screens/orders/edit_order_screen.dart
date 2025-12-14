@@ -286,7 +286,9 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
         ? DateTime.tryParse(draft.endDate)
         : null;
 
-    return Scaffold(
+    return PopScope(
+      canPop: true,
+      child: Scaffold(
       backgroundColor: const Color(0xFFF7F9FB),
       body: orderAsync.when(
         data: (order) {
@@ -677,6 +679,7 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

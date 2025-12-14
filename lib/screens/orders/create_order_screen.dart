@@ -269,7 +269,9 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       _invoiceNumberController.text = draft.invoiceNumber;
     }
 
-    return Scaffold(
+    return PopScope(
+      canPop: true,
+      child: Scaffold(
       backgroundColor: const Color(0xFFF7F9FB),
       body: CustomScrollView(
         controller: _scrollController,
@@ -570,6 +572,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

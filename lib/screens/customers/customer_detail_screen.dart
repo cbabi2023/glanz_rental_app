@@ -23,7 +23,9 @@ class CustomerDetailScreen extends ConsumerWidget {
     final customerAsync = ref.watch(customerProvider(customerId));
     final ordersAsync = ref.watch(customerOrdersProvider(customerId));
 
-    return Scaffold(
+    return PopScope(
+      canPop: true,
+      child: Scaffold(
       backgroundColor: const Color(0xFFF7F9FB),
       body: customerAsync.when(
         data: (customer) {
@@ -271,6 +273,7 @@ class CustomerDetailScreen extends ConsumerWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }

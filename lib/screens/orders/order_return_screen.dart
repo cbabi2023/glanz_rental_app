@@ -50,7 +50,9 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
   Widget build(BuildContext context) {
     final orderAsync = ref.watch(orderProvider(widget.orderId));
 
-    return Scaffold(
+    return PopScope(
+      canPop: true,
+      child: Scaffold(
       backgroundColor: const Color(0xFFF7F9FB),
       appBar: AppBar(
         elevation: 0,
@@ -726,6 +728,7 @@ class _OrderReturnScreenState extends ConsumerState<OrderReturnScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
