@@ -316,16 +316,20 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       // Clear draft
       ref.read(orderDraftProvider.notifier).clear();
 
-      // Invalidate orders provider to refresh the orders list
-      ref.invalidate(ordersProvider(OrdersParams(branchId: branchId)));
-
       if (mounted) {
+        // Trigger refresh by incrementing the refresh trigger
+        // All providers watching this (ordersProvider, recentOrdersProvider, dashboardStatsProvider)
+        // will automatically refetch their data
+        ref.read(ordersRefreshTriggerProvider.notifier).state++;
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Order created successfully!'),
             backgroundColor: Colors.green,
           ),
         );
+        
+        // Navigate to orders screen
         context.go('/orders');
       }
     } catch (e) {

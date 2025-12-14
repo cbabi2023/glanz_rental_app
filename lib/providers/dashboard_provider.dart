@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/dashboard_service.dart';
 import '../models/dashboard_stats.dart';
 import '../models/order.dart';
+import 'orders_provider.dart';
 
 /// Dashboard Stats Parameters
 ///
@@ -38,9 +39,13 @@ final dashboardServiceProvider = Provider<DashboardService>((ref) {
 /// Dashboard Stats Provider
 ///
 /// Fetches dashboard statistics for a branch and optional date range
+/// Automatically refreshes when ordersRefreshTriggerProvider changes
 final dashboardStatsProvider =
     FutureProvider.family<DashboardStats, DashboardStatsParams>(
   (ref, params) async {
+    // Watch refresh trigger to auto-refresh when orders change
+    ref.watch(ordersRefreshTriggerProvider);
+    
     final service = ref.watch(dashboardServiceProvider);
     return await service.getDashboardStats(
       branchId: params.branchId,
@@ -53,8 +58,12 @@ final dashboardStatsProvider =
 /// Recent Orders Provider
 /// 
 /// Fetches recent orders for dashboard (limit 10)
+/// Automatically refreshes when ordersRefreshTriggerProvider changes
 final recentOrdersProvider = FutureProvider.family<List<Order>, String?>(
   (ref, branchId) async {
+    // Watch refresh trigger to auto-refresh when orders change
+    ref.watch(ordersRefreshTriggerProvider);
+    
     final service = ref.watch(dashboardServiceProvider);
     return await service.getRecentOrders(branchId: branchId, limit: 10);
   },

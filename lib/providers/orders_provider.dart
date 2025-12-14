@@ -7,11 +7,19 @@ final ordersServiceProvider = Provider<OrdersService>((ref) {
   return OrdersService();
 });
 
+/// Refresh trigger for orders list
+/// Increment this to force orders list to refresh
+final ordersRefreshTriggerProvider = StateProvider<int>((ref) => 0);
+
 /// Orders List Provider
 /// 
 /// Fetches orders with optional filters
+/// Automatically refreshes when ordersRefreshTriggerProvider changes
 final ordersProvider = FutureProvider.family<List<Order>, OrdersParams>(
   (ref, params) async {
+    // Watch the refresh trigger to automatically refetch when it changes
+    ref.watch(ordersRefreshTriggerProvider);
+    
     final service = ref.watch(ordersServiceProvider);
     return await service.getOrders(
       branchId: params.branchId,

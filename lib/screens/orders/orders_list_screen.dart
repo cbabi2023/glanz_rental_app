@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../providers/orders_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/dashboard_provider.dart';
 import '../../models/order.dart';
 
 /// Orders List Screen
@@ -37,12 +38,39 @@ enum _DateFilter {
   custom,
 }
 
-class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
+class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with WidgetsBindingObserver {
   _OrdersTab _selectedTab = _OrdersTab.all;
   String _searchQuery = '';
   _DateFilter _selectedDateFilter = _DateFilter.allTime;
   DateTime? _customStartDate;
   DateTime? _customEndDate;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Refresh orders when app comes to foreground
+    if (state == AppLifecycleState.resumed) {
+      final userProfile = ref.read(userProfileProvider).value;
+      final branchId = userProfile?.branchId;
+      if (branchId != null) {
+        final startDate = _startForFilter(_selectedDateFilter);
+        final endDate = _endForFilter(_selectedDateFilter);
+        ref.invalidate(
+          ordersProvider(OrdersParams(branchId: branchId, startDate: startDate, endDate: endDate)),
+        );
+      }
+    }
+  }
 
   // Helper function to parse datetime with timezone handling
   DateTime _parseDateTimeWithTimezone(String dateString) {
@@ -168,6 +196,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
     // Read query parameters from route to set tab filter
@@ -218,10 +247,15 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
     }
     final userProfile = ref.watch(userProfileProvider);
     final branchId = userProfile.value?.branchId;
+    
+    // Watch refresh trigger - this ensures the widget rebuilds when a new order is created
+    // The ordersProvider also watches this, so it will refetch automatically
+    ref.watch(ordersRefreshTriggerProvider);
 
     final startDate = _startForFilter(_selectedDateFilter);
     final endDate = _endForFilter(_selectedDateFilter);
 
+    // Watch orders provider - will refresh when trigger changes (provider watches it too)
     final ordersAsync = ref.watch(
       ordersProvider(
         OrdersParams(
@@ -597,9 +631,12 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () async {
+                    // Invalidate the exact provider instance being watched
                     ref.invalidate(
-                      ordersProvider(OrdersParams(branchId: branchId)),
+                      ordersProvider(OrdersParams(branchId: branchId, startDate: startDate, endDate: endDate)),
                     );
+                    // Also invalidate recent orders
+                    ref.invalidate(recentOrdersProvider(branchId));
                   },
                   child: CustomScrollView(
                     slivers: [
@@ -682,7 +719,8 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
         error: (error, stack) => _ErrorState(
           message: 'Error loading orders: $error',
           onRetry: () {
-            ref.invalidate(ordersProvider(OrdersParams(branchId: branchId)));
+            ref.invalidate(ordersProvider(OrdersParams(branchId: branchId, startDate: startDate, endDate: endDate)));
+            ref.invalidate(recentOrdersProvider(branchId));
           },
         ),
       ),
