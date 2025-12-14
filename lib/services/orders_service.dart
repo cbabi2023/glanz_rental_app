@@ -91,7 +91,7 @@ class OrdersService {
         .select(
           'id, invoice_number, branch_id, staff_id, customer_id, '
           'booking_date, start_date, end_date, start_datetime, end_datetime, '
-          'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, '
+          'status, total_amount, subtotal, gst_amount, late_fee, discount_amount, damage_fee_total, '
           'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, additional_amount_collected, deposit_balance, created_at, '
           'customer:customers(id, name, phone, customer_number), '
           'branch:branches(id, name), '
@@ -141,7 +141,7 @@ class OrdersService {
           .select(
             'id, invoice_number, branch_id, staff_id, customer_id, '
             'booking_date, start_date, end_date, start_datetime, end_datetime, '
-            'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, '
+            'status, total_amount, subtotal, gst_amount, late_fee, discount_amount, damage_fee_total, '
             'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, additional_amount_collected, deposit_balance, created_at, '
             'customer:customers(*), '
             'staff:profiles(id, full_name, upi_id), '
@@ -434,6 +434,7 @@ class OrdersService {
   }
 
   /// Update late fee for an order
+  /// Total calculation: Subtotal + GST + Damage Fees + Late Fee - Discount
   Future<Order> updateLateFee({
     required String orderId,
     required double lateFee,
@@ -445,9 +446,16 @@ class OrdersService {
         throw Exception('Order not found');
       }
 
-      final originalTotal =
-          currentOrder.totalAmount - (currentOrder.lateFee ?? 0);
-      final newTotal = originalTotal + lateFee;
+      // Calculate base total: Subtotal + GST (if not included)
+      final baseTotal = currentOrder.subtotal ?? 0.0;
+      final gstAmount = currentOrder.gstAmount ?? 0.0;
+      final gstIncluded = currentOrder.staff?.gstIncluded ?? false;
+      final baseWithGst = gstIncluded ? baseTotal : baseTotal + gstAmount;
+      
+      // Add damage fees, late fee, and subtract discount
+      final damageFees = currentOrder.damageFeeTotal ?? 0.0;
+      final discount = currentOrder.discountAmount ?? 0.0;
+      final newTotal = baseWithGst + damageFees + lateFee - discount;
 
       await _supabase
           .from('orders')
@@ -464,6 +472,49 @@ class OrdersService {
       return updatedOrder;
     } catch (e) {
       AppLogger.error('Error updating late fee', e);
+      rethrow;
+    }
+  }
+
+  /// Update discount for an order
+  /// Total calculation: Subtotal + GST + Damage Fees + Late Fee - Discount
+  Future<Order> updateDiscount({
+    required String orderId,
+    required double discount,
+  }) async {
+    try {
+      // Get current order to calculate new total
+      final currentOrder = await getOrder(orderId);
+      if (currentOrder == null) {
+        throw Exception('Order not found');
+      }
+
+      // Calculate base total: Subtotal + GST (if not included)
+      final baseTotal = currentOrder.subtotal ?? 0.0;
+      final gstAmount = currentOrder.gstAmount ?? 0.0;
+      final gstIncluded = currentOrder.staff?.gstIncluded ?? false;
+      final baseWithGst = gstIncluded ? baseTotal : baseTotal + gstAmount;
+      
+      // Add damage fees, late fee, and subtract discount
+      final damageFees = currentOrder.damageFeeTotal ?? 0.0;
+      final lateFee = currentOrder.lateFee ?? 0.0;
+      final newTotal = baseWithGst + damageFees + lateFee - discount;
+
+      await _supabase
+          .from('orders')
+          .update({
+            'discount_amount': discount,
+            'total_amount': newTotal,
+          })
+          .eq('id', orderId);
+
+      final updatedOrder = await getOrder(orderId);
+      if (updatedOrder == null) {
+        throw Exception('Failed to retrieve updated order');
+      }
+      return updatedOrder;
+    } catch (e) {
+      AppLogger.error('Error updating discount', e);
       rethrow;
     }
   }
@@ -662,32 +713,110 @@ class OrdersService {
   }
   
   /// Process order return with item-wise tracking
-  /// Uses RPC function process_order_return_optimized
+  /// Matches website logic: saves late fee and discount together with item returns
   Future<Map<String, dynamic>> processOrderReturn({
     required String orderId,
     required List<ItemReturn> itemReturns,
     required String userId,
     double lateFee = 0,
+    double? discount,
   }) async {
     try {
-      final itemReturnsJson = itemReturns.map((ir) => ir.toJson()).toList();
-      
-      final response = await _supabase.rpc('process_order_return_optimized', params: {
-        'p_order_id': orderId,
-        'p_item_returns': itemReturnsJson,
-        'p_user_id': userId,
-        'p_late_fee': lateFee,
-      });
-      
-      // RPC returns data directly as Map
-      if (response is Map<String, dynamic>) {
-        return response;
-      } else if (response is Map) {
-        return Map<String, dynamic>.from(response);
-      } else {
-        // If response is not a Map, wrap it
-        return {'success': true, 'data': response};
+      // Get current order to calculate new total
+      final currentOrder = await getOrder(orderId);
+      if (currentOrder == null) {
+        throw Exception('Order not found');
       }
+
+      // Calculate damage fee total from item returns (or use existing if no item returns)
+      double calcDamageFeeTotal = currentOrder.damageFeeTotal ?? 0.0;
+      if (itemReturns.isNotEmpty) {
+        calcDamageFeeTotal = 0.0;
+        for (final itemReturn in itemReturns) {
+          if (itemReturn.damageCost != null && itemReturn.damageCost! > 0) {
+            calcDamageFeeTotal += itemReturn.damageCost!;
+          }
+        }
+        
+        // Update items in parallel (like website)
+        final itemUpdatePromises = itemReturns.map((itemReturn) {
+          final itemUpdate = <String, dynamic>{
+          'return_status': itemReturn.returnStatus,
+        };
+        
+        if (itemReturn.returnedQuantity != null) {
+          itemUpdate['returned_quantity'] = itemReturn.returnedQuantity;
+        }
+        if (itemReturn.actualReturnDate != null) {
+          itemUpdate['actual_return_date'] = itemReturn.actualReturnDate!.toIso8601String();
+        }
+        if (itemReturn.damageCost != null) {
+          itemUpdate['damage_fee'] = itemReturn.damageCost;
+        }
+        if (itemReturn.description != null) {
+          itemUpdate['damage_description'] = itemReturn.description;
+        }
+        if (itemReturn.missingNote != null) {
+          itemUpdate['missing_note'] = itemReturn.missingNote;
+        }
+        
+          return _supabase
+              .from('order_items')
+              .update(itemUpdate)
+              .eq('id', itemReturn.itemId);
+        });
+
+        // Wait for all item updates to complete
+      final itemUpdateResults = await Future.wait(itemUpdatePromises);
+      
+        // Check for errors
+        for (final result in itemUpdateResults) {
+          if (result.status != 200 && result.status != 204) {
+            throw Exception('Error updating order items: ${result.statusText}');
+          }
+        }
+      }
+
+      // Calculate base total: Subtotal + GST (if not included)
+      final baseTotal = currentOrder.subtotal ?? 0.0;
+      final gstAmount = currentOrder.gstAmount ?? 0.0;
+      final gstIncluded = currentOrder.staff?.gstIncluded ?? false;
+      final baseWithGst = gstIncluded ? baseTotal : baseTotal + gstAmount;
+      
+      // Add damage fees, late fee, and subtract discount
+      final discountAmount = discount ?? 0.0;
+      final newTotal = baseWithGst + calcDamageFeeTotal + lateFee - discountAmount;
+
+      // Update order with late fee, discount, damage fees, and new total (matching website logic)
+      final orderUpdate = <String, dynamic>{
+        'total_amount': newTotal,
+      };
+      
+      if (calcDamageFeeTotal > 0) {
+        orderUpdate['damage_fee_total'] = calcDamageFeeTotal;
+      }
+      if (lateFee > 0 || currentOrder.lateFee != null) {
+        orderUpdate['late_fee'] = lateFee;
+      }
+      if (discount != null && discount > 0) {
+        orderUpdate['discount_amount'] = discount;
+      } else if (discount != null && discount == 0 && currentOrder.discountAmount != null) {
+        // Clear discount if explicitly set to 0
+        orderUpdate['discount_amount'] = 0;
+      }
+
+      final orderUpdateResult = await _supabase
+          .from('orders')
+          .update(orderUpdate)
+          .eq('id', orderId)
+          .select()
+          .single();
+
+      if (orderUpdateResult.isEmpty) {
+        throw Exception('Failed to update order');
+      }
+
+      return {'success': true, 'data': orderUpdateResult};
     } catch (e) {
       AppLogger.error('Error processing order return', e);
       rethrow;
@@ -701,7 +830,7 @@ class OrdersService {
         .select(
           'id, invoice_number, branch_id, staff_id, customer_id, '
           'booking_date, start_date, end_date, start_datetime, end_datetime, '
-          'status, total_amount, subtotal, gst_amount, late_fee, damage_fee_total, '
+          'status, total_amount, subtotal, gst_amount, late_fee, discount_amount, damage_fee_total, '
           'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, additional_amount_collected, deposit_balance, created_at, '
           'customer:customers(*), '
           'branch:branches(*), '

@@ -67,6 +67,7 @@ class Order {
   final double? subtotal; // Subtotal before GST
   final double? gstAmount; // GST amount
   final double? lateFee; // Late fee amount
+  final double? discountAmount; // Discount amount applied during return process
   final double? damageFeeTotal; // Total damage fee for the order
   final double? securityDepositAmount; // Security deposit amount
   final double? depositBalance; // Backend-computed deposit balance (if provided)
@@ -103,6 +104,7 @@ class Order {
     this.subtotal,
     this.gstAmount,
     this.lateFee,
+    this.discountAmount,
     this.damageFeeTotal,
     this.securityDepositAmount,
     this.depositBalance,
@@ -258,6 +260,7 @@ class Order {
       subtotal: (json['subtotal'] as num?)?.toDouble(),
       gstAmount: (json['gst_amount'] as num?)?.toDouble(),
       lateFee: (json['late_fee'] as num?)?.toDouble(),
+      discountAmount: (json['discount_amount'] as num?)?.toDouble(),
       damageFeeTotal: (json['damage_fee_total'] as num?)?.toDouble(),
       securityDepositAmount: safeToDouble(json['security_deposit_amount']),
       depositBalance: safeToDouble(
@@ -299,6 +302,7 @@ class Order {
       'subtotal': subtotal,
       'gst_amount': gstAmount,
       'late_fee': lateFee,
+      'discount_amount': discountAmount,
       'security_deposit_amount': securityDepositAmount,
       'deposit_balance': depositBalance,
       'security_deposit_collected': securityDepositCollected,

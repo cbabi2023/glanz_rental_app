@@ -73,6 +73,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
 
   // Late fee controller
   final TextEditingController _lateFeeController = TextEditingController();
+  // Discount controller
+  final TextEditingController _discountController = TextEditingController();
 
   @override
   void initState() {
@@ -377,8 +379,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   }
 
   @override
+  @override
   void dispose() {
     _lateFeeController.dispose();
+    _discountController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -564,10 +568,45 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       return;
     }
 
-    // Check if there are any changes
+    // Check if there are any changes (including late fee and discount)
     bool hasChanges = false;
     final items = order.items ?? [];
 
+    // Check for late fee changes
+    final lateFeeText = _lateFeeController.text.trim();
+    double? newLateFee;
+    if (lateFeeText.isNotEmpty) {
+      try {
+        newLateFee = double.parse(lateFeeText);
+        if (newLateFee! < 0) newLateFee = 0;
+      } catch (e) {
+        newLateFee = null;
+      }
+    } else {
+      newLateFee = 0.0;
+    }
+    if ((newLateFee ?? 0) != (order.lateFee ?? 0)) {
+      hasChanges = true;
+    }
+
+    // Check for discount changes
+    final discountText = _discountController.text.trim();
+    double? newDiscount;
+    if (discountText.isNotEmpty) {
+      try {
+        newDiscount = double.parse(discountText);
+        if (newDiscount! < 0) newDiscount = 0;
+      } catch (e) {
+        newDiscount = null;
+      }
+    } else {
+      newDiscount = 0.0;
+    }
+    if ((newDiscount ?? 0) != (order.discountAmount ?? 0)) {
+      hasChanges = true;
+    }
+
+    // Check for item return changes
     for (final item in items) {
       if (item.id == null) continue;
 
@@ -666,58 +705,62 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         }
       }
 
-      // Also update damage for items that have damage but may not be returned
-      for (final item in items) {
-        if (item.id == null) continue;
-
-        final damageCost = _damageCosts[item.id!];
-        final damageDesc = _damageDescriptions[item.id!];
-        final currentDamageCost = item.damageCost;
-        final currentDamageDesc = item.missingNote;
-
-        // Update damage if changed
-        if ((damageCost != null && damageCost != (currentDamageCost ?? 0)) ||
-            (damageDesc != null && damageDesc != (currentDamageDesc ?? ''))) {
-          await ordersService.updateItemDamage(
-            itemId: item.id!,
-            damageCost: damageCost,
-            damageDescription: damageDesc,
-          );
+      // Parse late fee and discount (matching website logic)
+      double lateFee = 0.0;
+      double? discount;
+      
+      final lateFeeText = _lateFeeController.text.trim();
+      if (lateFeeText.isNotEmpty) {
+        try {
+          lateFee = double.parse(lateFeeText);
+          if (lateFee < 0) lateFee = 0.0;
+        } catch (e) {
+          AppLogger.error('Error parsing late fee', e);
+          lateFee = order.lateFee ?? 0.0; // Use existing if parse fails
         }
       }
 
-      // Update late fee if order is late or has late fee set
-      if (_isOrderLate(order) ||
-          (order.lateFee != null && order.lateFee! > 0)) {
-        final lateFeeText = _lateFeeController.text.trim();
-        if (lateFeeText.isNotEmpty) {
-          try {
-            final lateFee = double.parse(lateFeeText);
-            if (lateFee >= 0 && lateFee != (order.lateFee ?? 0)) {
-              await ordersService.updateLateFee(
-                orderId: widget.orderId,
-                lateFee: lateFee,
-              );
-            }
-          } catch (e) {
-            AppLogger.error('Error parsing late fee', e);
-            // Continue with other updates even if late fee parsing fails
+      final discountText = _discountController.text.trim();
+      if (discountText.isNotEmpty) {
+        try {
+          final discountValue = double.parse(discountText);
+          if (discountValue >= 0) {
+            discount = discountValue;
           }
-        } else if ((order.lateFee ?? 0) > 0) {
-          // Clear late fee if field is empty but order has late fee
-          await ordersService.updateLateFee(
-            orderId: widget.orderId,
-            lateFee: 0.0,
-          );
+        } catch (e) {
+          AppLogger.error('Error parsing discount', e);
+          // Continue with null (won't update discount)
         }
       }
 
-      if (itemReturns.isNotEmpty) {
+      // Validate discount is not more than order total (matching website validation)
+      final orderTotal = order.totalAmount;
+      if (discount != null && discount! > orderTotal) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Discount (₹${NumberFormat('#,##0.00').format(discount!)}) cannot exceed order total (₹${NumberFormat('#,##0.00').format(orderTotal)}). Please verify.',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        setState(() {
+          _isUpdating = false;
+        });
+        return;
+      }
+
+      // Process order return with late fee and discount together (matching website logic)
+      // If no item returns but late fee or discount changed, still call processOrderReturn
+      if (itemReturns.isNotEmpty || (lateFee != (order.lateFee ?? 0)) || (discount != null && discount != (order.discountAmount ?? 0))) {
         await ordersService.processOrderReturn(
           orderId: widget.orderId,
           itemReturns: itemReturns,
           userId: userProfile!.id,
-          lateFee: 0.0, // Late fee is handled separately above
+          lateFee: lateFee,
+          discount: discount,
         );
       }
 
@@ -833,9 +876,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   Widget build(BuildContext context) {
     final orderAsync = ref.watch(orderProvider(widget.orderId));
 
-    // Initialize late fee controller when order data is available
+    // Initialize late fee and discount controllers when order data is available
     orderAsync.whenData((order) {
       if (order != null) {
+        // Initialize late fee controller
         if (order.lateFee != null && order.lateFee! > 0) {
           if (_lateFeeController.text.isEmpty ||
               _lateFeeController.text != order.lateFee!.toStringAsFixed(2)) {
@@ -846,6 +890,20 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           if (_lateFeeController.text.isNotEmpty &&
               (order.lateFee == null || order.lateFee! == 0)) {
             // Don't clear if user has entered a value
+          }
+        }
+        
+        // Initialize discount controller
+        if (order.discountAmount != null && order.discountAmount! > 0) {
+          if (_discountController.text.isEmpty ||
+              _discountController.text != order.discountAmount!.toStringAsFixed(2)) {
+            _discountController.text = order.discountAmount!.toStringAsFixed(2);
+          }
+        } else {
+          // Clear discount if order has no discount
+          if (_discountController.text.isNotEmpty &&
+              (order.discountAmount == null || order.discountAmount! == 0)) {
+            _discountController.text = '';
           }
         }
       }
@@ -2066,7 +2124,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   },
                                 );
                               }),
-                              // Save Changes Button (only show when at least one checkbox is checked)
+                              // Late Fee and Discount Fields + Save Changes Button (only show when at least one checkbox is checked)
                               Builder(
                                 builder: (context) {
                                   // Check if any checkbox is checked
@@ -2085,6 +2143,196 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                           height: 1,
                                         ),
                                         const SizedBox(height: 16),
+                                        // Late Fee Input Field
+                                        Card(
+                                          elevation: 0,
+                                          color: Colors.white,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(16),
+                                            side: BorderSide(color: Colors.grey.shade200),
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(16),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Text(
+                                                      'Late Fee (₹)',
+                                                      style: TextStyle(
+                                                        fontSize: 14,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: Colors.grey.shade700,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      'Optional',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors.grey.shade500,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                if (_isOrderLate(order)) ...[
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    'This order was returned after the due date. Enter a late fee if applicable.',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.red.shade600,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ],
+                                                const SizedBox(height: 8),
+                                                TextField(
+                                                  controller: _lateFeeController,
+                                                  keyboardType:
+                                                      const TextInputType.numberWithOptions(
+                                                        decimal: true,
+                                                      ),
+                                                  decoration: InputDecoration(
+                                                    hintText: '0.00',
+                                                    prefixText: '₹ ',
+                                                    prefixStyle: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: Colors.grey.shade700,
+                                                    ),
+                                                    filled: true,
+                                                    fillColor: Colors.white,
+                                                    border: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      borderSide: BorderSide(
+                                                        color: Colors.grey.shade300,
+                                                      ),
+                                                    ),
+                                                    enabledBorder: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      borderSide: BorderSide(
+                                                        color: Colors.grey.shade300,
+                                                      ),
+                                                    ),
+                                                    focusedBorder: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      borderSide: BorderSide(
+                                                        color: Colors.red.shade600,
+                                                        width: 2,
+                                                      ),
+                                                    ),
+                                                    contentPadding: const EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                      vertical: 14,
+                                                    ),
+                                                  ),
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Colors.grey.shade900,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        // Discount Input Field
+                                        Card(
+                                          elevation: 0,
+                                          color: Colors.white,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(16),
+                                            side: BorderSide(color: Colors.grey.shade200),
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(16),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Text(
+                                                      'Discount (₹)',
+                                                      style: TextStyle(
+                                                        fontSize: 14,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: Colors.grey.shade700,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      'Optional',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors.grey.shade500,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 8),
+                                                TextField(
+                                                  controller: _discountController,
+                                                  keyboardType:
+                                                      const TextInputType.numberWithOptions(
+                                                        decimal: true,
+                                                      ),
+                                                  decoration: InputDecoration(
+                                                    hintText: '0.00',
+                                                    prefixText: '₹ ',
+                                                    prefixStyle: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: Colors.grey.shade700,
+                                                    ),
+                                                    filled: true,
+                                                    fillColor: Colors.white,
+                                                    border: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      borderSide: BorderSide(
+                                                        color: Colors.grey.shade300,
+                                                      ),
+                                                    ),
+                                                    enabledBorder: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      borderSide: BorderSide(
+                                                        color: Colors.grey.shade300,
+                                                      ),
+                                                    ),
+                                                    focusedBorder: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      borderSide: BorderSide(
+                                                        color: Colors.green.shade600,
+                                                        width: 2,
+                                                      ),
+                                                    ),
+                                                    contentPadding: const EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                      vertical: 14,
+                                                    ),
+                                                  ),
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Colors.grey.shade900,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'Enter discount amount to apply to this order when returning items.',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey.shade500,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        // Save Changes Button
                                         SizedBox(
                                           width: double.infinity,
                                           child: ElevatedButton.icon(
@@ -2184,636 +2432,223 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Late Fee Section Card (hide for flagged orders)
-                    if (!order.isFlagged &&
-                        (_isOrderLate(order) ||
-                            (order.lateFee != null && order.lateFee! > 0)))
-                      Card(
-                        elevation: 0,
-                        color: Colors.red.shade50,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(
-                            color: Colors.red.shade200,
-                            width: 1.5,
+
+                    // Summary Card (matching website design exactly)
+                    Builder(
+                      builder: (context) {
+                        // Get user profile for GST rate
+                        final userProfile = ref.watch(userProfileProvider).value;
+                        final gstRate = userProfile?.gstRate ?? 5.0;
+                        
+                        // Calculate display total matching website logic:
+                        // baseTotal + damage_fee_total + late_fee - discount_amount
+                        final baseTotal = order.subtotal ?? 0.0;
+                        final gstAmount = order.gstAmount ?? 0.0;
+                        final gstIncluded = userProfile?.gstIncluded ?? false;
+                        final baseWithGst = gstIncluded ? baseTotal : baseTotal + gstAmount;
+                        final damageFees = order.damageFeeTotal ?? 0.0;
+                        final lateFee = order.lateFee ?? 0.0;
+                        final discountAmount = order.discountAmount ?? 0.0;
+                        final displayTotalAmount = baseWithGst + damageFees + lateFee - discountAmount;
+                        
+                        return Card(
+                          elevation: 0,
+                          color: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: BorderSide(color: Colors.grey.shade200),
                           ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.shade100,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Icon(
-                                      Icons.warning_amber_rounded,
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.description_outlined,
                                       size: 20,
-                                      color: Colors.red.shade700,
+                                      color: const Color(0xFF273492),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  const Expanded(
-                                    child: Text(
-                                      'Late Fee',
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      'Summary',
                                       style: TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
                                         color: Color(0xFF0F1724),
                                       ),
                                     ),
-                                  ),
-                                  if (_isOrderLate(order))
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.red.shade600,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Text(
-                                        'LATE',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              if (_isOrderLate(order)) ...[
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.calendar_today_outlined,
-                                      size: 16,
-                                      color: Colors.red.shade700,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Days Overdue: ${_getDaysOverdue(order)}',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.red.shade700,
-                                      ),
-                                    ),
                                   ],
                                 ),
-                                const SizedBox(height: 12),
-                              ],
-                              // Late Fee Input Field (when order is late or has late fee)
-                              if (_isOrderLate(order) ||
-                                  (order.lateFee != null &&
-                                      order.lateFee! > 0)) ...[
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Enter Late Fee Amount',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.grey.shade700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    TextField(
-                                      controller: _lateFeeController,
-                                      keyboardType:
-                                          const TextInputType.numberWithOptions(
-                                            decimal: true,
-                                          ),
-                                      decoration: InputDecoration(
-                                        hintText: '0.00',
-                                        prefixText: '₹ ',
-                                        prefixStyle: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey.shade700,
-                                        ),
-                                        filled: true,
-                                        fillColor: Colors.white,
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          borderSide: BorderSide(
-                                            color: Colors.grey.shade300,
-                                          ),
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          borderSide: BorderSide(
-                                            color: Colors.grey.shade300,
-                                          ),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          borderSide: BorderSide(
-                                            color: Colors.red.shade600,
-                                            width: 2,
-                                          ),
-                                        ),
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 14,
-                                            ),
-                                      ),
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.grey.shade900,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ] else ...[
-                                // Display late fee if already set
+                                const SizedBox(height: 20),
+                                // Subtotal (always shown)
                                 Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      order.lateFee != null &&
-                                              order.lateFee! > 0
-                                          ? 'Late Fee Amount'
-                                          : 'No Late Fee Applied',
+                                      'Subtotal',
                                       style: TextStyle(
                                         fontSize: 14,
+                                        color: Colors.grey.shade600,
                                         fontWeight: FontWeight.w500,
-                                        color: Colors.grey.shade700,
                                       ),
                                     ),
-                                    if (order.lateFee != null &&
-                                        order.lateFee! > 0)
-                                      Text(
-                                        '₹${NumberFormat('#,##0.00').format(order.lateFee!)}',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.red.shade700,
-                                        ),
-                                      )
-                                    else
-                                      Text(
-                                        '₹0.00',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.grey.shade600,
-                                        ),
+                                    Text(
+                                      '₹${NumberFormat('#,##0.00').format(baseTotal)}',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF0F1724),
                                       ),
+                                    ),
                                   ],
                                 ),
-                              ],
-                              if (_isOrderLate(order) &&
-                                  (order.lateFee == null ||
-                                      order.lateFee! == 0)) ...[
                                 const SizedBox(height: 12),
+                                // GST (only if > 0, with dynamic rate)
+                                if (gstAmount > 0) ...[
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'GST (${gstRate.toStringAsFixed(0)}%)',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey.shade600,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      Text(
+                                        '₹${NumberFormat('#,##0.00').format(gstAmount)}',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF0F1724),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
+                                // Damage Fees (only if > 0)
+                                if (damageFees > 0) ...[
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Damage Fees',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey.shade600,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      Text(
+                                        '₹${NumberFormat('#,##0.00').format(damageFees)}',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.red.shade600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
+                                // Late Fees (only if > 0)
+                                if (lateFee > 0) ...[
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Late Fees',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey.shade600,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      Text(
+                                        '₹${NumberFormat('#,##0.00').format(lateFee)}',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.red.shade600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
+                                // Discount (only if > 0)
+                                if (discountAmount > 0) ...[
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Discount',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey.shade600,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      Text(
+                                        '-₹${NumberFormat('#,##0.00').format(discountAmount)}',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.green.shade600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
+                                // Grand Total (matching website styling)
                                 Container(
-                                  padding: const EdgeInsets.all(12),
+                                  margin: const EdgeInsets.only(top: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                    horizontal: 12,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: Colors.orange.shade50,
+                                    color: Colors.red.shade50,
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: Colors.orange.shade200,
+                                    border: Border(
+                                      top: BorderSide(
+                                        color: Colors.grey.shade400,
+                                        width: 2,
+                                      ),
                                     ),
                                   ),
                                   child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Icon(
-                                        Icons.info_outline,
-                                        size: 16,
-                                        color: Colors.orange.shade700,
+                                      const Text(
+                                        'Grand Total',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF0F1724),
+                                        ),
                                       ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          'Please enter the late fee amount',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.orange.shade700,
-                                            fontWeight: FontWeight.w500,
-                                          ),
+                                      Text(
+                                        '₹${NumberFormat('#,##0.00').format(displayTotalAmount)}',
+                                        style: TextStyle(
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.red.shade600,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
                               ],
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
-                    if (_isOrderLate(order) ||
-                        (order.lateFee != null && order.lateFee! > 0))
-                      const SizedBox(height: 16),
-
-                    // Summary Card (matching website design)
-                    Card(
-                      elevation: 0,
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(color: Colors.grey.shade200),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.description_outlined,
-                                  size: 20,
-                                  color: Colors.indigo.shade600,
-                                ),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'Summary',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF0F1724),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-                            // Subtotal
-                            if (order.subtotal != null) ...[
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Subtotal',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey.shade700,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  Text(
-                                    '₹${NumberFormat('#,##0.00').format(order.subtotal!)}',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey.shade900,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Divider(color: Colors.grey.shade200, height: 24),
-                            ],
-                            // GST
-                            if (order.gstAmount != null &&
-                                order.gstAmount! > 0) ...[
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'GST (5%)',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey.shade700,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  Text(
-                                    '₹${NumberFormat('#,##0.00').format(order.gstAmount!)}',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey.shade900,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Divider(color: Colors.grey.shade200, height: 24),
-                            ],
-                            // Damage Fees (itemized breakdown)
-                            Builder(
-                              builder: (context) {
-                                final itemsWithDamage =
-                                    order.items
-                                        ?.where(
-                                          (item) =>
-                                              item.damageCost != null &&
-                                              item.damageCost! > 0,
-                                        )
-                                        .toList() ??
-                                    [];
-
-                                if (itemsWithDamage.isNotEmpty) {
-                                  return Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            'Damage Fees',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey.shade700,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          const SizedBox(),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      ...itemsWithDamage.map((item) {
-                                        return Padding(
-                                          padding: const EdgeInsets.only(
-                                            left: 16,
-                                            bottom: 6,
-                                          ),
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  '- ${item.productName ?? 'Item'} (${item.quantity} qty)${item.missingNote != null && item.missingNote!.isNotEmpty ? ' - ${item.missingNote}' : ''}',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.grey.shade600,
-                                                  ),
-                                                ),
-                                              ),
-                                              Text(
-                                                '₹${NumberFormat('#,##0.00').format(item.damageCost!)}',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Colors.grey.shade900,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      }),
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            'Total Damage Fee',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey.shade700,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          Text(
-                                            '₹${NumberFormat('#,##0.00').format(order.damageFeeTotal ?? 0.0)}',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.red.shade700,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      Divider(
-                                        color: Colors.grey.shade200,
-                                        height: 24,
-                                      ),
-                                    ],
-                                  );
-                                }
-                                return const SizedBox.shrink();
-                              },
-                            ),
-                            // Return Status Section
-                            if (order.items != null &&
-                                order.items!.isNotEmpty &&
-                                !order.isScheduled &&
-                                !order.isCancelled) ...[
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'RETURN STATUS',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.grey.shade700,
-                                        letterSpacing: 1.2,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Builder(
-                                      builder: (context) {
-                                        final totalQuantity = order.items!
-                                            .fold<int>(
-                                              0,
-                                              (sum, item) =>
-                                                  sum + item.quantity,
-                                            );
-                                        final returnedQuantity = order.items!
-                                            .fold<int>(0, (sum, item) {
-                                              int returnedQty;
-                                              if (item.isReturned) {
-                                                returnedQty =
-                                                    item.returnedQuantity ??
-                                                    item.quantity;
-                                              } else {
-                                                returnedQty =
-                                                    item.returnedQuantity ?? 0;
-                                              }
-                                              return sum + returnedQty;
-                                            });
-                                        final missingQuantity =
-                                            totalQuantity - returnedQuantity;
-
-                                        return Column(
-                                          children: [
-                                            Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
-                                              children: [
-                                                Text(
-                                                  'Total Quantity',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.grey.shade600,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                                Text(
-                                                  '$totalQuantity',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.grey.shade700,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
-                                              children: [
-                                                Text(
-                                                  'Returned',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color:
-                                                        Colors.green.shade700,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                                Text(
-                                                  '$returnedQuantity',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.bold,
-                                                    color:
-                                                        Colors.green.shade700,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            if (missingQuantity > 0) ...[
-                                              const SizedBox(height: 8),
-                                              Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  Text(
-                                                    'Missing',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color:
-                                                          Colors.red.shade700,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    '$missingQuantity',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color:
-                                                          Colors.red.shade700,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                            ],
-                            // Security Deposit (if provided)
-                            if (order.securityDeposit != null &&
-                                order.securityDeposit! > 0) ...[
-                              const SizedBox(height: 12),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Security Deposit',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF1F2A7A),
-                                    ),
-                                  ),
-                                  Text(
-                                    '₹${NumberFormat('#,##0').format(order.securityDeposit!.toInt())}',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: const Color(0xFF1F2A7A),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                            ],
-                            // Total
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 12,
-                                horizontal: 12,
-                              ),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.grey.shade50,
-                                    Colors.grey.shade100,
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Total',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey.shade900,
-                                    ),
-                                  ),
-                                  Text(
-                                    '₹${NumberFormat('#,##0.00').format(order.totalAmount)}',
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: const Color(0xFF1F2A7A),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                        );
+                      },
                     ),
 
                     // Security Deposit Refund Section (only show if security deposit exists)
