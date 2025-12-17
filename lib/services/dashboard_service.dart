@@ -65,6 +65,50 @@ class DashboardService {
         AppLogger.error('Error fetching customers count', e);
       }
 
+      // Fetch late return count separately (without date filter, only branch filter)
+      // This ensures late returns always show full count regardless of date filter
+      int lateReturnCount = 0;
+      try {
+        dynamic lateReturnQuery = _supabase
+            .from('orders')
+            .select('status, end_date, end_datetime');
+
+        if (branchId != null) {
+          lateReturnQuery = lateReturnQuery.eq('branch_id', branchId);
+        }
+
+        final lateReturnResponse = await lateReturnQuery;
+        final now = DateTime.now();
+
+        if (lateReturnResponse is List) {
+          for (final raw in lateReturnResponse) {
+            final map = raw as Map<String, dynamic>;
+            final status = map['status'] as String?;
+
+            // Check if order is late (past end date but not completed/cancelled/partially returned)
+            if (status != 'completed' &&
+                status != 'cancelled' &&
+                status != 'partially_returned') {
+              try {
+                final endStr =
+                    map['end_datetime']?.toString() ??
+                    map['end_date']?.toString();
+                if (endStr != null && endStr.isNotEmpty) {
+                  final endDate = DateTime.parse(endStr);
+                  if (now.isAfter(endDate)) {
+                    lateReturnCount++;
+                  }
+                }
+              } catch (e) {
+                // Skip if date parsing fails
+              }
+            }
+          }
+        }
+      } catch (e) {
+        AppLogger.error('Error fetching late return count', e);
+      }
+
       if (ordersResponse == null || ordersResponse is! List) {
         return DashboardStats(
           active: 0,
@@ -75,7 +119,7 @@ class DashboardService {
           partiallyReturned: 0,
           totalOrders: 0,
           totalCustomers: 0,
-          lateReturn: 0,
+          lateReturn: lateReturnCount, // Use separately fetched count
         );
       }
 
@@ -84,9 +128,7 @@ class DashboardService {
       int completedCount = 0;
       int scheduledCount = 0;
       int partiallyReturnedCount = 0;
-      int lateReturnCount = 0;
       double collection = 0.0;
-      final now = DateTime.now();
 
       for (final raw in ordersResponse) {
         final map = raw as Map<String, dynamic>;
@@ -113,24 +155,7 @@ class DashboardService {
           default:
             break;
         }
-
-        // Check if order is late (past end date but not completed/cancelled/partially returned)
-        if (status != 'completed' &&
-            status != 'cancelled' &&
-            status != 'partially_returned') {
-          try {
-            final endStr =
-                map['end_datetime']?.toString() ?? map['end_date']?.toString();
-            if (endStr != null && endStr.isNotEmpty) {
-              final endDate = DateTime.parse(endStr);
-              if (now.isAfter(endDate)) {
-                lateReturnCount++;
-              }
-            }
-          } catch (e) {
-            // Skip if date parsing fails
-          }
-        }
+        // Late return count is now calculated separately above (without date filter)
       }
 
       return DashboardStats(
