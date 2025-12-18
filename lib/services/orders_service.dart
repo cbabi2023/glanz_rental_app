@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/supabase_client.dart';
 import '../core/logger.dart';
 import '../models/order.dart';
+import '../models/order_item.dart';
 
 /// Item Return Model for processing returns
 class ItemReturn {
@@ -729,17 +730,8 @@ class OrdersService {
         throw Exception('Order not found');
       }
 
-      // Calculate damage fee total from item returns (or use existing if no item returns)
-      double calcDamageFeeTotal = currentOrder.damageFeeTotal ?? 0.0;
+      // Update items in parallel (like website)
       if (itemReturns.isNotEmpty) {
-        calcDamageFeeTotal = 0.0;
-        for (final itemReturn in itemReturns) {
-          if (itemReturn.damageCost != null && itemReturn.damageCost! > 0) {
-            calcDamageFeeTotal += itemReturn.damageCost!;
-          }
-        }
-        
-        // Update items in parallel (like website)
         final itemUpdatePromises = itemReturns.map((itemReturn) {
           final itemUpdate = <String, dynamic>{
           'return_status': itemReturn.returnStatus,
@@ -777,65 +769,68 @@ class OrdersService {
         await Future.wait(itemUpdatePromises);
       }
 
-      // Determine new order status based on item returns being processed
-      // We check the itemReturns we're processing combined with current order state
-      OrderStatus? newStatus;
+      // Calculate damage fee total from all items in database (matching website logic)
+      // This ensures we get the complete total, not just from items being processed
+      final allItemsResponse = await _supabase
+          .from('order_items')
+          .select('damage_fee')
+          .eq('order_id', orderId);
       
-      if (itemReturns.isNotEmpty) {
-        // Build a map of item returns by itemId for quick lookup
-        final returnMap = <String, ItemReturn>{};
-        for (final itemReturn in itemReturns) {
-          returnMap[itemReturn.itemId] = itemReturn;
-        }
+      final calcDamageFeeTotal = (allItemsResponse as List)
+          .map((item) => (item['damage_fee'] as num?)?.toDouble() ?? 0.0)
+          .fold<double>(0.0, (sum, cost) => sum + cost);
 
-        // Get current order items to check quantities
-        final allItems = currentOrder.items ?? [];
+      // Determine new order status based on item returns being processed
+      // Matching website logic: determineOrderStatusFromReturns
+      // Fetch updated order to check current item state after updates
+      OrderStatus? newStatus;
+      final updatedOrderForStatus = await getOrder(orderId);
+      
+      if (updatedOrderForStatus != null) {
+        final allItems = updatedOrderForStatus.items ?? [];
         
         if (allItems.isNotEmpty) {
-          // Check if all items are being fully returned
-          bool allItemsFullyReturned = true;
-          bool hasAnyReturns = false;
-          
-          for (final item in allItems) {
-            if (item.id == null) continue;
-            
-            final itemReturn = returnMap[item.id!];
-            final currentReturnedQty = item.returnedQuantity ?? 0;
-            
-            if (itemReturn != null) {
-              // This item is being processed
-              if (itemReturn.returnStatus == 'returned' || itemReturn.returnStatus == 'missing') {
-                hasAnyReturns = true;
-                // If returnedQuantity is null, it means full quantity is being returned
-                final newReturnedQty = itemReturn.returnedQuantity ?? item.quantity;
-                if (newReturnedQty < item.quantity) {
-                  allItemsFullyReturned = false;
-                }
-              } else if (itemReturn.returnStatus == 'not_yet_returned') {
-                // Item is being unreturned - not all items are returned
-                allItemsFullyReturned = false;
-              }
-            } else {
-              // Item not in this batch - check existing state
-              if (currentReturnedQty > 0) {
-                hasAnyReturns = true;
-                if (currentReturnedQty < item.quantity) {
-                  allItemsFullyReturned = false;
-                }
-              } else {
-                // Item not returned yet
-                allItemsFullyReturned = false;
-              }
-            }
-          }
+          // Check if all items are fully returned
+          final allReturned = allItems.every((item) {
+            final returnedQty = item.returnedQuantity ?? 0;
+            return item.returnStatus == ReturnStatus.returned && returnedQty == item.quantity;
+          });
 
-          if (allItemsFullyReturned && hasAnyReturns) {
-            // All items returned - use completed status (not completed_with_issues to avoid constraint error)
+          // Check for missing items (return_status = 'missing')
+          final hasMissing = allItems.any((item) => item.returnStatus == ReturnStatus.missing);
+
+          // Check for items not yet returned
+          final hasNotReturned = allItems.any((item) {
+            final returnedQty = item.returnedQuantity ?? 0;
+            return (item.returnStatus == null || item.returnStatus == ReturnStatus.notYetReturned) && returnedQty == 0;
+          });
+
+          // Check for partial returns (returnedQuantity > 0 AND returnedQuantity < quantity)
+          final hasPartialReturns = allItems.any((item) {
+            final returnedQty = item.returnedQuantity ?? 0;
+            return returnedQty > 0 && returnedQty < item.quantity;
+          });
+
+          // Check for damage (damage_fee > 0 OR damage_description exists)
+          final hasDamage = calcDamageFeeTotal > 0 || 
+                           allItems.any((item) => 
+                             (item.damageCost != null && item.damageCost! > 0) ||
+                             (item.damageDescription != null && item.damageDescription!.trim().isNotEmpty)
+                           );
+
+          // Priority 1: All items fully returned, no damage, no missing, no partial returns → completed
+          if (allReturned && !hasPartialReturns && !hasDamage && !hasMissing) {
             newStatus = OrderStatus.completed;
-          } else if (hasAnyReturns) {
-            // Some items returned but not all - mark as partially returned
+          }
+          // Priority 2: Any damage OR partial returns OR missing items → flagged
+          else if (hasDamage || hasPartialReturns || hasMissing) {
+            newStatus = OrderStatus.flagged;
+          }
+          // Priority 3: Some items returned but no damage and no missing → partially_returned
+          else if (!hasNotReturned && !allReturned) {
             newStatus = OrderStatus.partiallyReturned;
           }
+          // Priority 4: No items returned yet → keep current status (don't update)
         }
       }
 
@@ -860,9 +855,8 @@ class OrdersService {
         orderUpdate['status'] = statusToSet.value;
       }
       
-      if (calcDamageFeeTotal > 0) {
-        orderUpdate['damage_fee_total'] = calcDamageFeeTotal;
-      }
+      // Always update damage_fee_total (even if 0) to match website logic
+      orderUpdate['damage_fee_total'] = calcDamageFeeTotal;
       if (lateFee > 0 || currentOrder.lateFee != null) {
         orderUpdate['late_fee'] = lateFee;
       }

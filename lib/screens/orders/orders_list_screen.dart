@@ -44,16 +44,71 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
   _DateFilter _selectedDateFilter = _DateFilter.allTime;
   DateTime? _customStartDate;
   DateTime? _customEndDate;
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onScroll() {
+    // Load more when user scrolls to 80% of the list
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent * 0.8) {
+      final userProfile = ref.read(userProfileProvider).value;
+      final branchId = userProfile?.branchId;
+      if (branchId == null) return;
+
+      final startDate = _startForFilter(_selectedDateFilter);
+      final endDate = _endForFilter(_selectedDateFilter);
+      
+      // Map tab to status for server-side filtering (where applicable)
+      OrderStatus? status;
+      switch (_selectedTab) {
+        case _OrdersTab.scheduled:
+          status = OrderStatus.scheduled;
+          break;
+        case _OrdersTab.ongoing:
+          status = OrderStatus.active;
+          break;
+        case _OrdersTab.returned:
+          status = OrderStatus.completed;
+          break;
+        case _OrdersTab.cancelled:
+          status = OrderStatus.cancelled;
+          break;
+        case _OrdersTab.flagged:
+          status = OrderStatus.flagged;
+          break;
+        case _OrdersTab.partiallyReturned:
+          status = OrderStatus.partiallyReturned;
+          break;
+        case _OrdersTab.late:
+        case _OrdersTab.all:
+          // These require client-side filtering
+          status = null;
+          break;
+      }
+      
+      final params = OrdersParams(
+        branchId: branchId,
+        status: status,
+        startDate: startDate,
+        endDate: endDate,
+      );
+      
+      ref.read(ordersInfiniteProvider(params).notifier).loadMore();
+    }
   }
 
   @override
@@ -65,9 +120,41 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
       if (branchId != null) {
         final startDate = _startForFilter(_selectedDateFilter);
         final endDate = _endForFilter(_selectedDateFilter);
-        ref.invalidate(
-          ordersProvider(OrdersParams(branchId: branchId, startDate: startDate, endDate: endDate)),
+        
+        // Map tab to status
+        OrderStatus? status;
+        switch (_selectedTab) {
+          case _OrdersTab.scheduled:
+            status = OrderStatus.scheduled;
+            break;
+          case _OrdersTab.ongoing:
+            status = OrderStatus.active;
+            break;
+          case _OrdersTab.returned:
+            status = OrderStatus.completed;
+            break;
+          case _OrdersTab.cancelled:
+            status = OrderStatus.cancelled;
+            break;
+          case _OrdersTab.flagged:
+            status = OrderStatus.flagged;
+            break;
+          case _OrdersTab.partiallyReturned:
+            status = OrderStatus.partiallyReturned;
+            break;
+          case _OrdersTab.late:
+          case _OrdersTab.all:
+            status = null;
+            break;
+        }
+        
+        final params = OrdersParams(
+          branchId: branchId,
+          status: status,
+          startDate: startDate,
+          endDate: endDate,
         );
+        ref.read(ordersInfiniteProvider(params).notifier).refresh();
       }
     }
   }
@@ -255,16 +342,43 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
     final startDate = _startForFilter(_selectedDateFilter);
     final endDate = _endForFilter(_selectedDateFilter);
 
-    // Watch orders provider - will refresh when trigger changes (provider watches it too)
-    final ordersAsync = ref.watch(
-      ordersProvider(
-        OrdersParams(
-          branchId: branchId,
-          startDate: startDate,
-          endDate: endDate,
-        ),
-      ),
+    // Map tab to status for server-side filtering (where applicable)
+    OrderStatus? status;
+    switch (_selectedTab) {
+      case _OrdersTab.scheduled:
+        status = OrderStatus.scheduled;
+        break;
+      case _OrdersTab.ongoing:
+        status = OrderStatus.active;
+        break;
+      case _OrdersTab.returned:
+        status = OrderStatus.completed;
+        break;
+      case _OrdersTab.cancelled:
+        status = OrderStatus.cancelled;
+        break;
+      case _OrdersTab.flagged:
+        status = OrderStatus.flagged;
+        break;
+      case _OrdersTab.partiallyReturned:
+        status = OrderStatus.partiallyReturned;
+        break;
+      case _OrdersTab.late:
+      case _OrdersTab.all:
+        // These require client-side filtering
+        status = null;
+        break;
+    }
+
+    final params = OrdersParams(
+      branchId: branchId,
+      status: status,
+      startDate: startDate,
+      endDate: endDate,
     );
+
+    // Use infinite scroll provider
+    final ordersState = ref.watch(ordersInfiniteProvider(params));
 
     return PopScope(
       canPop: true,
@@ -598,133 +712,149 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
-      body: ordersAsync.when(
-        data: (orders) {
-          if (orders.isEmpty) {
-            return _EmptyOrdersState(
-              onNewOrder: () => context.push('/orders/new'),
-            );
-          }
+      body: _buildOrdersBody(ordersState, params, branchId, startDate, endDate),
+      ),
+    );
+  }
 
-          // Apply filters and search
-          final filtered = _filterAndSearchOrders(orders);
-          final stats = _calculateStats(orders);
+  Widget _buildOrdersBody(
+    OrdersInfiniteState ordersState,
+    OrdersParams params,
+    String? branchId,
+    DateTime? startDate,
+    DateTime? endDate,
+  ) {
+    if (ordersState.isLoading && ordersState.orders.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-          return Column(
-            children: [
-              // Fixed Search Bar Only
-              Container(
-                color: Colors.white,
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                child: _OrdersSearchBar(
-                  value: _searchQuery,
-                  onChanged: (value) {
-                    setState(() {
-                      _searchQuery = value;
-                    });
-                  },
-                ),
-              ),
-              // Divider between fixed search and scrollable content
-              Divider(height: 1, color: Colors.grey.shade200),
-              // Scrollable Content (Tabs, Stats, Orders)
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () async {
-                    // Invalidate the exact provider instance being watched
-                    ref.invalidate(
-                      ordersProvider(OrdersParams(branchId: branchId, startDate: startDate, endDate: endDate)),
-                    );
-                    // Also invalidate recent orders
-                    ref.invalidate(recentOrdersProvider(branchId));
-                  },
-                  child: CustomScrollView(
-                    slivers: [
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _OrdersTabs(
-                                selected: _selectedTab,
-                                onChanged: (tab) {
-                                  // Update URL to reflect tab change
-                                  String tabParam = '';
-                                  switch (tab) {
-                                    case _OrdersTab.all:
-                                      tabParam = '';
-                                      break;
-                                    case _OrdersTab.scheduled:
-                                      tabParam = 'scheduled';
-                                      break;
-                                    case _OrdersTab.ongoing:
-                                      tabParam = 'ongoing';
-                                      break;
-                                    case _OrdersTab.late:
-                                      tabParam = 'late';
-                                      break;
-                                    case _OrdersTab.returned:
-                                      tabParam = 'completed';
-                                      break;
-                                    case _OrdersTab.partiallyReturned:
-                                      tabParam = 'partially_returned';
-                                      break;
-                                    case _OrdersTab.cancelled:
-                                      tabParam = 'cancelled';
-                                      break;
-                                    case _OrdersTab.flagged:
-                                      tabParam = 'flagged';
-                                      break;
-                                  }
-                                  
-                                  if (tabParam.isEmpty) {
-                                    context.go('/orders');
-                                  } else {
-                                    context.go('/orders?tab=$tabParam');
-                                  }
-                                },
-                              ),
-                              const SizedBox(height: 12),
-                              _OrdersStatsRow(stats: stats),
-                              const SizedBox(height: 12),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (filtered.isEmpty)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: _NoResultsState(),
-                          ),
-                        )
-                      else
-                        SliverList.builder(
-                          itemCount: filtered.length,
-                          itemBuilder: (context, index) {
-                            final order = filtered[index];
-                            return _OrderCardItem(order: order);
+    if (ordersState.error != null && ordersState.orders.isEmpty) {
+      return _ErrorState(
+        message: 'Error loading orders: ${ordersState.error}',
+        onRetry: () {
+          ref.read(ordersInfiniteProvider(params).notifier).refresh();
+          ref.invalidate(recentOrdersProvider(branchId));
+        },
+      );
+    }
+
+    if (ordersState.orders.isEmpty) {
+      return _EmptyOrdersState(
+        onNewOrder: () => context.push('/orders/new'),
+      );
+    }
+
+    // Apply client-side filters (search, late, etc.)
+    final filtered = _filterAndSearchOrders(ordersState.orders);
+    final stats = _calculateStats(ordersState.orders);
+
+    return Column(
+      children: [
+        // Fixed Search Bar Only
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: _OrdersSearchBar(
+            value: _searchQuery,
+            onChanged: (value) {
+              setState(() {
+                _searchQuery = value;
+              });
+            },
+          ),
+        ),
+        // Divider between fixed search and scrollable content
+        Divider(height: 1, color: Colors.grey.shade200),
+        // Scrollable Content (Tabs, Stats, Orders)
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              await ref.read(ordersInfiniteProvider(params).notifier).refresh();
+              ref.invalidate(recentOrdersProvider(branchId));
+            },
+            child: CustomScrollView(
+              controller: _scrollController,
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _OrdersTabs(
+                          selected: _selectedTab,
+                          onChanged: (tab) {
+                            // Update URL to reflect tab change
+                            String tabParam = '';
+                            switch (tab) {
+                              case _OrdersTab.all:
+                                tabParam = '';
+                                break;
+                              case _OrdersTab.scheduled:
+                                tabParam = 'scheduled';
+                                break;
+                              case _OrdersTab.ongoing:
+                                tabParam = 'ongoing';
+                                break;
+                              case _OrdersTab.late:
+                                tabParam = 'late';
+                                break;
+                              case _OrdersTab.returned:
+                                tabParam = 'completed';
+                                break;
+                              case _OrdersTab.partiallyReturned:
+                                tabParam = 'partially_returned';
+                                break;
+                              case _OrdersTab.cancelled:
+                                tabParam = 'cancelled';
+                                break;
+                              case _OrdersTab.flagged:
+                                tabParam = 'flagged';
+                                break;
+                            }
+                            
+                            if (tabParam.isEmpty) {
+                              context.go('/orders');
+                            } else {
+                              context.go('/orders?tab=$tabParam');
+                            }
                           },
                         ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                    ],
+                        const SizedBox(height: 12),
+                        _OrdersStatsRow(stats: stats),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => _ErrorState(
-          message: 'Error loading orders: $error',
-          onRetry: () {
-            ref.invalidate(ordersProvider(OrdersParams(branchId: branchId, startDate: startDate, endDate: endDate)));
-            ref.invalidate(recentOrdersProvider(branchId));
-          },
+                if (filtered.isEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: _NoResultsState(),
+                    ),
+                  )
+                else
+                  SliverList.builder(
+                    itemCount: filtered.length + (ordersState.isLoadingMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index >= filtered.length) {
+                        // Show loading indicator at bottom
+                        return const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      final order = filtered[index];
+                      return _OrderCardItem(order: order);
+                    },
+                  ),
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              ],
+            ),
+          ),
         ),
-      ),
-      ),
+      ],
     );
   }
 

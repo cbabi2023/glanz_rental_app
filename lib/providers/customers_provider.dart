@@ -7,6 +7,125 @@ final customersServiceProvider = Provider<CustomersService>((ref) {
   return CustomersService();
 });
 
+/// Customers Infinite Scroll State
+class CustomersInfiniteState {
+  final List<Customer> customers;
+  final bool isLoading;
+  final bool isLoadingMore;
+  final bool hasMore;
+  final String? error;
+  final int currentPage;
+
+  CustomersInfiniteState({
+    this.customers = const [],
+    this.isLoading = false,
+    this.isLoadingMore = false,
+    this.hasMore = true,
+    this.error,
+    this.currentPage = 1,
+  });
+
+  CustomersInfiniteState copyWith({
+    List<Customer>? customers,
+    bool? isLoading,
+    bool? isLoadingMore,
+    bool? hasMore,
+    String? error,
+    int? currentPage,
+  }) {
+    return CustomersInfiniteState(
+      customers: customers ?? this.customers,
+      isLoading: isLoading ?? this.isLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      hasMore: hasMore ?? this.hasMore,
+      error: error,
+      currentPage: currentPage ?? this.currentPage,
+    );
+  }
+}
+
+/// Customers Infinite Scroll Notifier
+class CustomersInfiniteNotifier extends StateNotifier<CustomersInfiniteState> {
+  final CustomersService _customersService;
+  final String? _searchQuery;
+
+  CustomersInfiniteNotifier(this._customersService, this._searchQuery)
+      : super(CustomersInfiniteState()) {
+    _loadInitial();
+  }
+
+  Future<void> _loadInitial() async {
+    state = state.copyWith(isLoading: true, error: null, currentPage: 1);
+    try {
+      final result = await _customersService.getCustomers(
+        searchQuery: _searchQuery,
+        page: 1,
+        pageSize: 25, // Match website: 25 items per page
+      );
+      final customers = result['data'] as List<Customer>;
+      state = state.copyWith(
+        customers: customers,
+        isLoading: false,
+        hasMore: customers.length == 25,
+        currentPage: 1,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString(),
+      );
+    }
+  }
+
+  Future<void> loadMore() async {
+    if (state.isLoadingMore || !state.hasMore) return;
+
+    state = state.copyWith(isLoadingMore: true);
+    try {
+      final nextPage = state.currentPage + 1;
+      final result = await _customersService.getCustomers(
+        searchQuery: _searchQuery,
+        page: nextPage,
+        pageSize: 25,
+      );
+      final customers = result['data'] as List<Customer>;
+
+      if (customers.isEmpty) {
+        state = state.copyWith(
+          isLoadingMore: false,
+          hasMore: false,
+        );
+      } else {
+        state = state.copyWith(
+          customers: [...state.customers, ...customers],
+          isLoadingMore: false,
+          hasMore: customers.length == 25,
+          currentPage: nextPage,
+        );
+      }
+    } catch (e) {
+      state = state.copyWith(
+        isLoadingMore: false,
+        error: e.toString(),
+      );
+    }
+  }
+
+  Future<void> refresh() async {
+    state = CustomersInfiniteState();
+    await _loadInitial();
+  }
+}
+
+/// Customers Infinite Provider
+final customersInfiniteProvider = StateNotifierProvider.family<
+    CustomersInfiniteNotifier, CustomersInfiniteState, String?>(
+  (ref, searchQuery) {
+    final service = ref.watch(customersServiceProvider);
+    return CustomersInfiniteNotifier(service, searchQuery);
+  },
+);
+
 /// Customers List Provider
 /// 
 /// Fetches customers with pagination and search

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -26,16 +27,60 @@ class CustomersListScreen extends ConsumerStatefulWidget {
 
 class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
   final _searchController = TextEditingController();
-  String? _searchQuery;
+  String? _searchQuery; // Used for provider (backend search)
   _CustomerFilter _selectedFilter = _CustomerFilter.all;
+  final ScrollController _scrollController = ScrollController();
+  Timer? _searchDebounceTimer;
+  final _searchFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
 
   @override
   void dispose() {
+    _searchDebounceTimer?.cancel();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
+  void _onSearchChanged(String value) {
+    // Cancel previous timer if it exists
+    _searchDebounceTimer?.cancel();
+
+    // Debounce the backend search - wait 500ms after user stops typing
+    _searchDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        final newSearchQuery = value.trim().isEmpty ? null : value.trim();
+        if (_searchQuery != newSearchQuery) {
+          // Update search query state - this triggers Consumer rebuild
+          setState(() {
+            _searchQuery = newSearchQuery;
+          });
+          
+          // Refresh provider with new search query (will load from backend)
+          // The Consumer widget will automatically rebuild only the list part
+          ref.read(customersInfiniteProvider(_searchQuery).notifier).refresh();
+        }
+      }
+    });
+  }
+
+  void _onScroll() {
+    // Load more when user scrolls to 80% of the list
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent * 0.8) {
+      ref.read(customersInfiniteProvider(_searchQuery).notifier).loadMore();
+    }
+  }
+
   List<Customer> _filterCustomers(List<Customer> customers) {
+    // Apply filter chip (dues/all) - search is handled by backend
     if (_selectedFilter == _CustomerFilter.dues) {
       return customers.where((customer) {
         return customer.dueAmount != null && customer.dueAmount! > 0;
@@ -44,188 +89,95 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
     return customers;
   }
 
-  Widget _buildCustomerListBody(List<Customer> allCustomers, bool isLoading, bool showOverlay) {
-    // Apply filter to customers
-    final customers = _filterCustomers(allCustomers);
-    if (customers.isEmpty && _searchQuery == null) {
+  Widget _buildCustomersBody(CustomersInfiniteState customersState) {
+    if (customersState.isLoading && customersState.customers.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1F2A7A)),
+        ),
+      );
+    }
+
+    if (customersState.error != null && customersState.customers.isEmpty) {
+      return _ErrorState(
+        message: 'Error loading customers: ${customersState.error}',
+        onRetry: () {
+          ref.read(customersInfiniteProvider(_searchQuery).notifier).refresh();
+        },
+      );
+    }
+
+    // Apply filter chip filtering (dues/all) - search is handled by backend
+    final filteredCustomers = _filterCustomers(customersState.customers);
+
+    // Only the list content rebuilds - search bar and filters are outside Consumer
+    return _buildCustomerListBody(
+      filteredCustomers,
+      customersState.isLoading,
+      customersState.isLoadingMore,
+    );
+  }
+
+  Widget _buildCustomerListBody(List<Customer> filteredCustomers, bool isLoading, bool isLoadingMore) {
+    if (filteredCustomers.isEmpty && _searchQuery == null) {
       return _EmptyCustomersState(
         onNewCustomer: () => context.push('/customers/new'),
         hasSearchQuery: false,
       );
     }
 
-    if (customers.isEmpty && (_searchQuery != null && _searchQuery!.isNotEmpty || _selectedFilter == _CustomerFilter.dues)) {
-      return Column(
-        children: [
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            child: _CustomersSearchBar(
-              controller: _searchController,
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value.isEmpty ? null : value;
-                });
-              },
-            ),
-          ),
-          Divider(height: 1, color: Colors.grey.shade200),
-          // Filter Chips
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                _CustomerFilterChip(
-                  label: 'All',
-                  icon: Icons.people_outline,
-                  selected: _selectedFilter == _CustomerFilter.all,
-                  onTap: () {
-                    setState(() {
-                      _selectedFilter = _CustomerFilter.all;
-                    });
-                  },
-                ),
-                const SizedBox(width: 8),
-                _CustomerFilterChip(
-                  label: 'Dues',
-                  icon: Icons.account_balance_wallet_outlined,
-                  selected: _selectedFilter == _CustomerFilter.dues,
-                  onTap: () {
-                    setState(() {
-                      _selectedFilter = _CustomerFilter.dues;
-                    });
-                  },
-                  isWarning: true,
-                ),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: Colors.grey.shade200),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: _NoResultsState(),
-            ),
-          ),
-        ],
+    if (filteredCustomers.isEmpty && (_searchQuery != null || _selectedFilter == _CustomerFilter.dues)) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: _NoResultsState(),
+        ),
       );
     }
 
-    final stats = _calculateStats(customers);
+    final stats = _calculateStats(filteredCustomers);
 
-    return Stack(
-      children: [
-        Column(
-          children: [
-            // Fixed Search Bar
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: _CustomersSearchBar(
-                controller: _searchController,
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value.isEmpty ? null : value;
-                  });
-                },
-              ),
-            ),
-            Divider(height: 1, color: Colors.grey.shade200),
-            
-            // Filter Chips
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  _CustomerFilterChip(
-                    label: 'All',
-                    icon: Icons.people_outline,
-                    selected: _selectedFilter == _CustomerFilter.all,
-                    onTap: () {
-                      setState(() {
-                        _selectedFilter = _CustomerFilter.all;
-                      });
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  _CustomerFilterChip(
-                    label: 'Dues',
-                    icon: Icons.account_balance_wallet_outlined,
-                    selected: _selectedFilter == _CustomerFilter.dues,
-                    onTap: () {
-                      setState(() {
-                        _selectedFilter = _CustomerFilter.dues;
-                      });
-                    },
-                    isWarning: true,
-                  ),
-                ],
-              ),
-            ),
-            Divider(height: 1, color: Colors.grey.shade200),
-            
-            // Scrollable Content (Stats, Customers)
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async {
-                  ref.invalidate(
-                    customersProvider(
-                      CustomersParams(searchQuery: _searchQuery),
-                    ),
-                  );
-                },
-                child: CustomScrollView(
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                        child: _CustomersStatsRow(stats: stats),
-                      ),
-                    ),
-                    SliverList.builder(
-                      itemCount: customers.length,
-                      itemBuilder: (context, index) {
-                        final customer = customers[index];
-                        return Opacity(
-                          opacity: isLoading ? 0.6 : 1.0,
-                          child: _CustomerCardItem(customer: customer),
-                        );
-                      },
-                    ),
-                    const SliverToBoxAdapter(
-                      child: SizedBox(height: 24),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-        if (showOverlay && isLoading)
-          Positioned.fill(
-            child: Container(
-              color: Colors.white.withValues(alpha: 0.7),
-              child: const Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1F2A7A)),
-                ),
-              ),
+    // Only return the scrollable list content - search bar and filters are outside Consumer
+    return RefreshIndicator(
+      onRefresh: () async {
+        await ref.read(customersInfiniteProvider(_searchQuery).notifier).refresh();
+      },
+      child: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: _CustomersStatsRow(stats: stats),
             ),
           ),
-      ],
+          SliverList.builder(
+            itemCount: filteredCustomers.length + (isLoadingMore ? 1 : 0),
+            itemBuilder: (context, index) {
+              if (index >= filteredCustomers.length) {
+                // Show loading indicator at bottom
+                return const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final customer = filteredCustomers[index];
+              return _CustomerCardItem(customer: customer);
+            },
+          ),
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 24),
+          ),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final customersAsync = ref.watch(
-      customersProvider(
-        CustomersParams(searchQuery: _searchQuery),
-      ),
-    );
-
+    // Don't watch provider here - only watch it in the Consumer widget below
+    // This prevents the entire screen from rebuilding when search changes
+    
     return Scaffold(
       backgroundColor: const Color(0xFFF7F9FB),
       appBar: AppBar(
@@ -268,44 +220,63 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
           ),
         ),
       ),
-      body: customersAsync.when(
-        data: (data) {
-          final customers = (data['data'] as List).cast<Customer>();
-          return _buildCustomerListBody(customers, false, false);
-        },
-        loading: () {
-          // Show previous data if available while loading
-          final previousData = customersAsync.valueOrNull;
-          if (previousData != null) {
-            final customers = (previousData['data'] as List).cast<Customer>();
-            return _buildCustomerListBody(customers, true, true);
-          }
-          // If no previous data, show loading spinner
-          return const Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1F2A7A)),
+      // Use Consumer to isolate provider watching to only the list content
+      // Search bar and filters are outside Consumer so they don't rebuild
+      body: Column(
+        children: [
+          // Search Bar (always visible, outside Consumer so it doesn't rebuild)
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: _CustomersSearchBar(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              onChanged: _onSearchChanged,
             ),
-          );
-        },
-        error: (error, stack) {
-          // Show previous data if available on error
-          final previousData = customersAsync.valueOrNull;
-          if (previousData != null) {
-            final customers = (previousData['data'] as List).cast<Customer>();
-            return _buildCustomerListBody(customers, false, false);
-          }
-          // If no previous data, show error
-          return _ErrorState(
-            message: 'Error loading customers: $error',
-            onRetry: () {
-              ref.invalidate(
-                customersProvider(
-                  CustomersParams(searchQuery: _searchQuery),
+          ),
+          Divider(height: 1, color: Colors.grey.shade200),
+          // Filter Chips (always visible, outside Consumer so they don't rebuild)
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                _CustomerFilterChip(
+                  label: 'All',
+                  icon: Icons.people_outline,
+                  selected: _selectedFilter == _CustomerFilter.all,
+                  onTap: () {
+                    setState(() {
+                      _selectedFilter = _CustomerFilter.all;
+                    });
+                  },
                 ),
-              );
-            },
-          );
-        },
+                const SizedBox(width: 8),
+                _CustomerFilterChip(
+                  label: 'Dues',
+                  icon: Icons.account_balance_wallet_outlined,
+                  selected: _selectedFilter == _CustomerFilter.dues,
+                  onTap: () {
+                    setState(() {
+                      _selectedFilter = _CustomerFilter.dues;
+                    });
+                  },
+                  isWarning: true,
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: Colors.grey.shade200),
+          // Only this part watches the provider and rebuilds when data changes
+          Expanded(
+            child: Consumer(
+              builder: (context, ref, child) {
+                final customersState = ref.watch(customersInfiniteProvider(_searchQuery));
+                return _buildCustomersBody(customersState);
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -403,16 +374,20 @@ class _CustomerFilterChip extends StatelessWidget {
 class _CustomersSearchBar extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
+  final FocusNode? focusNode;
 
   const _CustomersSearchBar({
     required this.controller,
     required this.onChanged,
+    this.focusNode,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
+      key: const ValueKey('customer_search_field'),
       controller: controller,
+      focusNode: focusNode,
       decoration: InputDecoration(
         hintText: 'Search by name, phone, or customer number',
         prefixIcon: const Icon(Icons.search),
