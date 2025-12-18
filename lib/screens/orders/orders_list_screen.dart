@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -40,11 +41,14 @@ enum _DateFilter {
 
 class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with WidgetsBindingObserver {
   _OrdersTab _selectedTab = _OrdersTab.all;
-  String _searchQuery = '';
+  final _searchController = TextEditingController();
+  String? _searchQuery; // Used for provider (backend search)
   _DateFilter _selectedDateFilter = _DateFilter.allTime;
   DateTime? _customStartDate;
   DateTime? _customEndDate;
   final ScrollController _scrollController = ScrollController();
+  Timer? _searchDebounceTimer;
+  final _searchFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -55,10 +59,77 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
 
   @override
   void dispose() {
+    _searchDebounceTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    // Cancel previous timer if it exists
+    _searchDebounceTimer?.cancel();
+
+    // Debounce the backend search - wait 500ms after user stops typing
+    _searchDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        final newSearchQuery = value.trim().isEmpty ? null : value.trim();
+        if (_searchQuery != newSearchQuery) {
+          // Update search query state - this triggers Consumer rebuild
+          setState(() {
+            _searchQuery = newSearchQuery;
+          });
+          
+          // Refresh provider with new search query (will load from backend)
+          // The Consumer widget will automatically rebuild only the list part
+          final userProfile = ref.read(userProfileProvider).value;
+          final branchId = userProfile?.branchId;
+          if (branchId != null) {
+            final startDate = _startForFilter(_selectedDateFilter);
+            final endDate = _endForFilter(_selectedDateFilter);
+            
+            // Map tab to status
+            OrderStatus? status;
+            switch (_selectedTab) {
+              case _OrdersTab.scheduled:
+                status = OrderStatus.scheduled;
+                break;
+              case _OrdersTab.ongoing:
+                status = OrderStatus.active;
+                break;
+              case _OrdersTab.returned:
+                status = OrderStatus.completed;
+                break;
+              case _OrdersTab.cancelled:
+                status = OrderStatus.cancelled;
+                break;
+              case _OrdersTab.flagged:
+                status = OrderStatus.flagged;
+                break;
+              case _OrdersTab.partiallyReturned:
+                status = OrderStatus.partiallyReturned;
+                break;
+              case _OrdersTab.late:
+              case _OrdersTab.all:
+                status = null;
+                break;
+            }
+            
+            final params = OrdersParams(
+              branchId: branchId,
+              status: status,
+              startDate: startDate,
+              endDate: endDate,
+              searchQuery: newSearchQuery,
+            );
+            
+            ref.read(ordersInfiniteProvider(params).notifier).refresh();
+          }
+        }
+      }
+    });
   }
 
   void _onScroll() {
@@ -105,6 +176,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
         status: status,
         startDate: startDate,
         endDate: endDate,
+        searchQuery: _searchQuery,
       );
       
       ref.read(ordersInfiniteProvider(params).notifier).loadMore();
@@ -153,6 +225,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
           status: status,
           startDate: startDate,
           endDate: endDate,
+          searchQuery: _searchQuery,
         );
         ref.read(ordersInfiniteProvider(params).notifier).refresh();
       }
@@ -369,16 +442,6 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
         status = null;
         break;
     }
-
-    final params = OrdersParams(
-      branchId: branchId,
-      status: status,
-      startDate: startDate,
-      endDate: endDate,
-    );
-
-    // Use infinite scroll provider
-    final ordersState = ref.watch(ordersInfiniteProvider(params));
 
     return PopScope(
       canPop: true,
@@ -712,7 +775,44 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
-      body: _buildOrdersBody(ordersState, params, branchId, startDate, endDate),
+      // Use Column to place search bar outside Consumer (so it doesn't rebuild)
+      body: Column(
+        children: [
+          // Search Bar (always visible, outside Consumer so it doesn't rebuild)
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: _OrdersSearchBar(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              onChanged: _onSearchChanged,
+            ),
+          ),
+          Divider(height: 1, color: Colors.grey.shade200),
+            // Only this part watches the provider and rebuilds when data changes
+            Expanded(
+              child: Consumer(
+                builder: (context, ref, child) {
+                  final params = OrdersParams(
+                    branchId: branchId,
+                    status: status,
+                    startDate: startDate,
+                    endDate: endDate,
+                    searchQuery: _searchQuery,
+                  );
+                  final ordersState = ref.watch(ordersInfiniteProvider(params));
+                  final statsParams = OrdersStatsParams(
+                    branchId: branchId,
+                    startDate: startDate,
+                    endDate: endDate,
+                  );
+                  final statsAsync = ref.watch(orderStatsProvider(statsParams));
+                  return _buildOrdersBody(ordersState, params, branchId, startDate, endDate, statsAsync);
+                },
+              ),
+            ),
+        ],
+      ),
       ),
     );
   }
@@ -723,6 +823,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
     String? branchId,
     DateTime? startDate,
     DateTime? endDate,
+    AsyncValue<Map<String, dynamic>> statsAsync,
   ) {
     if (ordersState.isLoading && ordersState.orders.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -744,32 +845,45 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
       );
     }
 
-    // Apply client-side filters (search, late, etc.)
-    final filtered = _filterAndSearchOrders(ordersState.orders);
-    final stats = _calculateStats(ordersState.orders);
+    // Apply client-side category filters only (late tab needs date checking)
+    // Search is now handled server-side
+    final filtered = _filterOrdersByCategory(ordersState.orders);
+    
+    // Get stats from server (or use default if loading/error)
+    final statsData = statsAsync.value ?? {
+      'total': 0,
+      'scheduled': 0,
+      'ongoing': 0,
+      'late': 0,
+      'returned': 0,
+      'partiallyReturned': 0,
+      'cancelled': 0,
+    };
+    final stats = _OrdersStats(
+      total: statsData['total'] as int? ?? 0,
+      scheduled: statsData['scheduled'] as int? ?? 0,
+      ongoing: statsData['ongoing'] as int? ?? 0,
+      late: statsData['late'] as int? ?? 0,
+      returned: statsData['returned'] as int? ?? 0,
+      partiallyReturned: statsData['partiallyReturned'] as int? ?? 0,
+      cancelled: statsData['cancelled'] as int? ?? 0,
+    );
 
     return Column(
       children: [
-        // Fixed Search Bar Only
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-          child: _OrdersSearchBar(
-            value: _searchQuery,
-            onChanged: (value) {
-              setState(() {
-                _searchQuery = value;
-              });
-            },
-          ),
-        ),
-        // Divider between fixed search and scrollable content
-        Divider(height: 1, color: Colors.grey.shade200),
         // Scrollable Content (Tabs, Stats, Orders)
         Expanded(
           child: RefreshIndicator(
             onRefresh: () async {
-              await ref.read(ordersInfiniteProvider(params).notifier).refresh();
+              final statsParams = OrdersStatsParams(
+                branchId: branchId,
+                startDate: startDate,
+                endDate: endDate,
+              );
+              await Future.wait([
+                ref.read(ordersInfiniteProvider(params).notifier).refresh(),
+                ref.refresh(orderStatsProvider(statsParams).future),
+              ]);
               ref.invalidate(recentOrdersProvider(branchId));
             },
             child: CustomScrollView(
@@ -917,100 +1031,36 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
     return _OrderCategory.ongoing;
   }
 
-  List<Order> _filterAndSearchOrders(List<Order> orders) {
+  List<Order> _filterOrdersByCategory(List<Order> orders) {
+    // Only filter by category/tab (late tab needs client-side date checking)
+    // Search is now handled server-side
+    if (_selectedTab == _OrdersTab.all) {
+      return orders;
+    }
+
     return orders.where((order) {
-      // Tab / category filter
-      if (_selectedTab != _OrdersTab.all) {
-        final category = _getOrderCategory(order);
-        switch (_selectedTab) {
-          case _OrdersTab.scheduled:
-            if (category != _OrderCategory.scheduled) return false;
-            break;
-          case _OrdersTab.ongoing:
-            if (category != _OrderCategory.ongoing) return false;
-            break;
-          case _OrdersTab.late:
-            if (category != _OrderCategory.late) return false;
-            break;
-          case _OrdersTab.returned:
-            if (category != _OrderCategory.returned) return false;
-            break;
-          case _OrdersTab.partiallyReturned:
-            if (category != _OrderCategory.partiallyReturned) return false;
-            break;
-          case _OrdersTab.cancelled:
-            if (category != _OrderCategory.cancelled) return false;
-            break;
-          case _OrdersTab.flagged:
-            if (category != _OrderCategory.flagged) return false;
-            break;
-          case _OrdersTab.all:
-            break;
-        }
+      final category = _getOrderCategory(order);
+      switch (_selectedTab) {
+        case _OrdersTab.scheduled:
+          return category == _OrderCategory.scheduled;
+        case _OrdersTab.ongoing:
+          return category == _OrderCategory.ongoing;
+        case _OrdersTab.late:
+          return category == _OrderCategory.late;
+        case _OrdersTab.returned:
+          return category == _OrderCategory.returned;
+        case _OrdersTab.partiallyReturned:
+          return category == _OrderCategory.partiallyReturned;
+        case _OrdersTab.cancelled:
+          return category == _OrderCategory.cancelled;
+        case _OrdersTab.flagged:
+          return category == _OrderCategory.flagged;
+        case _OrdersTab.all:
+          return true;
       }
-
-      // Search filter
-      if (_searchQuery.trim().isEmpty) return true;
-      final query = _searchQuery.toLowerCase();
-      final invoice = order.invoiceNumber.toLowerCase();
-      final customerName = order.customer?.name.toLowerCase() ?? '';
-      final phone = order.customer?.phone.toLowerCase() ?? '';
-      final customerNumber =
-          order.customer?.customerNumber?.toLowerCase() ?? '';
-
-      return invoice.contains(query) ||
-          customerName.contains(query) ||
-          phone.contains(query) ||
-          customerNumber.contains(query);
     }).toList();
   }
 
-  _OrdersStats _calculateStats(List<Order> orders) {
-    int scheduled = 0;
-    int ongoing = 0;
-    int late = 0;
-    int returned = 0;
-    int partiallyReturned = 0;
-    int cancelled = 0;
-
-    for (final order in orders) {
-      final category = _getOrderCategory(order);
-      switch (category) {
-        case _OrderCategory.scheduled:
-          scheduled++;
-          break;
-        case _OrderCategory.ongoing:
-          ongoing++;
-          break;
-        case _OrderCategory.late:
-          late++;
-          break;
-        case _OrderCategory.returned:
-          returned++;
-          break;
-        case _OrderCategory.partiallyReturned:
-          partiallyReturned++;
-          break;
-        case _OrderCategory.cancelled:
-          cancelled++;
-          break;
-        case _OrderCategory.flagged:
-          // Count flagged orders in returned stats for now
-          returned++;
-          break;
-      }
-    }
-
-    return _OrdersStats(
-      total: orders.length,
-      scheduled: scheduled,
-      ongoing: ongoing,
-      late: late,
-      returned: returned,
-      partiallyReturned: partiallyReturned,
-      cancelled: cancelled,
-    );
-  }
 }
 
 enum _OrderCategory {
@@ -1044,14 +1094,22 @@ class _OrdersStats {
 }
 
 class _OrdersSearchBar extends StatelessWidget {
-  final String value;
+  final TextEditingController controller;
+  final FocusNode focusNode;
   final ValueChanged<String> onChanged;
 
-  const _OrdersSearchBar({required this.value, required this.onChanged});
+  const _OrdersSearchBar({
+    required this.controller,
+    required this.focusNode,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
+      key: const ValueKey('order_search_field'),
+      controller: controller,
+      focusNode: focusNode,
       decoration: InputDecoration(
         hintText: 'Search by invoice, customer, or phone',
         prefixIcon: const Icon(Icons.search),

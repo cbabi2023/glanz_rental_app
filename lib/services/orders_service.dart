@@ -84,6 +84,7 @@ class OrdersService {
     OrderStatus? status,
     DateTime? startDate,
     DateTime? endDate,
+    String? searchQuery,
     int? limit,
     int? offset,
   }) async {
@@ -117,6 +118,40 @@ class OrdersService {
       query = query.lte('created_at', endDate.toIso8601String());
     }
 
+    // Apply search filter if provided
+    if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+      // First, find matching customers by name or phone
+      List<String> customerIds = [];
+      try {
+        final customerQuery = _supabase
+            .from('customers')
+            .select('id')
+            .or('name.ilike.%$searchQuery%,phone.ilike.%$searchQuery%');
+        
+        final customerResponse = await customerQuery;
+        customerIds = (customerResponse as List)
+            .map((json) => (json as Map<String, dynamic>)['id'] as String)
+            .toList();
+      } catch (e) {
+        AppLogger.warning('Error searching customers for order search', e);
+      }
+      
+      // Build OR filter: Invoice Number OR Customer ID Match
+      // Use PostgREST filter syntax that works with Supabase Flutter
+      if (customerIds.isNotEmpty) {
+        // Build OR filter: invoice_number.ilike OR customer_id matches
+        // Limit to first 50 customer IDs to avoid query length issues
+        final limitedCustomerIds = customerIds.take(50).toList();
+        final customerIdFilters = limitedCustomerIds.map((id) => 'customer_id.eq.$id').join(',');
+        // Use .or() with invoice_number search and customer_id filters
+        query = query.or('invoice_number.ilike.%$searchQuery%,$customerIdFilters');
+      } else {
+        // No matching customers, only search by invoice number
+        // This is the critical path for invoice number search
+        query = query.ilike('invoice_number', '%$searchQuery%');
+      }
+    }
+
     // Apply ordering after filters
     query = query.order('created_at', ascending: false);
 
@@ -133,6 +168,127 @@ class OrdersService {
     return (response as List)
         .map((json) => Order.fromJson(json as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Get order statistics from server
+  Future<Map<String, dynamic>> getOrderStats({
+    String? branchId,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      // Build base query for all orders
+      dynamic baseQuery = _supabase
+          .from('orders')
+          .select('id, status, end_date, end_datetime');
+
+      if (branchId != null) {
+        baseQuery = baseQuery.eq('branch_id', branchId);
+      }
+
+      if (startDate != null) {
+        baseQuery = baseQuery.gte('created_at', startDate.toIso8601String());
+      }
+
+      if (endDate != null) {
+        baseQuery = baseQuery.lte('created_at', endDate.toIso8601String());
+      }
+
+      final ordersResponse = await baseQuery;
+      final orders = (ordersResponse as List).cast<Map<String, dynamic>>();
+
+      // Calculate stats from server data
+      int total = orders.length;
+      int scheduled = 0;
+      int ongoing = 0;
+      int late = 0;
+      int returned = 0;
+      int partiallyReturned = 0;
+      int cancelled = 0;
+
+      final now = DateTime.now();
+
+      for (final order in orders) {
+        final statusStr = order['status'] as String?;
+        if (statusStr == null) continue;
+
+        // Parse status
+        OrderStatus? status;
+        try {
+          status = OrderStatus.values.firstWhere(
+            (s) => s.value == statusStr,
+            orElse: () => OrderStatus.active,
+          );
+        } catch (e) {
+          status = OrderStatus.active;
+        }
+
+        // Count by status
+        if (status == OrderStatus.scheduled) {
+          scheduled++;
+        } else if (status == OrderStatus.active) {
+          ongoing++;
+          // Check if late
+          final endDateStr = order['end_datetime'] as String? ?? order['end_date'] as String?;
+          if (endDateStr != null) {
+            try {
+              final endDate = _parseDateTimeWithTimezone(endDateStr);
+              if (now.isAfter(endDate)) {
+                late++;
+              }
+            } catch (e) {
+              // If date parsing fails, don't count as late
+            }
+          }
+        } else if (status == OrderStatus.pendingReturn) {
+          ongoing++;
+          // Check if late
+          final endDateStr = order['end_datetime'] as String? ?? order['end_date'] as String?;
+          if (endDateStr != null) {
+            try {
+              final endDate = _parseDateTimeWithTimezone(endDateStr);
+              if (now.isAfter(endDate)) {
+                late++;
+              }
+            } catch (e) {
+              // If date parsing fails, don't count as late
+            }
+          }
+        } else if (status == OrderStatus.completed || 
+                   status == OrderStatus.completedWithIssues ||
+                   status == OrderStatus.flagged) {
+          returned++;
+        } else if (status == OrderStatus.partiallyReturned) {
+          partiallyReturned++;
+        } else if (status == OrderStatus.cancelled) {
+          cancelled++;
+        }
+      }
+
+      // Note: late count is included in ongoing count, so we count it separately
+      // The late orders are a subset of ongoing orders
+
+      return {
+        'total': total,
+        'scheduled': scheduled,
+        'ongoing': ongoing,
+        'late': late,
+        'returned': returned,
+        'partiallyReturned': partiallyReturned,
+        'cancelled': cancelled,
+      };
+    } catch (e) {
+      AppLogger.error('Error fetching order stats', e);
+      return {
+        'total': 0,
+        'scheduled': 0,
+        'ongoing': 0,
+        'late': 0,
+        'returned': 0,
+        'partiallyReturned': 0,
+        'cancelled': 0,
+      };
+    }
   }
 
   /// Get a single order by ID with full details

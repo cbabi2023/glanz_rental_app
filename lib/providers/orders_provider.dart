@@ -66,6 +66,7 @@ class OrdersInfiniteNotifier extends StateNotifier<OrdersInfiniteState> {
         status: _baseParams.status,
         startDate: _baseParams.startDate,
         endDate: _baseParams.endDate,
+        searchQuery: _baseParams.searchQuery,
         limit: 10, // Match website: 10 items per page
         offset: 0,
       );
@@ -94,6 +95,7 @@ class OrdersInfiniteNotifier extends StateNotifier<OrdersInfiniteState> {
         status: _baseParams.status,
         startDate: _baseParams.startDate,
         endDate: _baseParams.endDate,
+        searchQuery: _baseParams.searchQuery,
         limit: 10,
         offset: nextPage * 10,
       );
@@ -183,12 +185,53 @@ final customerOrdersProvider = FutureProvider.family<List<Order>, String>(
   },
 );
 
+/// Order Stats Provider
+final orderStatsProvider = FutureProvider.family<Map<String, dynamic>, OrdersStatsParams>(
+  (ref, params) async {
+    final service = ref.watch(ordersServiceProvider);
+    return await service.getOrderStats(
+      branchId: params.branchId,
+      startDate: params.startDate,
+      endDate: params.endDate,
+    );
+  },
+);
+
+/// Order Stats Parameters
+class OrdersStatsParams {
+  final String? branchId;
+  final DateTime? startDate;
+  final DateTime? endDate;
+
+  OrdersStatsParams({
+    this.branchId,
+    this.startDate,
+    this.endDate,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OrdersStatsParams &&
+          runtimeType == other.runtimeType &&
+          branchId == other.branchId &&
+          startDate == other.startDate &&
+          endDate == other.endDate;
+
+  @override
+  int get hashCode =>
+      branchId.hashCode ^
+      startDate.hashCode ^
+      endDate.hashCode;
+}
+
 /// Orders Parameters
 class OrdersParams {
   final String? branchId;
   final OrderStatus? status;
   final DateTime? startDate;
   final DateTime? endDate;
+  final String? searchQuery;
   final int? limit;
   final int? offset;
 
@@ -197,6 +240,7 @@ class OrdersParams {
     this.status,
     this.startDate,
     this.endDate,
+    this.searchQuery,
     this.limit,
     this.offset,
   });
@@ -210,6 +254,7 @@ class OrdersParams {
           status == other.status &&
           startDate == other.startDate &&
           endDate == other.endDate &&
+          searchQuery == other.searchQuery &&
           limit == other.limit &&
           offset == other.offset;
 
@@ -219,6 +264,7 @@ class OrdersParams {
       status.hashCode ^
       startDate.hashCode ^
       endDate.hashCode ^
+      searchQuery.hashCode ^
       limit.hashCode ^
       offset.hashCode;
 }
