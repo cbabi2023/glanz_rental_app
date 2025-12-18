@@ -8,16 +8,158 @@ import '../models/customer.dart';
 class CustomersService {
   final _supabase = SupabaseService.client;
 
-  /// Get customers with optional search and pagination
+  /// Get customer statistics from server
+  Future<Map<String, dynamic>> getCustomerStats({
+    String? searchQuery,
+    bool duesOnly = false,
+  }) async {
+    try {
+      // Get total count - fetch all IDs and count them
+      dynamic countQuery = _supabase.from('customers').select('id');
+      
+      if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+        countQuery = countQuery.or('name.ilike.%$searchQuery%,phone.ilike.%$searchQuery%');
+      }
+      
+      final countResponse = await countQuery;
+      final total = countResponse is List ? countResponse.length : 0;
+      
+      // Get all customer IDs (for dues calculation)
+      dynamic customerIdsQuery = _supabase.from('customers').select('id');
+      if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+        customerIdsQuery = customerIdsQuery.or('name.ilike.%$searchQuery%,phone.ilike.%$searchQuery%');
+      }
+      final customerIdsResponse = await customerIdsQuery;
+      final customerIds = (customerIdsResponse as List)
+          .map((json) => (json as Map<String, dynamic>)['id'] as String)
+          .toList();
+      
+      // Calculate dues for all customers
+      Map<String, double> duesMap = {};
+      if (customerIds.isNotEmpty) {
+        // Build filter for customer IDs and status
+        // Use multiple OR conditions for customer IDs since .in() is not available
+        dynamic ordersQuery = _supabase.from('orders').select('customer_id, total_amount, status');
+        
+        // Filter by status first
+        ordersQuery = ordersQuery.or('status.eq.active,status.eq.pending_return');
+        
+        // Then filter by customer IDs - we'll filter in code after fetching
+        final ordersResponse = await ordersQuery;
+        
+        // Filter orders by customer IDs in code
+        final filteredOrders = (ordersResponse as List)
+            .where((order) {
+              final orderCustomerId = order['customer_id']?.toString();
+              return orderCustomerId != null && customerIds.contains(orderCustomerId);
+            })
+            .toList();
+        
+        for (final order in filteredOrders) {
+          final customerId = order['customer_id']?.toString();
+          if (customerId != null) {
+            final amount = (order['total_amount'] as num?)?.toDouble() ?? 0.0;
+            duesMap[customerId] = (duesMap[customerId] ?? 0.0) + amount;
+          }
+        }
+      }
+      
+      // Calculate stats
+      int withDues = 0;
+      double totalDues = 0.0;
+      
+      for (final customerId in customerIds) {
+        final dueAmount = duesMap[customerId] ?? 0.0;
+        if (dueAmount > 0) {
+          withDues++;
+          totalDues += dueAmount;
+        }
+      }
+      
+      return {
+        'total': total,
+        'withDues': withDues,
+        'totalDues': totalDues,
+      };
+    } catch (e) {
+      AppLogger.error('Error fetching customer stats', e);
+      return {
+        'total': 0,
+        'withDues': 0,
+        'totalDues': 0.0,
+      };
+    }
+  }
+
+  /// Get customers with optional search, filter, and pagination
   Future<Map<String, dynamic>> getCustomers({
     String? searchQuery,
+    bool duesOnly = false,
     int page = 1,
     int pageSize = 20,
   }) async {
     final from = (page - 1) * pageSize;
-    final to = from + pageSize - 1;
 
-    // Build query - apply filters before ordering
+    // Get all customer IDs first to calculate dues for filtering
+    dynamic customerIdsQuery = _supabase.from('customers').select('id');
+    if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+      customerIdsQuery = customerIdsQuery.or('name.ilike.%$searchQuery%,phone.ilike.%$searchQuery%');
+    }
+    final customerIdsResponse = await customerIdsQuery;
+    final allCustomerIds = (customerIdsResponse as List)
+        .map((json) => (json as Map<String, dynamic>)['id'] as String)
+        .toList();
+
+    // Calculate dues for all customers (for filtering)
+    Map<String, double> duesMap = {};
+    if (allCustomerIds.isNotEmpty) {
+      try {
+        final ordersResponse = await _supabase
+            .from('orders')
+            .select('customer_id, total_amount, status')
+            .or('status.eq.active,status.eq.pending_return');
+
+        // Filter orders by customer IDs in code
+        final filteredOrders = (ordersResponse as List)
+            .where((order) {
+              final orderCustomerId = order['customer_id']?.toString();
+              return orderCustomerId != null && allCustomerIds.contains(orderCustomerId);
+            })
+            .toList();
+
+        for (final order in filteredOrders) {
+          final customerId = order['customer_id']?.toString();
+          if (customerId != null) {
+            final amount = (order['total_amount'] as num?)?.toDouble() ?? 0.0;
+            duesMap[customerId] = (duesMap[customerId] ?? 0.0) + amount;
+          }
+        }
+      } catch (e) {
+        AppLogger.error('Error fetching orders for dues calculation', e);
+      }
+    }
+
+    // Filter customers with dues on server side if duesOnly is true
+    List<String> customerIdsToFetch = allCustomerIds;
+    int totalCount = allCustomerIds.length;
+    if (duesOnly) {
+      customerIdsToFetch = allCustomerIds
+          .where((id) => (duesMap[id] ?? 0.0) > 0)
+          .toList();
+      totalCount = customerIdsToFetch.length;
+      if (customerIdsToFetch.isEmpty) {
+        // No customers with dues, return empty result
+        return {
+          'data': <Customer>[],
+          'total': 0,
+          'page': page,
+          'pageSize': pageSize,
+          'totalPages': 0,
+        };
+      }
+    }
+
+    // Build query - fetch all matching customers first (we'll paginate after filtering)
     dynamic query = _supabase.from('customers').select('*');
 
     // Apply search filter if provided (before ordering)
@@ -28,70 +170,50 @@ class CustomersService {
     // Apply ordering
     query = query.order('created_at', ascending: false);
 
-    // Apply pagination
-    query = query.range(from, to);
-
+    // Fetch all matching customers (before pagination if duesOnly filter is applied)
     final response = await query;
-    final customers = (response as List)
+    List customersList = response as List;
+    
+    // Filter by customer IDs if duesOnly is true (before pagination)
+    if (duesOnly && customerIdsToFetch.isNotEmpty) {
+      customersList = customersList.where((json) {
+        final customerId = (json as Map<String, dynamic>)['id'] as String?;
+        return customerId != null && customerIdsToFetch.contains(customerId);
+      }).toList();
+    }
+    
+    // Apply pagination after filtering
+    final paginatedCustomersList = customersList.skip(from).take(pageSize).toList();
+    
+    final customers = paginatedCustomersList
         .map((json) => Customer.fromJson(json as Map<String, dynamic>))
         .toList();
 
-    // Calculate dues for customers - optimized to fetch all orders at once
-    if (customers.isNotEmpty) {
-      final customerIds = customers.map((c) => c.id).toSet().toList();
-      final duesMap = <String, double>{};
-
-      try {
-        // Fetch all pending orders for all customers in a single query
-        // This is much faster than querying individually
-        final ordersResponse = await _supabase
-            .from('orders')
-            .select('customer_id, total_amount, status')
-            .or('status.eq.active,status.eq.pending_return');
-
-        // Process all orders and calculate dues
-        for (final order in ordersResponse) {
-          final customerId = order['customer_id']?.toString();
-          if (customerId != null && customerIds.contains(customerId)) {
-            final amount = (order['total_amount'] as num?)?.toDouble() ?? 0.0;
-            duesMap[customerId] = (duesMap[customerId] ?? 0.0) + amount;
-          }
-        }
-      } catch (e) {
-        // If query fails, skip dues calculation - customers will show 0 dues
-        AppLogger.error('Error fetching orders for dues calculation', e);
-      }
-
-      // Add due amounts to customers
-      for (var i = 0; i < customers.length; i++) {
-        final customer = customers[i];
-        customers[i] = Customer(
-          id: customer.id,
-          customerNumber: customer.customerNumber,
-          name: customer.name,
-          phone: customer.phone,
-          email: customer.email,
-          address: customer.address,
-          idProofType: customer.idProofType,
-          idProofNumber: customer.idProofNumber,
-          idProofFrontUrl: customer.idProofFrontUrl,
-          idProofBackUrl: customer.idProofBackUrl,
-          createdAt: customer.createdAt,
-          dueAmount: duesMap[customer.id] ?? 0.0,
-        );
-      }
+    // Add due amounts to customers
+    for (var i = 0; i < customers.length; i++) {
+      final customer = customers[i];
+      customers[i] = Customer(
+        id: customer.id,
+        customerNumber: customer.customerNumber,
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email,
+        address: customer.address,
+        idProofType: customer.idProofType,
+        idProofNumber: customer.idProofNumber,
+        idProofFrontUrl: customer.idProofFrontUrl,
+        idProofBackUrl: customer.idProofBackUrl,
+        createdAt: customer.createdAt,
+        dueAmount: duesMap[customer.id] ?? 0.0,
+      );
     }
-
-    // Note: Getting exact count requires a separate count query in Supabase Flutter
-    // For now, using length as approximation
-    final count = customers.length;
 
     return {
       'data': customers,
-      'total': count,
+      'total': totalCount,
       'page': page,
       'pageSize': pageSize,
-      'totalPages': (count / pageSize).ceil(),
+      'totalPages': (totalCount / pageSize).ceil(),
     };
   }
 

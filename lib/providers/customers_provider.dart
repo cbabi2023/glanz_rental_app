@@ -44,12 +44,34 @@ class CustomersInfiniteState {
   }
 }
 
+/// Customers Infinite Scroll Parameters
+class CustomersInfiniteParams {
+  final String? searchQuery;
+  final bool duesOnly;
+
+  CustomersInfiniteParams({
+    this.searchQuery,
+    this.duesOnly = false,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CustomersInfiniteParams &&
+          runtimeType == other.runtimeType &&
+          searchQuery == other.searchQuery &&
+          duesOnly == other.duesOnly;
+
+  @override
+  int get hashCode => searchQuery.hashCode ^ duesOnly.hashCode;
+}
+
 /// Customers Infinite Scroll Notifier
 class CustomersInfiniteNotifier extends StateNotifier<CustomersInfiniteState> {
   final CustomersService _customersService;
-  final String? _searchQuery;
+  final CustomersInfiniteParams _params;
 
-  CustomersInfiniteNotifier(this._customersService, this._searchQuery)
+  CustomersInfiniteNotifier(this._customersService, this._params)
       : super(CustomersInfiniteState()) {
     _loadInitial();
   }
@@ -58,7 +80,8 @@ class CustomersInfiniteNotifier extends StateNotifier<CustomersInfiniteState> {
     state = state.copyWith(isLoading: true, error: null, currentPage: 1);
     try {
       final result = await _customersService.getCustomers(
-        searchQuery: _searchQuery,
+        searchQuery: _params.searchQuery,
+        duesOnly: _params.duesOnly,
         page: 1,
         pageSize: 25, // Match website: 25 items per page
       );
@@ -84,7 +107,8 @@ class CustomersInfiniteNotifier extends StateNotifier<CustomersInfiniteState> {
     try {
       final nextPage = state.currentPage + 1;
       final result = await _customersService.getCustomers(
-        searchQuery: _searchQuery,
+        searchQuery: _params.searchQuery,
+        duesOnly: _params.duesOnly,
         page: nextPage,
         pageSize: 25,
       );
@@ -119,10 +143,21 @@ class CustomersInfiniteNotifier extends StateNotifier<CustomersInfiniteState> {
 
 /// Customers Infinite Provider
 final customersInfiniteProvider = StateNotifierProvider.family<
-    CustomersInfiniteNotifier, CustomersInfiniteState, String?>(
-  (ref, searchQuery) {
+    CustomersInfiniteNotifier, CustomersInfiniteState, CustomersInfiniteParams>(
+  (ref, params) {
     final service = ref.watch(customersServiceProvider);
-    return CustomersInfiniteNotifier(service, searchQuery);
+    return CustomersInfiniteNotifier(service, params);
+  },
+);
+
+/// Customer Stats Provider
+final customerStatsProvider = FutureProvider.family<Map<String, dynamic>, CustomersInfiniteParams>(
+  (ref, params) async {
+    final service = ref.watch(customersServiceProvider);
+    return await service.getCustomerStats(
+      searchQuery: params.searchQuery,
+      duesOnly: params.duesOnly,
+    );
   },
 );
 

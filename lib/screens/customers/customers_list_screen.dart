@@ -65,7 +65,11 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
           
           // Refresh provider with new search query (will load from backend)
           // The Consumer widget will automatically rebuild only the list part
-          ref.read(customersInfiniteProvider(_searchQuery).notifier).refresh();
+          final params = CustomersInfiniteParams(
+            searchQuery: newSearchQuery,
+            duesOnly: _selectedFilter == _CustomerFilter.dues,
+          );
+          ref.read(customersInfiniteProvider(params).notifier).refresh();
         }
       }
     });
@@ -75,21 +79,18 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
     // Load more when user scrolls to 80% of the list
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent * 0.8) {
-      ref.read(customersInfiniteProvider(_searchQuery).notifier).loadMore();
+      final params = CustomersInfiniteParams(
+        searchQuery: _searchQuery,
+        duesOnly: _selectedFilter == _CustomerFilter.dues,
+      );
+      ref.read(customersInfiniteProvider(params).notifier).loadMore();
     }
   }
 
-  List<Customer> _filterCustomers(List<Customer> customers) {
-    // Apply filter chip (dues/all) - search is handled by backend
-    if (_selectedFilter == _CustomerFilter.dues) {
-      return customers.where((customer) {
-        return customer.dueAmount != null && customer.dueAmount! > 0;
-      }).toList();
-    }
-    return customers;
-  }
-
-  Widget _buildCustomersBody(CustomersInfiniteState customersState) {
+  Widget _buildCustomersBody(
+    CustomersInfiniteState customersState,
+    AsyncValue<Map<String, dynamic>> statsAsync,
+  ) {
     if (customersState.isLoading && customersState.customers.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(
@@ -102,23 +103,31 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
       return _ErrorState(
         message: 'Error loading customers: ${customersState.error}',
         onRetry: () {
-          ref.read(customersInfiniteProvider(_searchQuery).notifier).refresh();
+          final params = CustomersInfiniteParams(
+            searchQuery: _searchQuery,
+            duesOnly: _selectedFilter == _CustomerFilter.dues,
+          );
+          ref.read(customersInfiniteProvider(params).notifier).refresh();
         },
       );
     }
 
-    // Apply filter chip filtering (dues/all) - search is handled by backend
-    final filteredCustomers = _filterCustomers(customersState.customers);
-
     // Only the list content rebuilds - search bar and filters are outside Consumer
+    // Filtering is now done on server side, so no client-side filtering needed
     return _buildCustomerListBody(
-      filteredCustomers,
+      customersState.customers,
       customersState.isLoading,
       customersState.isLoadingMore,
+      statsAsync,
     );
   }
 
-  Widget _buildCustomerListBody(List<Customer> filteredCustomers, bool isLoading, bool isLoadingMore) {
+  Widget _buildCustomerListBody(
+    List<Customer> filteredCustomers,
+    bool isLoading,
+    bool isLoadingMore,
+    AsyncValue<Map<String, dynamic>> statsAsync,
+  ) {
     if (filteredCustomers.isEmpty && _searchQuery == null) {
       return _EmptyCustomersState(
         onNewCustomer: () => context.push('/customers/new'),
@@ -135,12 +144,29 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
       );
     }
 
-    final stats = _calculateStats(filteredCustomers);
+    // Get stats from server (or use default if loading/error)
+    final stats = statsAsync.value ?? {
+      'total': 0,
+      'withDues': 0,
+      'totalDues': 0.0,
+    };
+    final customersStats = _CustomersStats(
+      total: stats['total'] as int? ?? 0,
+      withDues: stats['withDues'] as int? ?? 0,
+      totalDues: (stats['totalDues'] as num?)?.toDouble() ?? 0.0,
+    );
 
     // Only return the scrollable list content - search bar and filters are outside Consumer
     return RefreshIndicator(
       onRefresh: () async {
-        await ref.read(customersInfiniteProvider(_searchQuery).notifier).refresh();
+        final params = CustomersInfiniteParams(
+          searchQuery: _searchQuery,
+          duesOnly: _selectedFilter == _CustomerFilter.dues,
+        );
+        await Future.wait([
+          ref.read(customersInfiniteProvider(params).notifier).refresh(),
+          ref.refresh(customerStatsProvider(params).future),
+        ]);
       },
       child: CustomScrollView(
         controller: _scrollController,
@@ -148,7 +174,7 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: _CustomersStatsRow(stats: stats),
+              child: _CustomersStatsRow(stats: customersStats),
             ),
           ),
           SliverList.builder(
@@ -249,6 +275,13 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
                     setState(() {
                       _selectedFilter = _CustomerFilter.all;
                     });
+                    // Refresh provider with new filter
+                    final params = CustomersInfiniteParams(
+                      searchQuery: _searchQuery,
+                      duesOnly: false,
+                    );
+                    ref.read(customersInfiniteProvider(params).notifier).refresh();
+                    ref.invalidate(customerStatsProvider(params));
                   },
                 ),
                 const SizedBox(width: 8),
@@ -260,6 +293,13 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
                     setState(() {
                       _selectedFilter = _CustomerFilter.dues;
                     });
+                    // Refresh provider with new filter
+                    final params = CustomersInfiniteParams(
+                      searchQuery: _searchQuery,
+                      duesOnly: true,
+                    );
+                    ref.read(customersInfiniteProvider(params).notifier).refresh();
+                    ref.invalidate(customerStatsProvider(params));
                   },
                   isWarning: true,
                 ),
@@ -271,8 +311,13 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
           Expanded(
             child: Consumer(
               builder: (context, ref, child) {
-                final customersState = ref.watch(customersInfiniteProvider(_searchQuery));
-                return _buildCustomersBody(customersState);
+                final params = CustomersInfiniteParams(
+                  searchQuery: _searchQuery,
+                  duesOnly: _selectedFilter == _CustomerFilter.dues,
+                );
+                final customersState = ref.watch(customersInfiniteProvider(params));
+                final statsAsync = ref.watch(customerStatsProvider(params));
+                return _buildCustomersBody(customersState, statsAsync);
               },
             ),
           ),
@@ -281,24 +326,6 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
     );
   }
 
-  _CustomersStats _calculateStats(List<Customer> customers) {
-    int total = customers.length;
-    int withDues = 0;
-    double totalDues = 0.0;
-
-    for (final customer in customers) {
-      if (customer.dueAmount != null && customer.dueAmount! > 0) {
-        withDues++;
-        totalDues += customer.dueAmount!;
-      }
-    }
-
-    return _CustomersStats(
-      total: total,
-      withDues: withDues,
-      totalDues: totalDues,
-    );
-  }
 }
 
 class _CustomersStats {
