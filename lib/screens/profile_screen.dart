@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../providers/auth_provider.dart';
 import '../providers/branches_provider.dart';
+import '../providers/orders_provider.dart';
 import '../models/user_profile.dart';
 import '../core/supabase_client.dart';
 import '../services/permission_service.dart';
@@ -521,6 +522,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       await authService.updateBranch(branchId);
 
       ref.invalidate(userProfileProvider);
+      
+      // Invalidate order providers to refresh orders with new branch
+      ref.read(ordersRefreshTriggerProvider.notifier).state++;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

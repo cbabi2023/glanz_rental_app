@@ -85,8 +85,11 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
           // Refresh provider with new search query (will load from backend)
           // The Consumer widget will automatically rebuild only the list part
           final userProfile = ref.read(userProfileProvider).value;
-          final branchId = userProfile?.branchId;
-          if (branchId != null) {
+          // Super admin should see all orders (branchId = null), others see their branch orders
+          final branchId = userProfile?.isSuperAdmin == true 
+              ? null 
+              : userProfile?.branchId;
+          {
             final startDate = _startForFilter(_selectedDateFilter);
             final endDate = _endForFilter(_selectedDateFilter);
             
@@ -137,8 +140,10 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent * 0.8) {
       final userProfile = ref.read(userProfileProvider).value;
-      final branchId = userProfile?.branchId;
-      if (branchId == null) return;
+      // Super admin should see all orders (branchId = null), others see their branch orders
+      final branchId = userProfile?.isSuperAdmin == true 
+          ? null 
+          : userProfile?.branchId;
 
       final startDate = _startForFilter(_selectedDateFilter);
       final endDate = _endForFilter(_selectedDateFilter);
@@ -188,8 +193,11 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
     // Refresh orders when app comes to foreground
     if (state == AppLifecycleState.resumed) {
       final userProfile = ref.read(userProfileProvider).value;
-      final branchId = userProfile?.branchId;
-      if (branchId != null) {
+      // Super admin should see all orders (branchId = null), others see their branch orders
+      final branchId = userProfile?.isSuperAdmin == true 
+          ? null 
+          : userProfile?.branchId;
+      {
         final startDate = _startForFilter(_selectedDateFilter);
         final endDate = _endForFilter(_selectedDateFilter);
         
@@ -405,9 +413,6 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
         }
       });
     }
-    final userProfile = ref.watch(userProfileProvider);
-    final branchId = userProfile.value?.branchId;
-    
     // Watch refresh trigger - this ensures the widget rebuilds when a new order is created
     // The ordersProvider also watches this, so it will refetch automatically
     ref.watch(ordersRefreshTriggerProvider);
@@ -793,6 +798,13 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
             Expanded(
               child: Consumer(
                 builder: (context, ref, child) {
+                  // Get branchId inside Consumer to ensure it uses latest userProfile
+                  final userProfile = ref.watch(userProfileProvider);
+                  // Super admin should see all orders (branchId = null), others see their branch orders
+                  final branchId = userProfile.value?.isSuperAdmin == true 
+                      ? null 
+                      : userProfile.value?.branchId;
+                  
                   final params = OrdersParams(
                     branchId: branchId,
                     status: status,
@@ -1581,7 +1593,10 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
       );
 
       // Invalidate order queries to refresh the list
-      final branchId = ref.read(userProfileProvider).value?.branchId;
+      final userProfile = ref.read(userProfileProvider).value;
+      final branchId = userProfile?.isSuperAdmin == true 
+          ? null 
+          : userProfile?.branchId;
       ref.invalidate(ordersProvider(OrdersParams(branchId: branchId)));
 
       if (mounted) {
@@ -1649,7 +1664,10 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
       );
 
       // Invalidate order queries to refresh the list
-      final branchId = ref.read(userProfileProvider).value?.branchId;
+      final userProfile = ref.read(userProfileProvider).value;
+      final branchId = userProfile?.isSuperAdmin == true 
+          ? null 
+          : userProfile?.branchId;
       ref.invalidate(ordersProvider(OrdersParams(branchId: branchId)));
 
       if (mounted) {
