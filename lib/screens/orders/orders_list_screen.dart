@@ -825,30 +825,6 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
     DateTime? endDate,
     AsyncValue<Map<String, dynamic>> statsAsync,
   ) {
-    if (ordersState.isLoading && ordersState.orders.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (ordersState.error != null && ordersState.orders.isEmpty) {
-      return _ErrorState(
-        message: 'Error loading orders: ${ordersState.error}',
-        onRetry: () {
-          ref.read(ordersInfiniteProvider(params).notifier).refresh();
-          ref.invalidate(recentOrdersProvider(branchId));
-        },
-      );
-    }
-
-    if (ordersState.orders.isEmpty) {
-      return _EmptyOrdersState(
-        onNewOrder: () => context.push('/orders/new'),
-      );
-    }
-
-    // Apply client-side category filters only (late tab needs date checking)
-    // Search is now handled server-side
-    final filtered = _filterOrdersByCategory(ordersState.orders);
-    
     // Get stats from server (or use default if loading/error)
     final statsData = statsAsync.value ?? {
       'total': 0,
@@ -868,6 +844,17 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
       partiallyReturned: statsData['partiallyReturned'] as int? ?? 0,
       cancelled: statsData['cancelled'] as int? ?? 0,
     );
+
+    // Apply client-side category filters only (late tab needs date checking)
+    // Search is now handled server-side
+    final filtered = _filterOrdersByCategory(ordersState.orders);
+    
+    // Check if this is initial empty state (no filters, no search, no orders)
+    final isInitialEmpty = ordersState.orders.isEmpty && 
+                          !ordersState.isLoading && 
+                          ordersState.error == null &&
+                          _searchQuery == null &&
+                          _selectedTab == _OrdersTab.all;
 
     return Column(
       children: [
@@ -941,13 +928,38 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
                     ),
                   ),
                 ),
-                if (filtered.isEmpty)
-                  SliverToBoxAdapter(
+                // Show loading indicator during initial load
+                if (ordersState.isLoading && ordersState.orders.isEmpty)
+                  const SliverFillRemaining(
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                // Show error state
+                else if (ordersState.error != null && ordersState.orders.isEmpty)
+                  SliverFillRemaining(
+                    child: _ErrorState(
+                      message: 'Error loading orders: ${ordersState.error}',
+                      onRetry: () {
+                        ref.read(ordersInfiniteProvider(params).notifier).refresh();
+                        ref.invalidate(recentOrdersProvider(branchId));
+                      },
+                    ),
+                  )
+                // Show empty state only for initial empty (no filters, no search)
+                else if (isInitialEmpty)
+                  SliverFillRemaining(
+                    child: _EmptyOrdersState(
+                      onNewOrder: () => context.push('/orders/new'),
+                    ),
+                  )
+                // Show no results message when filtered list is empty
+                else if (filtered.isEmpty)
+                  SliverFillRemaining(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: _NoResultsState(),
                     ),
                   )
+                // Show order list
                 else
                   SliverList.builder(
                     itemCount: filtered.length + (ordersState.isLoadingMore ? 1 : 0),
