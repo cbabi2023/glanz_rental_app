@@ -222,20 +222,75 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
     AppLogger.debug('Using branch ID: $effectiveBranchId for user: ${userProfile.id}');
 
-    // Validate all items have required fields
-    final invalidItems = draft.items.where(
-      (item) => item.photoUrl.isEmpty ||
-          item.quantity <= 0 ||
-          item.pricePerDay < 0,
-    );
-    if (invalidItems.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please check all items have valid photo, quantity, and price'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    // Validate items before creating order
+    if (draft.items.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please add at least one item to the order'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       return;
+    }
+
+    // Validate each item
+    for (var i = 0; i < draft.items.length; i++) {
+      final item = draft.items[i];
+      final itemNumber = i + 1;
+      
+      // Validate image
+      if (item.photoUrl.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Item $itemNumber: Please add an image'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Validate product name
+      if (item.productName == null || item.productName!.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Item $itemNumber: Product name is required'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Validate quantity (must be 1 or more)
+      if (item.quantity < 1) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Item $itemNumber: Quantity must be 1 or more'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Validate price (must be greater than 0)
+      if (item.pricePerDay <= 0) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Item $itemNumber: Price must be greater than 0'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
     }
 
     setState(() {
