@@ -42,6 +42,7 @@ class OrderItem {
   final String? missingNote;
   final int? returnedQuantity; // Number of items returned (for partial returns)
   final double? damageCost; // Cost for damaged/missing items
+  final String? damageDescription; // Description of damage or issues (separate from missing_note)
 
   OrderItem({
     this.id,
@@ -58,6 +59,7 @@ class OrderItem {
     this.missingNote,
     this.returnedQuantity,
     this.damageCost,
+    this.damageDescription,
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
@@ -113,6 +115,7 @@ class OrderItem {
       missingNote: json['missing_note']?.toString(),
       returnedQuantity: (json['returned_quantity'] as num?)?.toInt(),
       damageCost: (json['damage_fee'] as num?)?.toDouble(),
+      damageDescription: json['damage_description']?.toString(),
     );
   }
 
@@ -132,6 +135,7 @@ class OrderItem {
       if (missingNote != null) 'missing_note': missingNote,
       if (returnedQuantity != null) 'returned_quantity': returnedQuantity,
       if (damageCost != null) 'damage_fee': damageCost,
+      if (damageDescription != null) 'damage_description': damageDescription,
     };
   }
   

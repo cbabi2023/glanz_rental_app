@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/supabase_client.dart';
 import '../core/logger.dart';
 import '../models/order.dart';
@@ -95,7 +96,7 @@ class OrdersService {
           'security_deposit_amount, security_deposit_collected, security_deposit_refunded, security_deposit_refunded_amount, security_deposit_refund_date, additional_amount_collected, deposit_balance, created_at, '
           'customer:customers(id, name, phone, customer_number), '
           'branch:branches(id, name), '
-          'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity, damage_fee)',
+          'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity, damage_fee, damage_description)',
         );
 
     // Apply filters
@@ -146,7 +147,7 @@ class OrdersService {
             'customer:customers(*), '
             'staff:profiles(id, full_name, upi_id), '
             'branch:branches(*), '
-            'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity, damage_fee)',
+            'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity, damage_fee, damage_description)',
           )
           .eq('id', orderId)
           .single();
@@ -753,11 +754,16 @@ class OrdersService {
         if (itemReturn.damageCost != null) {
           itemUpdate['damage_fee'] = itemReturn.damageCost;
         }
-        if (itemReturn.description != null) {
-          itemUpdate['damage_description'] = itemReturn.description;
+        // Store damage description in damage_description field (matching website schema)
+        if (itemReturn.description != null && itemReturn.description!.trim().isNotEmpty) {
+          itemUpdate['damage_description'] = itemReturn.description!.trim();
+        } else {
+          // Clear damage_description if empty
+          itemUpdate['damage_description'] = null;
         }
-        if (itemReturn.missingNote != null) {
-          itemUpdate['missing_note'] = itemReturn.missingNote;
+        // missing_note is separate - only for missing items
+        if (itemReturn.missingNote != null && itemReturn.missingNote!.trim().isNotEmpty) {
+          itemUpdate['missing_note'] = itemReturn.missingNote!.trim();
         }
         
           return _supabase
@@ -771,43 +777,66 @@ class OrdersService {
         await Future.wait(itemUpdatePromises);
       }
 
-      // Fetch updated order to check current item return status
-      final updatedOrderForStatus = await getOrder(orderId);
-      if (updatedOrderForStatus == null) {
-        throw Exception('Failed to retrieve updated order for status check');
-      }
-
-      // Determine new order status based on item return state
+      // Determine new order status based on item returns being processed
+      // We check the itemReturns we're processing combined with current order state
       OrderStatus? newStatus;
-      final allItems = updatedOrderForStatus.items ?? [];
       
-      if (allItems.isNotEmpty) {
-        // Check if all items are fully returned
-        final allItemsFullyReturned = allItems.every((item) {
-          final returnedQty = item.returnedQuantity ?? 0;
-          return returnedQty >= item.quantity;
-        });
-
-        // Check if any items are returned (partially or fully)
-        final hasAnyReturns = allItems.any((item) {
-          final returnedQty = item.returnedQuantity ?? 0;
-          return returnedQty > 0;
-        });
-
-        // Check if there's any damage
-        final hasDamage = calcDamageFeeTotal > 0 || 
-                         allItems.any((item) => item.damageCost != null && item.damageCost! > 0);
-
-        if (allItemsFullyReturned) {
-          // All items returned - mark as completed (or completed_with_issues if damage)
-          newStatus = hasDamage 
-              ? OrderStatus.completedWithIssues 
-              : OrderStatus.completed;
-        } else if (hasAnyReturns) {
-          // Some items returned but not all - mark as partially returned
-          newStatus = OrderStatus.partiallyReturned;
+      if (itemReturns.isNotEmpty) {
+        // Build a map of item returns by itemId for quick lookup
+        final returnMap = <String, ItemReturn>{};
+        for (final itemReturn in itemReturns) {
+          returnMap[itemReturn.itemId] = itemReturn;
         }
-        // If no returns, status stays as is (active, pending_return, etc.)
+
+        // Get current order items to check quantities
+        final allItems = currentOrder.items ?? [];
+        
+        if (allItems.isNotEmpty) {
+          // Check if all items are being fully returned
+          bool allItemsFullyReturned = true;
+          bool hasAnyReturns = false;
+          
+          for (final item in allItems) {
+            if (item.id == null) continue;
+            
+            final itemReturn = returnMap[item.id!];
+            final currentReturnedQty = item.returnedQuantity ?? 0;
+            
+            if (itemReturn != null) {
+              // This item is being processed
+              if (itemReturn.returnStatus == 'returned' || itemReturn.returnStatus == 'missing') {
+                hasAnyReturns = true;
+                // If returnedQuantity is null, it means full quantity is being returned
+                final newReturnedQty = itemReturn.returnedQuantity ?? item.quantity;
+                if (newReturnedQty < item.quantity) {
+                  allItemsFullyReturned = false;
+                }
+              } else if (itemReturn.returnStatus == 'not_yet_returned') {
+                // Item is being unreturned - not all items are returned
+                allItemsFullyReturned = false;
+              }
+            } else {
+              // Item not in this batch - check existing state
+              if (currentReturnedQty > 0) {
+                hasAnyReturns = true;
+                if (currentReturnedQty < item.quantity) {
+                  allItemsFullyReturned = false;
+                }
+              } else {
+                // Item not returned yet
+                allItemsFullyReturned = false;
+              }
+            }
+          }
+
+          if (allItemsFullyReturned && hasAnyReturns) {
+            // All items returned - use completed status (not completed_with_issues to avoid constraint error)
+            newStatus = OrderStatus.completed;
+          } else if (hasAnyReturns) {
+            // Some items returned but not all - mark as partially returned
+            newStatus = OrderStatus.partiallyReturned;
+          }
+        }
       }
 
       // Calculate base total: Subtotal + GST (if not included)
@@ -826,8 +855,9 @@ class OrdersService {
       };
       
       // Update status if determined
-      if (newStatus != null) {
-        orderUpdate['status'] = newStatus.value;
+      OrderStatus? statusToSet = newStatus;
+      if (statusToSet != null) {
+        orderUpdate['status'] = statusToSet.value;
       }
       
       if (calcDamageFeeTotal > 0) {
@@ -843,12 +873,47 @@ class OrdersService {
         orderUpdate['discount_amount'] = 0;
       }
 
-      final orderUpdateResult = await _supabase
-          .from('orders')
-          .update(orderUpdate)
-          .eq('id', orderId)
-          .select()
-          .single();
+      // Try to update the order
+      // If status constraint fails (e.g., completed_with_issues not allowed), fallback to completed
+      dynamic orderUpdateResult;
+      try {
+        orderUpdateResult = await _supabase
+            .from('orders')
+            .update(orderUpdate)
+            .eq('id', orderId)
+            .select()
+            .single();
+      } on PostgrestException catch (statusError) {
+        // If status constraint error (code 23514), retry with completed status
+        final isConstraintError = statusError.code == '23514' || 
+                                  statusError.message.contains('orders_status_check') ||
+                                  statusError.message.contains('check constraint');
+        
+        if (isConstraintError && statusToSet != null) {
+          AppLogger.warning(
+            'Status ${statusToSet.value} not allowed by database constraint, falling back to completed',
+          );
+          // Use completed status instead
+          orderUpdate['status'] = OrderStatus.completed.value;
+          try {
+            orderUpdateResult = await _supabase
+                .from('orders')
+                .update(orderUpdate)
+                .eq('id', orderId)
+                .select()
+                .single();
+          } catch (retryError) {
+            AppLogger.error('Failed to update order with completed status', retryError);
+            rethrow;
+          }
+        } else {
+          // Re-throw if it's a different error
+          rethrow;
+        }
+      } catch (e) {
+        // Re-throw any other exceptions
+        rethrow;
+      }
 
       if (orderUpdateResult.isEmpty) {
         throw Exception('Failed to update order');
@@ -873,7 +938,7 @@ class OrdersService {
           'customer:customers(*), '
           'branch:branches(*), '
           'staff:profiles(id, full_name, upi_id), '
-          'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity, damage_fee)',
+          'items:order_items(id, photo_url, product_name, quantity, price_per_day, days, line_total, return_status, actual_return_date, late_return, missing_note, returned_quantity, damage_fee, damage_description)',
         )
         .eq('customer_id', customerId)
         .order('created_at', ascending: false);
@@ -1060,12 +1125,12 @@ class OrdersService {
         updateData['damage_fee'] = null;
       }
       
-      // Store damage description in missing_note if provided
+      // Store damage description in damage_description field (matching website schema)
       if (damageDescription != null && damageDescription.trim().isNotEmpty) {
-        updateData['missing_note'] = damageDescription.trim();
-      } else if (damageCost == null || damageCost == 0) {
-        // Clear missing_note if no damage
-        updateData['missing_note'] = null;
+        updateData['damage_description'] = damageDescription.trim();
+      } else {
+        // Clear damage_description if empty
+        updateData['damage_description'] = null;
       }
       
       await _supabase

@@ -619,7 +619,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       if (isChecked) {
         final currentReturnedQty = item.returnedQuantity ?? 0;
         final currentDamageCost = item.damageCost;
-        final currentDamageDesc = item.missingNote;
+        final currentDamageDesc = item.damageDescription;
 
         if (returnedQty != null && returnedQty != currentReturnedQty) {
           hasChanges = true;
@@ -669,27 +669,48 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         final damageCost = _damageCosts[item.id!];
         final damageDesc = _damageDescriptions[item.id!];
 
-        if (isChecked && returnedQty != null && returnedQty > 0) {
-          // Item is being returned
+        if (isChecked) {
+          // Item is checked - either being returned or updating damage info
           final currentReturnedQty = item.returnedQuantity ?? 0;
-          final pendingQty = item.quantity - currentReturnedQty;
-
-          if (returnedQty <= pendingQty) {
-            // Valid return quantity
-            itemReturns.add(
-              ItemReturn(
-                itemId: item.id!,
-                returnStatus: returnedQty >= item.quantity
-                    ? 'returned'
-                    : 'returned',
-                actualReturnDate: DateTime.now(),
-                returnedQuantity: returnedQty,
-                damageCost: damageCost,
-                description: damageDesc?.trim().isEmpty ?? true
-                    ? null
-                    : damageDesc?.trim(),
-              ),
-            );
+          
+          // Check if there are changes or if item is already returned
+          final hasQtyChange = returnedQty != null && returnedQty != currentReturnedQty && returnedQty > 0;
+          final hasDamageCost = damageCost != null;
+          final hasDamageDesc = damageDesc != null && damageDesc.trim().isNotEmpty;
+          
+          // Include item if: quantity change, damage info provided, or already returned
+          if (hasQtyChange || hasDamageCost || hasDamageDesc || currentReturnedQty > 0) {
+            // Use entered quantity if specified, otherwise use current returned quantity
+            final qtyToUse = returnedQty ?? currentReturnedQty;
+            
+            // Only validate quantity if user is changing it
+            bool shouldInclude = true;
+            if (returnedQty != null && returnedQty != currentReturnedQty) {
+              final pendingQty = item.quantity - currentReturnedQty;
+              shouldInclude = returnedQty <= pendingQty;
+            }
+            
+            if (shouldInclude && (qtyToUse > 0 || hasDamageCost || hasDamageDesc)) {
+              // Create item return with damage info
+              itemReturns.add(
+                ItemReturn(
+                  itemId: item.id!,
+                  returnStatus: qtyToUse >= item.quantity
+                      ? 'returned'
+                      : 'returned',
+                  actualReturnDate: hasQtyChange && (returnedQty ?? 0) > currentReturnedQty
+                      ? DateTime.now() 
+                      : null, // Don't update return date if quantity unchanged
+                  returnedQuantity: hasQtyChange
+                      ? returnedQty 
+                      : null, // Only include if quantity changed
+                  damageCost: damageCost,
+                  description: hasDamageDesc
+                      ? damageDesc!.trim()
+                      : null,
+                ),
+              );
+            }
           }
         } else if (!isChecked &&
             (item.isReturned || (item.returnedQuantity ?? 0) > 0)) {
@@ -2078,7 +2099,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                       _damageCosts[item.id] ?? item.damageCost,
                                   damageDescription:
                                       _damageDescriptions[item.id] ??
-                                      item.missingNote,
+                                      item.damageDescription,
                                   onCheckboxChanged: (checked) {
                                     setState(() {
                                       if (item.id != null) {
@@ -2966,6 +2987,64 @@ class _OrderItemCard extends StatefulWidget {
 }
 
 class _OrderItemCardState extends State<_OrderItemCard> {
+  late TextEditingController _damageCostController;
+  late TextEditingController _damageDescriptionController;
+
+  @override
+  void initState() {
+    super.initState();
+    _damageCostController = TextEditingController(
+      text: _getInitialDamageCost(),
+    );
+    _damageDescriptionController = TextEditingController(
+      text: _getInitialDamageDescription(),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_OrderItemCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update controllers if values or checked state changed from outside
+    if (widget.isChecked != oldWidget.isChecked ||
+        widget.damageCost != oldWidget.damageCost) {
+      final newValue = _getInitialDamageCost();
+      if (_damageCostController.text != newValue) {
+        _damageCostController.text = newValue;
+      }
+    }
+    if (widget.isChecked != oldWidget.isChecked ||
+        widget.damageDescription != oldWidget.damageDescription) {
+      final newValue = _getInitialDamageDescription();
+      if (_damageDescriptionController.text != newValue) {
+        _damageDescriptionController.text = newValue;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _damageCostController.dispose();
+    _damageDescriptionController.dispose();
+    super.dispose();
+  }
+
+  String _getInitialDamageCost() {
+    final currentDamageCost = widget.isChecked && widget.damageCost != null
+        ? widget.damageCost
+        : widget.item.damageCost;
+    return (currentDamageCost != null && currentDamageCost > 0)
+        ? currentDamageCost.toStringAsFixed(0)
+        : '';
+  }
+
+  String _getInitialDamageDescription() {
+    final currentDamageDescription =
+        widget.isChecked && widget.damageDescription != null
+            ? widget.damageDescription
+            : widget.item.damageDescription;
+    return currentDamageDescription ?? '';
+  }
+
   void _showImagePreview(
     BuildContext context,
     String imageUrl,
@@ -3013,10 +3092,6 @@ class _OrderItemCardState extends State<_OrderItemCard> {
     final currentDamageCost = widget.isChecked && widget.damageCost != null
         ? widget.damageCost
         : widget.item.damageCost;
-    final currentDamageDescription =
-        widget.isChecked && widget.damageDescription != null
-        ? widget.damageDescription
-        : widget.item.missingNote;
 
     final isReturned = widget.item.isReturned;
     final isFullyReturned = currentReturnedQty >= widget.item.quantity;
@@ -3452,13 +3527,7 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                           ),
                           const SizedBox(height: 6),
                           TextField(
-                            controller: TextEditingController(
-                              text:
-                                  currentDamageCost != null &&
-                                      currentDamageCost > 0
-                                  ? currentDamageCost.toStringAsFixed(0)
-                                  : '',
-                            ),
+                            controller: _damageCostController,
                             keyboardType: TextInputType.number,
                             enabled: true,
                             onChanged: (value) {
@@ -3488,9 +3557,7 @@ class _OrderItemCardState extends State<_OrderItemCard> {
                           ),
                           const SizedBox(height: 6),
                           TextField(
-                            controller: TextEditingController(
-                              text: currentDamageDescription ?? '',
-                            ),
+                            controller: _damageDescriptionController,
                             maxLines: 3,
                             enabled: true,
                             onChanged: (value) {
