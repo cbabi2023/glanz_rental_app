@@ -25,52 +25,27 @@ class PermissionService {
     return status.isGranted;
   }
 
-  /// Request gallery/media permissions based on Android version
+  /// Request gallery/media permissions
+  /// 
+  /// Note: On Android 13+, we use Android Photo Picker which doesn't require permissions.
+  /// The image_picker package automatically uses Photo Picker when gallery permissions
+  /// are not requested. For older Android versions (API 32 and below), READ_EXTERNAL_STORAGE
+  /// in the manifest (with maxSdkVersion="32") handles it.
+  /// 
+  /// Returns true to allow Photo Picker usage (no explicit permission needed).
   static Future<bool> requestGalleryPermission() async {
-    // Check Android version - use READ_MEDIA_IMAGES for Android 13+
-    // For older versions, use READ_EXTERNAL_STORAGE
-    // The permission_handler plugin handles this automatically based on platform
-    ph.Permission permission;
-    
-    // Try to use photos permission (Android 13+), fallback to storage
-    try {
-      // Check if photos permission is available (Android 13+)
-      final photosStatus = await ph.Permission.photos.status;
-      permission = ph.Permission.photos;
-      
-      // If photos permission is permanently denied or restricted, try storage
-      if (photosStatus.isPermanentlyDenied || photosStatus.isRestricted) {
-        permission = ph.Permission.storage;
-      }
-    } catch (e) {
-      // Fallback to storage permission for older Android versions
-      permission = ph.Permission.storage;
-    }
-    
-    final status = await permission.request();
-    return status.isGranted;
+    // Photo Picker (Android 13+) doesn't require explicit permissions
+    // The image_picker package will use Photo Picker automatically when permissions aren't requested
+    return true;
   }
 
   /// Request both camera and gallery permissions
+  /// 
+  /// Note: Only requests camera permission. Gallery uses Android Photo Picker
+  /// which doesn't require explicit permissions.
   static Future<Map<ph.Permission, ph.PermissionStatus>> requestAllPermissions() async {
-    List<ph.Permission> permissions = [];
-    
-    // Always request camera
-    permissions.add(ph.Permission.camera);
-    
-    // Request appropriate storage/gallery permission
-    // The permission_handler will use the correct one based on Android version
-    // Try photos first (Android 13+), fallback to storage for older versions
-    try {
-      // Check if photos permission is available (Android 13+)
-      await ph.Permission.photos.status;
-      permissions.add(ph.Permission.photos);
-    } catch (e) {
-      // Fallback to storage for older versions
-      permissions.add(ph.Permission.storage);
-    }
-
-    final statuses = await permissions.request();
+    // Only request camera permission - gallery uses Photo Picker (no permission needed)
+    final statuses = await [ph.Permission.camera].request();
     return statuses;
   }
 
@@ -81,22 +56,12 @@ class PermissionService {
   }
 
   /// Check if gallery permission is granted
+  /// 
+  /// Note: Photo Picker (Android 13+) doesn't require permissions, so always returns true.
+  /// For older Android versions, READ_EXTERNAL_STORAGE in manifest handles it.
   static Future<bool> isGalleryPermissionGranted() async {
-    try {
-      // Check photos permission first (Android 13+)
-      final photosStatus = await ph.Permission.photos.status;
-      if (photosStatus.isGranted) {
-        return true;
-      }
-      
-      // Check storage permission for older versions
-      final storageStatus = await ph.Permission.storage.status;
-      return storageStatus.isGranted;
-    } catch (e) {
-      // Fallback to storage permission check
-      final storageStatus = await ph.Permission.storage.status;
-      return storageStatus.isGranted;
-    }
+    // Photo Picker doesn't require explicit permissions - always allow
+    return true;
   }
 
   /// Open app settings if permissions are permanently denied
