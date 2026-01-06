@@ -66,7 +66,7 @@ class DashboardService {
       }
 
       // Fetch late return count separately (without date filter, only branch filter)
-      // This ensures late returns always show full count regardless of date filter
+      // Only count active/pending_return orders whose end date/time has passed
       int lateReturnCount = 0;
       try {
         dynamic lateReturnQuery = _supabase
@@ -85,22 +85,20 @@ class DashboardService {
             final map = raw as Map<String, dynamic>;
             final status = map['status'] as String?;
 
-            // Check if order is late (past end date but not completed/cancelled/partially returned)
-            if (status != 'completed' &&
-                status != 'cancelled' &&
-                status != 'partially_returned') {
+            // Only active or pending_return can be late
+            if (status == 'active' || status == 'pending_return') {
               try {
                 final endStr =
                     map['end_datetime']?.toString() ??
                     map['end_date']?.toString();
                 if (endStr != null && endStr.isNotEmpty) {
-                  final endDate = DateTime.parse(endStr);
+                  final endDate = _parseDateTimeWithTimezone(endStr);
                   if (now.isAfter(endDate)) {
                     lateReturnCount++;
                   }
                 }
-              } catch (e) {
-                // Skip if date parsing fails
+              } catch (_) {
+                // Ignore parse errors
               }
             }
           }
@@ -129,6 +127,7 @@ class DashboardService {
       int scheduledCount = 0;
       int partiallyReturnedCount = 0;
       double collection = 0.0;
+      final now = DateTime.now();
 
       for (final raw in ordersResponse) {
         final map = raw as Map<String, dynamic>;
@@ -137,7 +136,21 @@ class DashboardService {
 
         switch (status) {
           case 'active':
-            activeCount++;
+            // Count as active only if not late
+            bool isLate = false;
+            final endStr =
+                map['end_datetime']?.toString() ?? map['end_date']?.toString();
+            if (endStr != null && endStr.isNotEmpty) {
+              try {
+                final endDate = _parseDateTimeWithTimezone(endStr);
+                isLate = now.isAfter(endDate);
+              } catch (_) {
+                // If parsing fails, default to not late
+              }
+            }
+            if (!isLate) {
+              activeCount++;
+            }
             break;
           case 'pending_return':
             pendingCount++;
@@ -182,6 +195,34 @@ class DashboardService {
         totalCustomers: 0,
         lateReturn: 0,
       );
+    }
+  }
+
+  /// Helper to parse datetime strings and handle timezone/UTC conversions
+  static DateTime _parseDateTimeWithTimezone(String dateString) {
+    try {
+      final trimmed = dateString.trim();
+      final hasTimezone = trimmed.endsWith('Z') ||
+          RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+
+      if (hasTimezone) {
+        return DateTime.parse(trimmed).toLocal();
+      } else {
+        final parsed = DateTime.parse(trimmed);
+        final utcDate = DateTime.utc(
+          parsed.year,
+          parsed.month,
+          parsed.day,
+          parsed.hour,
+          parsed.minute,
+          parsed.second,
+          parsed.millisecond,
+          parsed.microsecond,
+        );
+        return utcDate.toLocal();
+      }
+    } catch (_) {
+      return DateTime.now();
     }
   }
 

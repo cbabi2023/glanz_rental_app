@@ -226,33 +226,25 @@ class OrdersService {
         // Count by status
         if (status == OrderStatus.scheduled) {
           scheduled++;
-        } else if (status == OrderStatus.active) {
-          ongoing++;
-          // Check if late
+        } else if (status == OrderStatus.active || status == OrderStatus.pendingReturn) {
+          // Check if late first
+          bool isLate = false;
           final endDateStr = order['end_datetime'] as String? ?? order['end_date'] as String?;
           if (endDateStr != null) {
             try {
               final endDate = _parseDateTimeWithTimezone(endDateStr);
               if (now.isAfter(endDate)) {
+                isLate = true;
                 late++;
               }
             } catch (e) {
               // If date parsing fails, don't count as late
             }
           }
-        } else if (status == OrderStatus.pendingReturn) {
-          ongoing++;
-          // Check if late
-          final endDateStr = order['end_datetime'] as String? ?? order['end_date'] as String?;
-          if (endDateStr != null) {
-            try {
-              final endDate = _parseDateTimeWithTimezone(endDateStr);
-              if (now.isAfter(endDate)) {
-                late++;
-              }
-            } catch (e) {
-              // If date parsing fails, don't count as late
-            }
+          
+          // Only count as ongoing if NOT late
+          if (!isLate) {
+            ongoing++;
           }
         } else if (status == OrderStatus.completed || 
                    status == OrderStatus.completedWithIssues ||
@@ -265,8 +257,8 @@ class OrdersService {
         }
       }
 
-      // Note: late count is included in ongoing count, so we count it separately
-      // The late orders are a subset of ongoing orders
+      // Note: late orders are excluded from ongoing count
+      // Late orders are counted separately in the 'late' category
 
       return {
         'total': total,
