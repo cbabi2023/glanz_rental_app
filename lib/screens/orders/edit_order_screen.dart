@@ -474,8 +474,8 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
       final itemsForDb = finalUniqueItems.map((item) {
         // Update days for each item based on start/end dates
         final days = calculateDays(draft.startDate, draft.endDate);
-        // CRITICAL: lineTotal should be quantity * pricePerDay * days (not just quantity * pricePerDay)
-        final lineTotal = item.quantity * item.pricePerDay * days;
+        // Calculate line total: quantity × price per item (not per day, so no days multiplier)
+        final lineTotal = item.quantity * item.pricePerDay;
 
         final itemData = {
           'photo_url': item.photoUrl,
@@ -497,10 +497,9 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
 
       // CRITICAL FIX: Calculate subtotal from the actual items being sent to database
       // This ensures the subtotal matches the items, especially after item removal
-      final days = calculateDays(draft.startDate, draft.endDate);
-      final subtotal = finalUniqueItems.fold<double>(0.0, (sum, item) {
-        final lineTotal = item.quantity * item.pricePerDay * days;
-        return sum + lineTotal;
+      // Calculate line total: quantity × price per item (not per day, so no days multiplier)
+      final subtotal = itemsForDb.fold<double>(0.0, (sum, item) {
+        return sum + (item['line_total'] as double);
       });
       print(
         '🟠 Calculated subtotal from ${finalUniqueItems.length} items: $subtotal',

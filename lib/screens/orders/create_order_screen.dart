@@ -301,7 +301,29 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
     try {
       final ordersService = ref.read(ordersServiceProvider);
-      final subtotal = ref.read(orderSubtotalProvider);
+
+      // Prepare items for database first
+      final itemsForDb = draft.items.map((item) {
+        // Update days for each item based on start/end dates
+        final days = calculateDays(draft.startDate, draft.endDate);
+        // Calculate line total: quantity × price per item (not per day)
+        final lineTotal = item.quantity * item.pricePerDay;
+        
+        return {
+          'photo_url': item.photoUrl,
+          'product_name': item.productName,
+          'quantity': item.quantity,
+          'price_per_day': item.pricePerDay,
+          'days': days,
+          'line_total': lineTotal,
+        };
+      }).toList();
+
+      // CRITICAL FIX: Calculate subtotal from the actual items being sent to database
+      // This ensures the subtotal matches the items exactly (quantity × price per item)
+      final subtotal = itemsForDb.fold<double>(0.0, (sum, item) {
+        return sum + (item['line_total'] as double);
+      });
 
       // If staff or branch admin, use super admin GST settings (await to ensure we have it before submission)
       UserProfile? gstProfile = userProfile;
@@ -334,22 +356,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         subtotal: subtotal,
         user: gstProfile,
       );
-
-      // Prepare items for database
-      final itemsForDb = draft.items.map((item) {
-        // Update days for each item based on start/end dates
-        final days = calculateDays(draft.startDate, draft.endDate);
-        final lineTotal = item.quantity * item.pricePerDay;
-        
-        return {
-          'photo_url': item.photoUrl,
-          'product_name': item.productName,
-          'quantity': item.quantity,
-          'price_per_day': item.pricePerDay,
-          'days': days,
-          'line_total': lineTotal,
-        };
-      }).toList();
 
       // Create order - use effective branch ID (already validated above)
       final branchId = effectiveBranchId;

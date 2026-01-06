@@ -159,7 +159,8 @@ class OrderItem {
   /// Get the quantity that has been returned
   int get alreadyReturnedQuantity => returnedQuantity ?? (isReturned ? quantity : 0);
 
-  /// Calculate line total (quantity * price_per_day, without multiplying by days)
+  /// Calculate line total (quantity * price per item)
+  /// Note: pricePerDay parameter name is historical - it represents price per item, not per day
   static double calculateLineTotal({
     required int quantity,
     required double pricePerDay,
