@@ -19,9 +19,10 @@ class DashboardService {
   }) async {
     try {
       // Base query for orders - need end_date/end_datetime for late calculation
+      // Also need items to detect partial returns from active orders
       dynamic baseQuery = _supabase
           .from('orders')
-          .select('status, total_amount, end_date, end_datetime');
+          .select('status, total_amount, end_date, end_datetime, items:order_items(id, return_status)');
 
       // Apply date range filter only when provided
       if (startDate != null && endDate != null) {
@@ -133,27 +134,63 @@ class DashboardService {
         final map = raw as Map<String, dynamic>;
         final status = map['status'] as String?;
         final amount = (map['total_amount'] as num?)?.toDouble() ?? 0.0;
+        final items = map['items'];
+
+        // Check for partial returns by examining items (for active/pending_return orders)
+        // This matches website logic: detect partial returns even if status is still 'active'
+        bool isPartialReturn = false;
+        if ((status == 'active' || status == 'pending_return') && items is List) {
+          bool hasReturnedItems = false;
+          bool hasNotReturnedItems = false;
+          
+          for (final item in items) {
+            if (item is Map<String, dynamic>) {
+              final returnStatus = item['return_status'] as String?;
+              
+              // Website logic: Check if item has return_status = 'returned'
+              if (returnStatus == 'returned') {
+                hasReturnedItems = true;
+              }
+              
+              // Website logic: Check if item is not yet returned
+              if (returnStatus == null || returnStatus == 'not_yet_returned') {
+                hasNotReturnedItems = true;
+              }
+            }
+          }
+          
+          // If some items are returned and some are not, it's a partial return
+          if (hasReturnedItems && hasNotReturnedItems) {
+            isPartialReturn = true;
+            partiallyReturnedCount++;
+          }
+        }
 
         switch (status) {
           case 'active':
-            // Count as active only if not late
-            bool isLate = false;
-            final endStr =
-                map['end_datetime']?.toString() ?? map['end_date']?.toString();
-            if (endStr != null && endStr.isNotEmpty) {
-              try {
-                final endDate = _parseDateTimeWithTimezone(endStr);
-                isLate = now.isAfter(endDate);
-              } catch (_) {
-                // If parsing fails, default to not late
+            // Count as active only if not late and not a partial return
+            if (!isPartialReturn) {
+              bool isLate = false;
+              final endStr =
+                  map['end_datetime']?.toString() ?? map['end_date']?.toString();
+              if (endStr != null && endStr.isNotEmpty) {
+                try {
+                  final endDate = _parseDateTimeWithTimezone(endStr);
+                  isLate = now.isAfter(endDate);
+                } catch (_) {
+                  // If parsing fails, default to not late
+                }
               }
-            }
-            if (!isLate) {
-              activeCount++;
+              if (!isLate) {
+                activeCount++;
+              }
             }
             break;
           case 'pending_return':
-            pendingCount++;
+            // Count as pending_return only if not a partial return
+            if (!isPartialReturn) {
+              pendingCount++;
+            }
             break;
           case 'completed':
             completedCount++;

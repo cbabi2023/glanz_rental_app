@@ -161,6 +161,8 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
           status = OrderStatus.flagged;
           break;
         case _OrdersTab.partiallyReturned:
+          // Use server-side filtering for partially returned orders
+          // to match website behavior (status = 'partially_returned')
           status = OrderStatus.partiallyReturned;
           break;
         case _OrdersTab.late:
@@ -430,7 +432,9 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
         status = OrderStatus.flagged;
         break;
       case _OrdersTab.partiallyReturned:
-        status = OrderStatus.partiallyReturned;
+        // Do NOT filter by status on the server.
+        // We need all relevant orders so _getOrderCategory() can detect partial returns by items.
+        status = null;
         break;
       case _OrdersTab.late:
       case _OrdersTab.all:
