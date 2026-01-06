@@ -62,6 +62,41 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
     super.dispose();
   }
 
+  /// Helper function to parse datetime string with timezone conversion
+  /// Converts UTC times from database to local time for display
+  DateTime? _parseDateTimeWithTimezone(String dateString) {
+    try {
+      final trimmed = dateString.trim();
+
+      // Check if string has timezone info (ends with Z or has timezone offset like +05:30, -05:00)
+      final hasTimezone =
+          trimmed.endsWith('Z') ||
+          RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+
+      if (hasTimezone) {
+        // Has timezone info - DateTime.parse will handle conversion to local time
+        return DateTime.parse(trimmed).toLocal();
+      } else {
+        // No timezone info - assume it's UTC from database
+        // Parse the components and create as UTC, then convert to local
+        final parsed = DateTime.parse(trimmed);
+        final utcDate = DateTime.utc(
+          parsed.year,
+          parsed.month,
+          parsed.day,
+          parsed.hour,
+          parsed.minute,
+          parsed.second,
+          parsed.millisecond,
+          parsed.microsecond,
+        );
+        return utcDate.toLocal(); // Convert UTC to local time
+      }
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<void> _initializeFromOrder() async {
     print('🟣 _initializeFromOrder called for order: ${widget.orderId}');
     print(
@@ -577,12 +612,13 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
         ? calculateDays(draft.startDate, draft.endDate)
         : 0;
 
-    // Parse dates
+    // Parse dates with timezone conversion
+    // This ensures UTC times from database are converted to local time for display
     final startDate = draft.startDate.isNotEmpty
-        ? DateTime.tryParse(draft.startDate)
+        ? _parseDateTimeWithTimezone(draft.startDate)
         : null;
     final endDate = draft.endDate.isNotEmpty
-        ? DateTime.tryParse(draft.endDate)
+        ? _parseDateTimeWithTimezone(draft.endDate)
         : null;
 
     return PopScope(
