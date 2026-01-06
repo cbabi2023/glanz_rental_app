@@ -728,15 +728,85 @@ class OrdersService {
       print(
         '🟠 Deleting ${itemsToDelete.length} items that are no longer needed...',
       );
-      for (final itemId in itemsToDelete) {
-        try {
-          await _supabase.from('order_items').delete().eq('id', itemId);
-        } catch (e) {
-          print('🔴 Error deleting item $itemId (may be blocked by RLS): $e');
-          // If delete fails due to RLS, we'll leave the item - it's better than failing completely
+      print('🟠 Item IDs to delete: $itemsToDelete');
+
+      // CRITICAL FIX: Use RPC function to bypass RLS policies
+      // The delete_order_items function uses SECURITY DEFINER to bypass RLS
+      try {
+        final result = await _supabase.rpc(
+          'delete_order_items',
+          params: {'p_order_id': orderId, 'p_item_ids': itemsToDelete},
+        );
+
+        print('🟠 RPC delete_order_items result: $result');
+
+        if (result != null && result['success'] == true) {
+          print(
+            '🟢 Successfully deleted ${result['deleted_count']} items via RPC',
+          );
+        } else {
+          print('🔴 RPC delete failed: ${result?['error'] ?? 'Unknown error'}');
+
+          // Fallback: Try direct delete (may fail due to RLS)
+          print('🟡 Attempting fallback direct delete...');
+          for (final itemId in itemsToDelete) {
+            try {
+              await _supabase
+                  .from('order_items')
+                  .delete()
+                  .eq('id', itemId)
+                  .eq('order_id', orderId);
+              print('� Direct delete executed for item $itemId');
+            } catch (e) {
+              print('🔴 Direct delete failed for item $itemId: $e');
+            }
+          }
+        }
+      } catch (e) {
+        print('🔴 RPC call failed: $e');
+        print(
+          '🟡 This likely means the RPC function is not yet created in Supabase',
+        );
+        print(
+          '� Please run the SQL from supabase_delete_order_items.sql in Supabase SQL Editor',
+        );
+
+        // Fallback: Try direct delete (may fail due to RLS)
+        for (final itemId in itemsToDelete) {
+          try {
+            await _supabase
+                .from('order_items')
+                .delete()
+                .eq('id', itemId)
+                .eq('order_id', orderId);
+            print('🟡 Direct delete attempted for item $itemId');
+          } catch (e2) {
+            print('🔴 Direct delete also failed for item $itemId: $e2');
+          }
         }
       }
-      print('🟢 Deletion attempt completed');
+
+      // Verify deletion worked by counting remaining items
+      final remainingItems = await _supabase
+          .from('order_items')
+          .select('id')
+          .eq('order_id', orderId)
+          .inFilter('id', itemsToDelete);
+
+      final remainingCount = (remainingItems as List).length;
+      if (remainingCount == 0) {
+        print('🟢 All ${itemsToDelete.length} items successfully deleted');
+      } else {
+        print(
+          '🔴 DELETION FAILED: $remainingCount/${itemsToDelete.length} items still exist in database',
+        );
+        print(
+          '🔴 Remaining item IDs: ${remainingItems.map((i) => i['id']).toList()}',
+        );
+        print(
+          '🔴 Please run the SQL from supabase_delete_order_items.sql in Supabase SQL Editor',
+        );
+      }
     }
 
     // Verify final state

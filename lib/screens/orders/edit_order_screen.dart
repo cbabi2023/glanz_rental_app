@@ -403,7 +403,6 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
 
     try {
       final ordersService = ref.read(ordersServiceProvider);
-      final subtotal = ref.read(orderSubtotalProvider);
 
       // If staff or branch admin, use super admin GST settings (await to ensure we have it before submission)
       UserProfile? gstProfile = ref.read(userProfileProvider).value;
@@ -415,15 +414,6 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
           gstProfile = ref.read(userProfileProvider).value;
         }
       }
-
-      final gstAmount = calculateGstAmount(
-        subtotal: subtotal,
-        user: gstProfile,
-      );
-      final grandTotal = calculateGrandTotal(
-        subtotal: subtotal,
-        user: gstProfile,
-      );
 
       // CRITICAL: Prepare items for database - ensure NO duplicates
       // Use the snapshot we created at the start to prevent any changes during update
@@ -504,6 +494,27 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
 
         return itemData;
       }).toList();
+
+      // CRITICAL FIX: Calculate subtotal from the actual items being sent to database
+      // This ensures the subtotal matches the items, especially after item removal
+      final days = calculateDays(draft.startDate, draft.endDate);
+      final subtotal = finalUniqueItems.fold<double>(0.0, (sum, item) {
+        final lineTotal = item.quantity * item.pricePerDay * days;
+        return sum + lineTotal;
+      });
+      print(
+        '🟠 Calculated subtotal from ${finalUniqueItems.length} items: $subtotal',
+      );
+
+      final gstAmount = calculateGstAmount(
+        subtotal: subtotal,
+        user: gstProfile,
+      );
+      final grandTotal = calculateGrandTotal(
+        subtotal: subtotal,
+        user: gstProfile,
+      );
+      print('🟠 GST: $gstAmount, Grand Total: $grandTotal');
 
       // Update order
       print('🟠 Sending ${itemsForDb.length} items to updateOrder service');
