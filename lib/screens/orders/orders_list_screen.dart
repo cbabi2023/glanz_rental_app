@@ -39,7 +39,8 @@ enum _DateFilter {
   custom,
 }
 
-class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with WidgetsBindingObserver {
+class _OrdersListScreenState extends ConsumerState<OrdersListScreen>
+    with WidgetsBindingObserver {
   _OrdersTab _selectedTab = _OrdersTab.all;
   final _searchController = TextEditingController();
   String? _searchQuery; // Used for provider (backend search)
@@ -81,7 +82,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
           setState(() {
             _searchQuery = newSearchQuery;
           });
-          
+
           // Refresh provider with new search query (will load from backend)
           // The Consumer widget will automatically rebuild only the list part
           final userProfile = ref.read(userProfileProvider).value;
@@ -89,7 +90,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
           {
             final startDate = _startForFilter(_selectedDateFilter);
             final endDate = _endForFilter(_selectedDateFilter);
-            
+
             // Map tab to status
             OrderStatus? status;
             switch (_selectedTab) {
@@ -116,16 +117,18 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
                 status = null;
                 break;
             }
-            
+
             final params = OrdersParams(
               branchId: branchId,
               status: status,
               startDate: startDate,
               endDate: endDate,
               searchQuery: newSearchQuery,
-              includePartialReturns: _selectedTab == _OrdersTab.partiallyReturned,
+              includePartialReturns:
+                  _selectedTab == _OrdersTab.partiallyReturned,
+              includeLateOrders: _selectedTab == _OrdersTab.late,
             );
-            
+
             ref.read(ordersInfiniteProvider(params).notifier).refresh();
           }
         }
@@ -142,7 +145,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
 
       final startDate = _startForFilter(_selectedDateFilter);
       final endDate = _endForFilter(_selectedDateFilter);
-      
+
       // Map tab to status for server-side filtering (where applicable)
       OrderStatus? status;
       switch (_selectedTab) {
@@ -172,7 +175,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
           status = null;
           break;
       }
-      
+
       final params = OrdersParams(
         branchId: branchId,
         status: status,
@@ -180,8 +183,9 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
         endDate: endDate,
         searchQuery: _searchQuery,
         includePartialReturns: _selectedTab == _OrdersTab.partiallyReturned,
+        includeLateOrders: _selectedTab == _OrdersTab.late,
       );
-      
+
       ref.read(ordersInfiniteProvider(params).notifier).loadMore();
     }
   }
@@ -195,7 +199,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
       {
         final startDate = _startForFilter(_selectedDateFilter);
         final endDate = _endForFilter(_selectedDateFilter);
-        
+
         // Map tab to status
         OrderStatus? status;
         switch (_selectedTab) {
@@ -222,7 +226,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
             status = null;
             break;
         }
-        
+
         final params = OrdersParams(
           branchId: branchId,
           status: status,
@@ -230,6 +234,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
           endDate: endDate,
           searchQuery: _searchQuery,
           includePartialReturns: _selectedTab == _OrdersTab.partiallyReturned,
+          includeLateOrders: _selectedTab == _OrdersTab.late,
         );
         ref.read(ordersInfiniteProvider(params).notifier).refresh();
       }
@@ -240,17 +245,23 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
   DateTime _parseDateTimeWithTimezone(String dateString) {
     try {
       final trimmed = dateString.trim();
-      final hasTimezone = trimmed.endsWith('Z') || 
-                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
-      
+      final hasTimezone =
+          trimmed.endsWith('Z') ||
+          RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+
       if (hasTimezone) {
         return DateTime.parse(trimmed).toLocal();
       } else {
         final parsed = DateTime.parse(trimmed);
         final utcDate = DateTime.utc(
-          parsed.year, parsed.month, parsed.day,
-          parsed.hour, parsed.minute, parsed.second, 
-          parsed.millisecond, parsed.microsecond
+          parsed.year,
+          parsed.month,
+          parsed.day,
+          parsed.hour,
+          parsed.minute,
+          parsed.second,
+          parsed.millisecond,
+          parsed.microsecond,
         );
         return utcDate.toLocal();
       }
@@ -360,15 +371,14 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     // Read query parameters from route to set tab filter
     final uri = GoRouterState.of(context).uri;
     final tabParam = uri.queryParameters['tab'];
-    
+
     _OrdersTab targetTab;
-    
+
     if (tabParam == null || tabParam.isEmpty) {
       // No tab parameter means "All" tab
       targetTab = _OrdersTab.all;
@@ -399,7 +409,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
           targetTab = _OrdersTab.all;
       }
     }
-    
+
     if (_selectedTab != targetTab) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -451,347 +461,348 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
       child: Scaffold(
         backgroundColor: const Color(0xFFF7F9FB),
         appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        leadingWidth: 60,
-        leading: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12.0,
-            vertical: 8.0,
-          ),
-          child: Image.asset(
-            'lib/assets/png/glanz.png',
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              return const SizedBox.shrink();
-            },
-          ),
-        ),
-        title: const Text(
-          'Orders',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF0F1724),
-          ),
-        ),
-        actions: [
-          // Date Filter Dropdown
-          Builder(
-            builder: (context) => PopupMenuButton<_DateFilter>(
-              offset: const Offset(0, 56),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              icon: Stack(
-                children: [
-                  const Icon(Icons.filter_list, color: Color(0xFF1F2A7A)),
-                  if (_selectedDateFilter != _DateFilter.allTime)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 1),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              tooltip: 'Date Filter',
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: _DateFilter.allTime,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.all_inclusive,
-                        size: 20,
-                        color: _selectedDateFilter == _DateFilter.allTime
-                            ? const Color(0xFF1F2A7A)
-                            : Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'All Time',
-                        style: TextStyle(
-                          fontWeight: _selectedDateFilter == _DateFilter.allTime
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                          color: _selectedDateFilter == _DateFilter.allTime
-                              ? const Color(0xFF1F2A7A)
-                              : Colors.grey.shade700,
-                        ),
-                      ),
-                      if (_selectedDateFilter == _DateFilter.allTime) ...[
-                        const Spacer(),
-                        Icon(
-                          Icons.check,
-                          size: 18,
-                          color: const Color(0xFF1F2A7A),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _DateFilter.today,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.today,
-                        size: 20,
-                        color: _selectedDateFilter == _DateFilter.today
-                            ? const Color(0xFF1F2A7A)
-                            : Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Today',
-                        style: TextStyle(
-                          fontWeight: _selectedDateFilter == _DateFilter.today
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                          color: _selectedDateFilter == _DateFilter.today
-                              ? const Color(0xFF1F2A7A)
-                              : Colors.grey.shade700,
-                        ),
-                      ),
-                      if (_selectedDateFilter == _DateFilter.today) ...[
-                        const Spacer(),
-                        Icon(
-                          Icons.check,
-                          size: 18,
-                          color: const Color(0xFF1F2A7A),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _DateFilter.yesterday,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.history,
-                        size: 20,
-                        color: _selectedDateFilter == _DateFilter.yesterday
-                            ? const Color(0xFF1F2A7A)
-                            : Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Yesterday',
-                        style: TextStyle(
-                          fontWeight:
-                              _selectedDateFilter == _DateFilter.yesterday
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                          color: _selectedDateFilter == _DateFilter.yesterday
-                              ? const Color(0xFF1F2A7A)
-                              : Colors.grey.shade700,
-                        ),
-                      ),
-                      if (_selectedDateFilter == _DateFilter.yesterday) ...[
-                        const Spacer(),
-                        Icon(
-                          Icons.check,
-                          size: 18,
-                          color: const Color(0xFF1F2A7A),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _DateFilter.thisWeek,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.date_range,
-                        size: 20,
-                        color: _selectedDateFilter == _DateFilter.thisWeek
-                            ? const Color(0xFF1F2A7A)
-                            : Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'This Week',
-                        style: TextStyle(
-                          fontWeight:
-                              _selectedDateFilter == _DateFilter.thisWeek
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                          color: _selectedDateFilter == _DateFilter.thisWeek
-                              ? const Color(0xFF1F2A7A)
-                              : Colors.grey.shade700,
-                        ),
-                      ),
-                      if (_selectedDateFilter == _DateFilter.thisWeek) ...[
-                        const Spacer(),
-                        Icon(
-                          Icons.check,
-                          size: 18,
-                          color: const Color(0xFF1F2A7A),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _DateFilter.thisMonth,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_month,
-                        size: 20,
-                        color: _selectedDateFilter == _DateFilter.thisMonth
-                            ? const Color(0xFF1F2A7A)
-                            : Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'This Month',
-                        style: TextStyle(
-                          fontWeight:
-                              _selectedDateFilter == _DateFilter.thisMonth
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                          color: _selectedDateFilter == _DateFilter.thisMonth
-                              ? const Color(0xFF1F2A7A)
-                              : Colors.grey.shade700,
-                        ),
-                      ),
-                      if (_selectedDateFilter == _DateFilter.thisMonth) ...[
-                        const Spacer(),
-                        Icon(
-                          Icons.check,
-                          size: 18,
-                          color: const Color(0xFF1F2A7A),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _DateFilter.last7Days,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.view_week,
-                        size: 20,
-                        color: _selectedDateFilter == _DateFilter.last7Days
-                            ? const Color(0xFF1F2A7A)
-                            : Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Last 7 Days',
-                        style: TextStyle(
-                          fontWeight:
-                              _selectedDateFilter == _DateFilter.last7Days
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                          color: _selectedDateFilter == _DateFilter.last7Days
-                              ? const Color(0xFF1F2A7A)
-                              : Colors.grey.shade700,
-                        ),
-                      ),
-                      if (_selectedDateFilter == _DateFilter.last7Days) ...[
-                        const Spacer(),
-                        Icon(
-                          Icons.check,
-                          size: 18,
-                          color: const Color(0xFF1F2A7A),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _DateFilter.custom,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.event_note,
-                        size: 20,
-                        color: _selectedDateFilter == _DateFilter.custom
-                            ? const Color(0xFF1F2A7A)
-                            : Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _selectedDateFilter == _DateFilter.custom &&
-                                  _customStartDate != null &&
-                                  _customEndDate != null
-                              ? '${DateFormat('dd MMM').format(_customStartDate!)} - ${DateFormat('dd MMM yyyy').format(_customEndDate!)}'
-                              : 'Custom',
-                          style: TextStyle(
-                            fontWeight:
-                                _selectedDateFilter == _DateFilter.custom
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                            color: _selectedDateFilter == _DateFilter.custom
-                                ? const Color(0xFF1F2A7A)
-                                : Colors.grey.shade700,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (_selectedDateFilter == _DateFilter.custom)
-                        Icon(
-                          Icons.check,
-                          size: 18,
-                          color: const Color(0xFF1F2A7A),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-              onSelected: (filter) {
-                if (filter == _DateFilter.custom) {
-                  _showCustomDatePicker();
-                } else {
-                  setState(() {
-                    _selectedDateFilter = filter;
-                  });
-                }
+          elevation: 0,
+          backgroundColor: Colors.white,
+          leadingWidth: 60,
+          leading: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12.0,
+              vertical: 8.0,
+            ),
+            child: Image.asset(
+              'lib/assets/png/glanz.png',
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return const SizedBox.shrink();
               },
             ),
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'orders_fab',
-        onPressed: () => context.push('/orders/new'),
-        backgroundColor: const Color(0xFF1F2A7A),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text(
-          'New Order',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-      ),
-      // Use Column to place search bar outside Consumer (so it doesn't rebuild)
-      body: Column(
-        children: [
-          // Search Bar (always visible, outside Consumer so it doesn't rebuild)
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            child: _OrdersSearchBar(
-              controller: _searchController,
-              focusNode: _searchFocusNode,
-              onChanged: _onSearchChanged,
+          title: const Text(
+            'Orders',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F1724),
             ),
           ),
-          Divider(height: 1, color: Colors.grey.shade200),
+          actions: [
+            // Date Filter Dropdown
+            Builder(
+              builder: (context) => PopupMenuButton<_DateFilter>(
+                offset: const Offset(0, 56),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                icon: Stack(
+                  children: [
+                    const Icon(Icons.filter_list, color: Color(0xFF1F2A7A)),
+                    if (_selectedDateFilter != _DateFilter.allTime)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                tooltip: 'Date Filter',
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: _DateFilter.allTime,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.all_inclusive,
+                          size: 20,
+                          color: _selectedDateFilter == _DateFilter.allTime
+                              ? const Color(0xFF1F2A7A)
+                              : Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'All Time',
+                          style: TextStyle(
+                            fontWeight:
+                                _selectedDateFilter == _DateFilter.allTime
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: _selectedDateFilter == _DateFilter.allTime
+                                ? const Color(0xFF1F2A7A)
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                        if (_selectedDateFilter == _DateFilter.allTime) ...[
+                          const Spacer(),
+                          Icon(
+                            Icons.check,
+                            size: 18,
+                            color: const Color(0xFF1F2A7A),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _DateFilter.today,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.today,
+                          size: 20,
+                          color: _selectedDateFilter == _DateFilter.today
+                              ? const Color(0xFF1F2A7A)
+                              : Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Today',
+                          style: TextStyle(
+                            fontWeight: _selectedDateFilter == _DateFilter.today
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: _selectedDateFilter == _DateFilter.today
+                                ? const Color(0xFF1F2A7A)
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                        if (_selectedDateFilter == _DateFilter.today) ...[
+                          const Spacer(),
+                          Icon(
+                            Icons.check,
+                            size: 18,
+                            color: const Color(0xFF1F2A7A),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _DateFilter.yesterday,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.history,
+                          size: 20,
+                          color: _selectedDateFilter == _DateFilter.yesterday
+                              ? const Color(0xFF1F2A7A)
+                              : Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Yesterday',
+                          style: TextStyle(
+                            fontWeight:
+                                _selectedDateFilter == _DateFilter.yesterday
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: _selectedDateFilter == _DateFilter.yesterday
+                                ? const Color(0xFF1F2A7A)
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                        if (_selectedDateFilter == _DateFilter.yesterday) ...[
+                          const Spacer(),
+                          Icon(
+                            Icons.check,
+                            size: 18,
+                            color: const Color(0xFF1F2A7A),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _DateFilter.thisWeek,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.date_range,
+                          size: 20,
+                          color: _selectedDateFilter == _DateFilter.thisWeek
+                              ? const Color(0xFF1F2A7A)
+                              : Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'This Week',
+                          style: TextStyle(
+                            fontWeight:
+                                _selectedDateFilter == _DateFilter.thisWeek
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: _selectedDateFilter == _DateFilter.thisWeek
+                                ? const Color(0xFF1F2A7A)
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                        if (_selectedDateFilter == _DateFilter.thisWeek) ...[
+                          const Spacer(),
+                          Icon(
+                            Icons.check,
+                            size: 18,
+                            color: const Color(0xFF1F2A7A),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _DateFilter.thisMonth,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_month,
+                          size: 20,
+                          color: _selectedDateFilter == _DateFilter.thisMonth
+                              ? const Color(0xFF1F2A7A)
+                              : Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'This Month',
+                          style: TextStyle(
+                            fontWeight:
+                                _selectedDateFilter == _DateFilter.thisMonth
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: _selectedDateFilter == _DateFilter.thisMonth
+                                ? const Color(0xFF1F2A7A)
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                        if (_selectedDateFilter == _DateFilter.thisMonth) ...[
+                          const Spacer(),
+                          Icon(
+                            Icons.check,
+                            size: 18,
+                            color: const Color(0xFF1F2A7A),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _DateFilter.last7Days,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.view_week,
+                          size: 20,
+                          color: _selectedDateFilter == _DateFilter.last7Days
+                              ? const Color(0xFF1F2A7A)
+                              : Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Last 7 Days',
+                          style: TextStyle(
+                            fontWeight:
+                                _selectedDateFilter == _DateFilter.last7Days
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: _selectedDateFilter == _DateFilter.last7Days
+                                ? const Color(0xFF1F2A7A)
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                        if (_selectedDateFilter == _DateFilter.last7Days) ...[
+                          const Spacer(),
+                          Icon(
+                            Icons.check,
+                            size: 18,
+                            color: const Color(0xFF1F2A7A),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _DateFilter.custom,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.event_note,
+                          size: 20,
+                          color: _selectedDateFilter == _DateFilter.custom
+                              ? const Color(0xFF1F2A7A)
+                              : Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _selectedDateFilter == _DateFilter.custom &&
+                                    _customStartDate != null &&
+                                    _customEndDate != null
+                                ? '${DateFormat('dd MMM').format(_customStartDate!)} - ${DateFormat('dd MMM yyyy').format(_customEndDate!)}'
+                                : 'Custom',
+                            style: TextStyle(
+                              fontWeight:
+                                  _selectedDateFilter == _DateFilter.custom
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              color: _selectedDateFilter == _DateFilter.custom
+                                  ? const Color(0xFF1F2A7A)
+                                  : Colors.grey.shade700,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (_selectedDateFilter == _DateFilter.custom)
+                          Icon(
+                            Icons.check,
+                            size: 18,
+                            color: const Color(0xFF1F2A7A),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+                onSelected: (filter) {
+                  if (filter == _DateFilter.custom) {
+                    _showCustomDatePicker();
+                  } else {
+                    setState(() {
+                      _selectedDateFilter = filter;
+                    });
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          heroTag: 'orders_fab',
+          onPressed: () => context.push('/orders/new'),
+          backgroundColor: const Color(0xFF1F2A7A),
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add),
+          label: const Text(
+            'New Order',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ),
+        // Use Column to place search bar outside Consumer (so it doesn't rebuild)
+        body: Column(
+          children: [
+            // Search Bar (always visible, outside Consumer so it doesn't rebuild)
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: _OrdersSearchBar(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                onChanged: _onSearchChanged,
+              ),
+            ),
+            Divider(height: 1, color: Colors.grey.shade200),
             // Only this part watches the provider and rebuilds when data changes
             Expanded(
               child: Consumer(
@@ -800,14 +811,16 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
                   final userProfile = ref.watch(userProfileProvider);
                   // All users (including super admin) should see orders from their selected branch
                   final branchId = userProfile.value?.branchId;
-                  
+
                   final params = OrdersParams(
                     branchId: branchId,
                     status: status,
                     startDate: startDate,
                     endDate: endDate,
                     searchQuery: _searchQuery,
-                    includePartialReturns: _selectedTab == _OrdersTab.partiallyReturned,
+                    includePartialReturns:
+                        _selectedTab == _OrdersTab.partiallyReturned,
+                    includeLateOrders: _selectedTab == _OrdersTab.late,
                   );
                   final ordersState = ref.watch(ordersInfiniteProvider(params));
                   final statsParams = OrdersStatsParams(
@@ -816,12 +829,19 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
                     endDate: endDate,
                   );
                   final statsAsync = ref.watch(orderStatsProvider(statsParams));
-                  return _buildOrdersBody(ordersState, params, branchId, startDate, endDate, statsAsync);
+                  return _buildOrdersBody(
+                    ordersState,
+                    params,
+                    branchId,
+                    startDate,
+                    endDate,
+                    statsAsync,
+                  );
                 },
               ),
             ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -835,15 +855,17 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
     AsyncValue<Map<String, dynamic>> statsAsync,
   ) {
     // Get stats from server (or use default if loading/error)
-    final statsData = statsAsync.value ?? {
-      'total': 0,
-      'scheduled': 0,
-      'ongoing': 0,
-      'late': 0,
-      'returned': 0,
-      'partiallyReturned': 0,
-      'cancelled': 0,
-    };
+    final statsData =
+        statsAsync.value ??
+        {
+          'total': 0,
+          'scheduled': 0,
+          'ongoing': 0,
+          'late': 0,
+          'returned': 0,
+          'partiallyReturned': 0,
+          'cancelled': 0,
+        };
     final stats = _OrdersStats(
       total: statsData['total'] as int? ?? 0,
       scheduled: statsData['scheduled'] as int? ?? 0,
@@ -857,13 +879,14 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
     // Apply client-side category filters only (late tab needs date checking)
     // Search is now handled server-side
     final filtered = _filterOrdersByCategory(ordersState.orders);
-    
+
     // Check if this is initial empty state (no filters, no search, no orders)
-    final isInitialEmpty = ordersState.orders.isEmpty && 
-                          !ordersState.isLoading && 
-                          ordersState.error == null &&
-                          _searchQuery == null &&
-                          _selectedTab == _OrdersTab.all;
+    final isInitialEmpty =
+        ordersState.orders.isEmpty &&
+        !ordersState.isLoading &&
+        ordersState.error == null &&
+        _searchQuery == null &&
+        _selectedTab == _OrdersTab.all;
 
     return Column(
       children: [
@@ -922,7 +945,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
                                 tabParam = 'flagged';
                                 break;
                             }
-                            
+
                             if (tabParam.isEmpty) {
                               context.go('/orders');
                             } else {
@@ -943,12 +966,15 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
                     child: Center(child: CircularProgressIndicator()),
                   )
                 // Show error state
-                else if (ordersState.error != null && ordersState.orders.isEmpty)
+                else if (ordersState.error != null &&
+                    ordersState.orders.isEmpty)
                   SliverFillRemaining(
                     child: _ErrorState(
                       message: 'Error loading orders: ${ordersState.error}',
                       onRetry: () {
-                        ref.read(ordersInfiniteProvider(params).notifier).refresh();
+                        ref
+                            .read(ordersInfiniteProvider(params).notifier)
+                            .refresh();
                         ref.invalidate(recentOrdersProvider(branchId));
                       },
                     ),
@@ -971,7 +997,8 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
                 // Show order list
                 else
                   SliverList.builder(
-                    itemCount: filtered.length + (ordersState.isLoadingMore ? 1 : 0),
+                    itemCount:
+                        filtered.length + (ordersState.isLoadingMore ? 1 : 0),
                     itemBuilder: (context, index) {
                       if (index >= filtered.length) {
                         // Show loading indicator at bottom
@@ -1017,7 +1044,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
     if (order.items != null && order.items!.isNotEmpty) {
       // Check for missing items (exclude from partial returns)
       final hasMissingItems = order.items!.any((item) => item.isMissing);
-      
+
       // Check if some items have return_status = 'returned' OR have returnedQuantity > 0
       final hasReturnedItems = order.items!.any((item) {
         if (item.isReturned) return true;
@@ -1025,7 +1052,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
         final returnedQty = item.returnedQuantity ?? 0;
         return returnedQty > 0;
       });
-      
+
       // Check if some items are not yet returned (return_status is null or 'not_yet_returned')
       // OR have returnedQuantity = 0 or null
       final hasNotReturnedItems = order.items!.any((item) {
@@ -1044,7 +1071,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
     }
 
     // Check completed status AFTER checking for partial returns
-    if (status == OrderStatus.completed || 
+    if (status == OrderStatus.completed ||
         status == OrderStatus.completedWithIssues) {
       return _OrderCategory.returned;
     }
@@ -1112,7 +1139,6 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
       }
     }).toList();
   }
-
 }
 
 enum _OrderCategory {
@@ -1444,17 +1470,23 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
   DateTime _parseDateTimeWithTimezone(String dateString) {
     try {
       final trimmed = dateString.trim();
-      final hasTimezone = trimmed.endsWith('Z') || 
-                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
-      
+      final hasTimezone =
+          trimmed.endsWith('Z') ||
+          RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+
       if (hasTimezone) {
         return DateTime.parse(trimmed).toLocal();
       } else {
         final parsed = DateTime.parse(trimmed);
         final utcDate = DateTime.utc(
-          parsed.year, parsed.month, parsed.day,
-          parsed.hour, parsed.minute, parsed.second, 
-          parsed.millisecond, parsed.microsecond
+          parsed.year,
+          parsed.month,
+          parsed.day,
+          parsed.hour,
+          parsed.minute,
+          parsed.second,
+          parsed.millisecond,
+          parsed.microsecond,
         );
         return utcDate.toLocal();
       }
@@ -1471,7 +1503,7 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
     if (status == OrderStatus.flagged) return _OrderCategory.flagged;
     if (status == OrderStatus.partiallyReturned)
       return _OrderCategory.partiallyReturned;
-    if (status == OrderStatus.completed || 
+    if (status == OrderStatus.completed ||
         status == OrderStatus.completedWithIssues) {
       return _OrderCategory.returned;
     }
@@ -1487,10 +1519,10 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
     if (order.items != null && order.items!.isNotEmpty) {
       // Check for missing items (exclude from partial returns)
       final hasMissingItems = order.items!.any((item) => item.isMissing);
-      
+
       // Check if some items have return_status = 'returned'
       final hasReturnedItems = order.items!.any((item) => item.isReturned);
-      
+
       // Check if some items are not yet returned (return_status is null or 'not_yet_returned')
       final hasNotReturnedItems = order.items!.any((item) => item.isPending);
 
@@ -1547,14 +1579,18 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
 
     // Normalize to date only (midnight) to ensure accurate day calculation
     // For rental: same day = 1 day, next day = 1 day (overnight), etc.
-    final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
+    final startDateOnly = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+    );
     final endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
-    
+
     final duration = endDateOnly.difference(startDateOnly);
     final daysDifference = duration.inDays;
     // Use same logic as calculateDays: at least 1 day for same-day rentals
     final days = daysDifference < 1 ? 1 : daysDifference;
-    
+
     // Only show hours if days is 0 (shouldn't happen with our logic, but keep for edge cases)
     final hours = days == 0 ? (endDate.difference(startDate).inHours % 24) : 0;
 
@@ -1775,9 +1811,9 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
     final dateInfo = _getDateInfo(order);
     // Show return button if order has pending items to return (not scheduled, completed, or cancelled)
     final canMarkReturned =
-        order.hasPendingReturnItems && 
-        !order.isScheduled && 
-        !order.isCompleted && 
+        order.hasPendingReturnItems &&
+        !order.isScheduled &&
+        !order.isCompleted &&
         !order.isCancelled;
     final canCancel = order.canCancel();
     final itemsCount = order.items?.length ?? 0;
@@ -1920,9 +1956,13 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                     Builder(
                       builder: (context) {
                         // Calculate grand total to match order detail screen
-                        final userProfile = ref.watch(userProfileProvider).value;
-                        final grandTotal = order.calculateGrandTotal(userProfile: userProfile);
-                        
+                        final userProfile = ref
+                            .watch(userProfileProvider)
+                            .value;
+                        final grandTotal = order.calculateGrandTotal(
+                          userProfile: userProfile,
+                        );
+
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
@@ -2070,8 +2110,9 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () =>
-                          context.push('/orders/${order.id}?scrollToItems=true'),
+                      onPressed: () => context.push(
+                        '/orders/${order.id}?scrollToItems=true',
+                      ),
                       icon: const Icon(Icons.check_circle_outline, size: 18),
                       label: const Text(
                         'Process Return',

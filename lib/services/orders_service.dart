@@ -8,13 +8,15 @@ import '../models/order_item.dart';
 /// Item Return Model for processing returns
 class ItemReturn {
   final String itemId;
-  final String returnStatus; // 'returned', 'missing', or 'not_yet_returned' (to unreturn)
+  final String
+  returnStatus; // 'returned', 'missing', or 'not_yet_returned' (to unreturn)
   final DateTime? actualReturnDate;
   final String? missingNote;
-  final int? returnedQuantity; // Number of items to return (for partial returns)
+  final int?
+  returnedQuantity; // Number of items to return (for partial returns)
   final double? damageCost; // Cost for damaged/missing items
   final String? description; // Description for missing/damaged items
-  
+
   ItemReturn({
     required this.itemId,
     required this.returnStatus,
@@ -24,12 +26,14 @@ class ItemReturn {
     this.damageCost,
     this.description,
   });
-  
+
   Map<String, dynamic> toJson() {
     return {
       'item_id': itemId,
       'return_status': returnStatus,
-      'actual_return_date': actualReturnDate?.toIso8601String() ?? DateTime.now().toIso8601String(),
+      'actual_return_date':
+          actualReturnDate?.toIso8601String() ??
+          DateTime.now().toIso8601String(),
       'missing_note': missingNote,
       if (returnedQuantity != null) 'returned_quantity': returnedQuantity,
       if (damageCost != null) 'damage_cost': damageCost,
@@ -43,22 +47,28 @@ class ItemReturn {
 /// Handles all order-related database operations
 class OrdersService {
   final _supabase = SupabaseService.client;
-  
+
   /// Helper function to parse datetime with timezone handling
   static DateTime _parseDateTimeWithTimezone(String dateString) {
     try {
       final trimmed = dateString.trim();
-      final hasTimezone = trimmed.endsWith('Z') || 
-                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
-      
+      final hasTimezone =
+          trimmed.endsWith('Z') ||
+          RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+
       if (hasTimezone) {
         return DateTime.parse(trimmed).toLocal();
       } else {
         final parsed = DateTime.parse(trimmed);
         final utcDate = DateTime.utc(
-          parsed.year, parsed.month, parsed.day,
-          parsed.hour, parsed.minute, parsed.second, 
-          parsed.millisecond, parsed.microsecond
+          parsed.year,
+          parsed.month,
+          parsed.day,
+          parsed.hour,
+          parsed.minute,
+          parsed.second,
+          parsed.millisecond,
+          parsed.microsecond,
         );
         return utcDate.toLocal();
       }
@@ -66,7 +76,7 @@ class OrdersService {
       return DateTime.now();
     }
   }
-  
+
   /// Generate auto invoice number in format: GLAORD-YYYYMMDD-XXXX
   String generateInvoiceNumber() {
     final now = DateTime.now();
@@ -74,7 +84,7 @@ class OrdersService {
     final month = now.month.toString().padLeft(2, '0');
     final day = now.day.toString().padLeft(2, '0');
     final random = Random().nextInt(10000).toString().padLeft(4, '0');
-    
+
     return 'GLAORD-$year$month$day-$random';
   }
 
@@ -87,7 +97,10 @@ class OrdersService {
     String? searchQuery,
     int? limit,
     int? offset,
-    bool? includePartialReturns, // Special flag to load orders for partial returns detection
+    bool?
+    includePartialReturns, // Special flag to load orders for partial returns detection
+    bool?
+    includeLateOrders, // Special flag to load late orders (active/pending_return with end_datetime < now)
   }) async {
     // Build query - apply all filters first, then ordering, then pagination
     dynamic query = _supabase
@@ -109,12 +122,23 @@ class OrdersService {
 
     if (status != null) {
       query = query.eq('status', status.value);
+    } else if (includeLateOrders == true) {
+      // For late orders: load orders with status IN ('active', 'pending_return')
+      // AND end_datetime < now (or end_date < today if end_datetime is null)
+      // This is server-side filtering to ensure all late orders are fetched with pagination
+      final now = DateTime.now().toUtc().toIso8601String();
+      query = query.or('status.eq.active,status.eq.pending_return');
+      // Filter by end_datetime < now to get only late orders
+      // Use end_datetime first, fallback to end_date for ordering
+      query = query.lt('end_datetime', now);
     } else if (includePartialReturns == true) {
       // For partial returns: load orders with status IN ('partially_returned', 'active', 'pending_return')
       // This is server-side filtering to reduce data load
-      query = query.or('status.eq.partially_returned,status.eq.active,status.eq.pending_return');
+      query = query.or(
+        'status.eq.partially_returned,status.eq.active,status.eq.pending_return',
+      );
     }
-    // If status is null and includePartialReturns is false/null, load all orders (for client-side filtering like late, etc.)
+    // If status is null and includePartialReturns/includeLateOrders is false/null, load all orders (for client-side filtering)
 
     if (startDate != null) {
       query = query.gte('created_at', startDate.toIso8601String());
@@ -133,7 +157,7 @@ class OrdersService {
             .from('customers')
             .select('id')
             .or('name.ilike.%$searchQuery%,phone.ilike.%$searchQuery%');
-        
+
         final customerResponse = await customerQuery;
         customerIds = (customerResponse as List)
             .map((json) => (json as Map<String, dynamic>)['id'] as String)
@@ -141,16 +165,20 @@ class OrdersService {
       } catch (e) {
         AppLogger.warning('Error searching customers for order search', e);
       }
-      
+
       // Build OR filter: Invoice Number OR Customer ID Match
       // Use PostgREST filter syntax that works with Supabase Flutter
       if (customerIds.isNotEmpty) {
         // Build OR filter: invoice_number.ilike OR customer_id matches
         // Limit to first 50 customer IDs to avoid query length issues
         final limitedCustomerIds = customerIds.take(50).toList();
-        final customerIdFilters = limitedCustomerIds.map((id) => 'customer_id.eq.$id').join(',');
+        final customerIdFilters = limitedCustomerIds
+            .map((id) => 'customer_id.eq.$id')
+            .join(',');
         // Use .or() with invoice_number search and customer_id filters
-        query = query.or('invoice_number.ilike.%$searchQuery%,$customerIdFilters');
+        query = query.or(
+          'invoice_number.ilike.%$searchQuery%,$customerIdFilters',
+        );
       } else {
         // No matching customers, only search by invoice number
         // This is the critical path for invoice number search
@@ -232,10 +260,12 @@ class OrdersService {
         // Count by status
         if (status == OrderStatus.scheduled) {
           scheduled++;
-        } else if (status == OrderStatus.active || status == OrderStatus.pendingReturn) {
+        } else if (status == OrderStatus.active ||
+            status == OrderStatus.pendingReturn) {
           // Check if late first
           bool isLate = false;
-          final endDateStr = order['end_datetime'] as String? ?? order['end_date'] as String?;
+          final endDateStr =
+              order['end_datetime'] as String? ?? order['end_date'] as String?;
           if (endDateStr != null) {
             try {
               final endDate = _parseDateTimeWithTimezone(endDateStr);
@@ -247,14 +277,14 @@ class OrdersService {
               // If date parsing fails, don't count as late
             }
           }
-          
+
           // Only count as ongoing if NOT late
           if (!isLate) {
             ongoing++;
           }
-        } else if (status == OrderStatus.completed || 
-                   status == OrderStatus.completedWithIssues ||
-                   status == OrderStatus.flagged) {
+        } else if (status == OrderStatus.completed ||
+            status == OrderStatus.completedWithIssues ||
+            status == OrderStatus.flagged) {
           returned++;
         } else if (status == OrderStatus.partiallyReturned) {
           partiallyReturned++;
@@ -315,11 +345,11 @@ class OrdersService {
   }
 
   /// Stream orders in real-time
-  /// 
+  ///
   /// ⚠️ IMPORTANT: This watches the 'orders' table.
   /// Note: Order items changes (return status) also affect order categorization.
   /// The provider layer should invalidate/refetch when order_items change via RPC calls.
-  /// 
+  ///
   /// For complete real-time updates including order_items, consider using
   /// a combination of this stream + manual invalidation after return processing.
   Stream<List<Order>> watchOrders({String? branchId}) {
@@ -364,18 +394,22 @@ class OrdersService {
     final startDateParsed = DateTime.parse(startDate);
     final today = DateTime.now();
     final todayStart = DateTime(today.year, today.month, today.day);
-    final startDateOnly = DateTime(startDateParsed.year, startDateParsed.month, startDateParsed.day);
-    
+    final startDateOnly = DateTime(
+      startDateParsed.year,
+      startDateParsed.month,
+      startDateParsed.day,
+    );
+
     // Calculate status: scheduled if future date, active if today or past
-    final orderStatus = startDateOnly.isAfter(todayStart) 
-      ? OrderStatus.scheduled 
-      : OrderStatus.active;
-    
+    final orderStatus = startDateOnly.isAfter(todayStart)
+        ? OrderStatus.scheduled
+        : OrderStatus.active;
+
     // Generate invoice number if not provided
     final finalInvoiceNumber = invoiceNumber?.trim().isEmpty ?? true
-      ? generateInvoiceNumber()
-      : invoiceNumber!;
-    
+        ? generateInvoiceNumber()
+        : invoiceNumber!;
+
     // Prepare order data
     final startDateOnlyStr = startDate.split('T')[0];
     final endDateOnlyStr = endDate.split('T')[0];
@@ -383,11 +417,11 @@ class OrdersService {
     // Convert local times to UTC for database storage
     // Database stores times in UTC, so we need to convert local time to UTC
     final bookingDateUtc = DateTime.now().toUtc().toIso8601String();
-    
+
     // Ensure start_datetime and end_datetime are in UTC
     String? startDatetimeUtc;
     String? endDatetimeUtc;
-    
+
     if (startDatetime != null) {
       try {
         // Parse as local time, then convert to UTC
@@ -399,7 +433,7 @@ class OrdersService {
         startDatetimeUtc = startDatetime; // Fallback to original
       }
     }
-    
+
     if (endDatetime != null) {
       try {
         // Parse as local time, then convert to UTC
@@ -427,10 +461,11 @@ class OrdersService {
       'subtotal': subtotal,
       'gst_amount': gstAmount,
       // Insert security deposit amount (numeric) and collected flag (boolean)
-      if (securityDeposit != null && securityDeposit > 0) 
+      if (securityDeposit != null && securityDeposit > 0)
         'security_deposit_amount': securityDeposit,
-      if (securityDeposit != null && securityDeposit > 0) 
-        'security_deposit_collected': true, // Boolean flag indicating deposit was collected
+      if (securityDeposit != null && securityDeposit > 0)
+        'security_deposit_collected':
+            true, // Boolean flag indicating deposit was collected
       // Note: security_deposit_refunded is a boolean flag, so we don't set it during creation
       // Note: security_deposit_refunded_amount and security_deposit_refund_date are set during refund process
     };
@@ -491,10 +526,11 @@ class OrdersService {
       'subtotal': subtotal,
       'gst_amount': gstAmount,
       // Update security deposit amount (numeric) and collected flag (boolean)
-      if (securityDeposit != null && securityDeposit > 0) 
+      if (securityDeposit != null && securityDeposit > 0)
         'security_deposit_amount': securityDeposit,
-      if (securityDeposit != null && securityDeposit > 0) 
-        'security_deposit_collected': true, // Boolean flag indicating deposit was collected
+      if (securityDeposit != null && securityDeposit > 0)
+        'security_deposit_collected':
+            true, // Boolean flag indicating deposit was collected
       // Note: security_deposit_refunded is a boolean flag, so we don't update it here
       // Note: security_deposit_refunded_amount and security_deposit_refund_date are set during refund process
     };
@@ -505,21 +541,18 @@ class OrdersService {
     }
 
     // Update order
-    await _supabase
-        .from('orders')
-        .update(updateData)
-        .eq('id', orderId);
+    await _supabase.from('orders').update(updateData).eq('id', orderId);
 
     // DEBUG: Log items being sent to update
     print('🟠 updateOrder called for order: $orderId');
     print('🟠 Items count received: ${items.length}');
-    
+
     // CRITICAL: First, remove duplicates from incoming items
     // This ensures we don't process duplicates
     print('🟠 Removing duplicates from incoming items...');
     final seenItemKeys = <String>{};
     final deduplicatedItems = <Map<String, dynamic>>[];
-    
+
     for (final item in items) {
       final photoUrl = item['photo_url'] as String? ?? '';
       final productName = item['product_name'] as String? ?? '';
@@ -527,45 +560,49 @@ class OrdersService {
       final pricePerDay = item['price_per_day'] as double? ?? 0.0;
       final days = item['days'] as int? ?? 0;
       final lineTotal = item['line_total'] as double? ?? 0.0;
-      final key = '${photoUrl}_${productName}_${quantity}_${pricePerDay}_${days}_${lineTotal}';
-      
+      final key =
+          '${photoUrl}_${productName}_${quantity}_${pricePerDay}_${days}_$lineTotal';
+
       if (!seenItemKeys.contains(key)) {
         seenItemKeys.add(key);
         deduplicatedItems.add(item);
       }
     }
-    
+
     print('🟠 Items before deduplication: ${items.length}');
     print('🟠 Items after deduplication: ${deduplicatedItems.length}');
-    
+
     // Use deduplicated items for the rest of the process
     final processedItems = deduplicatedItems;
-    
+
     // CRITICAL: Use UPDATE/UPSERT approach instead of DELETE+INSERT
     // This avoids RLS policy issues with deletes
     print('🟠 Updating order items using upsert approach for order: $orderId');
-    
+
     // Get existing items to compare
     final existingItemsResponse = await _supabase
         .from('order_items')
-        .select('id, photo_url, product_name, quantity, price_per_day, days, line_total')
+        .select(
+          'id, photo_url, product_name, quantity, price_per_day, days, line_total',
+        )
         .eq('order_id', orderId);
-    final existingItems = (existingItemsResponse as List).cast<Map<String, dynamic>>();
+    final existingItems = (existingItemsResponse as List)
+        .cast<Map<String, dynamic>>();
     final existingItemsCount = existingItems.length;
     print('🟠 Existing items count: $existingItemsCount');
-    
+
     // Create maps for different lookup strategies
     // 1. Map by ID (for items that have IDs - most reliable)
     final existingItemsById = <String, Map<String, dynamic>>{};
     // 2. Map by composite key (for items without IDs or as fallback)
     final existingItemsByKey = <String, Map<String, dynamic>>{};
-    
+
     for (final item in existingItems) {
       final itemId = item['id'] as String?;
       if (itemId != null && itemId.isNotEmpty) {
         existingItemsById[itemId] = item;
       }
-      
+
       // Also index by composite key for fallback matching
       final photoUrl = item['photo_url'] as String? ?? '';
       final productName = item['product_name'] as String? ?? '';
@@ -573,16 +610,17 @@ class OrdersService {
       final pricePerDay = (item['price_per_day'] as num?)?.toDouble() ?? 0.0;
       final days = item['days'] as int? ?? 0;
       final lineTotal = (item['line_total'] as num?)?.toDouble() ?? 0.0;
-      final key = '${photoUrl}_${productName}_${quantity}_${pricePerDay}_${days}_${lineTotal}';
+      final key =
+          '${photoUrl}_${productName}_${quantity}_${pricePerDay}_${days}_$lineTotal';
       existingItemsByKey[key] = item;
     }
-    
+
     // Process new items and determine what to do with each
     final itemsToUpdate = <Map<String, dynamic>>[];
     final itemsToInsert = <Map<String, dynamic>>[];
     final existingItemIdsToKeep = <String>{};
     final processedItemIds = <String>{};
-    
+
     print('🟠 Processing ${processedItems.length} unique items...');
     for (final item in processedItems) {
       // CRITICAL: Check if item has an ID first (from frontend)
@@ -590,8 +628,10 @@ class OrdersService {
       final itemId = item['id'] as String?;
       Map<String, dynamic>? existingItem;
       String? matchedItemId;
-      
-      if (itemId != null && itemId.isNotEmpty && existingItemsById.containsKey(itemId)) {
+
+      if (itemId != null &&
+          itemId.isNotEmpty &&
+          existingItemsById.containsKey(itemId)) {
         // Item has ID and exists in database - update it (even if properties changed)
         existingItem = existingItemsById[itemId];
         matchedItemId = itemId;
@@ -604,28 +644,31 @@ class OrdersService {
         final pricePerDay = item['price_per_day'] as double? ?? 0.0;
         final days = item['days'] as int? ?? 0;
         final lineTotal = item['line_total'] as double? ?? 0.0;
-        final key = '${photoUrl}_${productName}_${quantity}_${pricePerDay}_${days}_${lineTotal}';
-        
+        final key =
+            '${photoUrl}_${productName}_${quantity}_${pricePerDay}_${days}_$lineTotal';
+
         if (existingItemsByKey.containsKey(key)) {
           existingItem = existingItemsByKey[key];
           matchedItemId = existingItem!['id'] as String?;
           print('🟢 Matching item by composite key: $key');
         }
       }
-      
-      if (existingItem != null && matchedItemId != null && matchedItemId.isNotEmpty) {
+
+      if (existingItem != null &&
+          matchedItemId != null &&
+          matchedItemId.isNotEmpty) {
         // Item exists - update it
         if (!processedItemIds.contains(matchedItemId)) {
           existingItemIdsToKeep.add(matchedItemId);
           processedItemIds.add(matchedItemId);
-          
+
           final photoUrl = item['photo_url'] as String? ?? '';
           final productName = item['product_name'] as String? ?? '';
           final quantity = item['quantity'] as int? ?? 0;
           final pricePerDay = item['price_per_day'] as double? ?? 0.0;
           final days = item['days'] as int? ?? 0;
           final lineTotal = item['line_total'] as double? ?? 0.0;
-          
+
           final updateData = {
             'photo_url': photoUrl,
             'product_name': productName,
@@ -634,7 +677,7 @@ class OrdersService {
             'days': days,
             'line_total': lineTotal,
           };
-          
+
           try {
             await _supabase
                 .from('order_items')
@@ -651,7 +694,9 @@ class OrdersService {
             itemsToInsert.add(itemData);
           }
         } else {
-          print('🟡 Skipping duplicate item (already processed): $matchedItemId');
+          print(
+            '🟡 Skipping duplicate item (already processed): $matchedItemId',
+          );
         }
       } else {
         // New item - insert it
@@ -662,25 +707,27 @@ class OrdersService {
         print('🟢 New item to insert');
       }
     }
-    
+
     print('🟠 Items to update: ${itemsToUpdate.length}');
     print('🟠 Items to insert: ${itemsToInsert.length}');
-    
+
     // Insert new items
     if (itemsToInsert.isNotEmpty) {
       print('🟠 Inserting ${itemsToInsert.length} new items...');
       await _supabase.from('order_items').insert(itemsToInsert);
       print('🟢 New items inserted');
     }
-    
+
     // Delete items that no longer exist in the new list
     final itemsToDelete = existingItems
         .where((item) => !existingItemIdsToKeep.contains(item['id'] as String))
         .map((item) => item['id'] as String)
         .toList();
-    
+
     if (itemsToDelete.isNotEmpty) {
-      print('🟠 Deleting ${itemsToDelete.length} items that are no longer needed...');
+      print(
+        '🟠 Deleting ${itemsToDelete.length} items that are no longer needed...',
+      );
       for (final itemId in itemsToDelete) {
         try {
           await _supabase.from('order_items').delete().eq('id', itemId);
@@ -691,7 +738,7 @@ class OrdersService {
       }
       print('🟢 Deletion attempt completed');
     }
-    
+
     // Verify final state
     await Future.delayed(const Duration(milliseconds: 200));
     final finalItems = await _supabase
@@ -701,27 +748,34 @@ class OrdersService {
     final finalItemsCount = (finalItems as List).length;
     print('🟠 Final items count: $finalItemsCount');
     print('🟠 Expected items count: ${processedItems.length}');
-    
+
     if (finalItemsCount > processedItems.length) {
-      print('🟡 WARNING: More items than expected (some deletions may have failed due to RLS)');
-      print('🟡 This is acceptable - the extra items will be cleaned up on next update');
+      print(
+        '🟡 WARNING: More items than expected (some deletions may have failed due to RLS)',
+      );
+      print(
+        '🟡 This is acceptable - the extra items will be cleaned up on next update',
+      );
     } else if (finalItemsCount < processedItems.length) {
-      print('🟡 WARNING: Fewer items than expected - some inserts may have failed');
+      print(
+        '🟡 WARNING: Fewer items than expected - some inserts may have failed',
+      );
     } else {
       print('🟢 SUCCESS: Item count matches expected count');
     }
-    
 
     // Return updated order
     final updatedOrder = await getOrder(orderId);
     if (updatedOrder == null) {
       throw Exception('Failed to retrieve updated order');
     }
-    
+
     if (updatedOrder.items != null) {
-      print('🟠 Final order items count from getOrder: ${updatedOrder.items!.length}');
+      print(
+        '🟠 Final order items count from getOrder: ${updatedOrder.items!.length}',
+      );
     }
-    
+
     return updatedOrder;
   }
 
@@ -729,19 +783,19 @@ class OrdersService {
   Future<Order> startRental(String orderId) async {
     try {
       final response = await _supabase
-        .from('orders')
-        .update({
-          'status': OrderStatus.active.value,
-          'start_datetime': DateTime.now().toIso8601String(),
-        })
-        .eq('id', orderId)
-        .select()
-        .single();
-      
+          .from('orders')
+          .update({
+            'status': OrderStatus.active.value,
+            'start_datetime': DateTime.now().toIso8601String(),
+          })
+          .eq('id', orderId)
+          .select()
+          .single();
+
       if (response.isEmpty) {
         throw Exception('Failed to start rental: Order not found');
       }
-      
+
       final updatedOrder = await getOrder(orderId);
       if (updatedOrder == null) {
         throw Exception('Failed to retrieve updated order');
@@ -802,7 +856,7 @@ class OrdersService {
       final gstAmount = currentOrder.gstAmount ?? 0.0;
       final gstIncluded = currentOrder.staff?.gstIncluded ?? false;
       final baseWithGst = gstIncluded ? baseTotal : baseTotal + gstAmount;
-      
+
       // Add damage fees, late fee, and subtract discount
       final damageFees = currentOrder.damageFeeTotal ?? 0.0;
       final discount = currentOrder.discountAmount ?? 0.0;
@@ -810,10 +864,7 @@ class OrdersService {
 
       await _supabase
           .from('orders')
-          .update({
-            'late_fee': lateFee,
-            'total_amount': newTotal,
-          })
+          .update({'late_fee': lateFee, 'total_amount': newTotal})
           .eq('id', orderId);
 
       final updatedOrder = await getOrder(orderId);
@@ -845,7 +896,7 @@ class OrdersService {
       final gstAmount = currentOrder.gstAmount ?? 0.0;
       final gstIncluded = currentOrder.staff?.gstIncluded ?? false;
       final baseWithGst = gstIncluded ? baseTotal : baseTotal + gstAmount;
-      
+
       // Add damage fees, late fee, and subtract discount
       final damageFees = currentOrder.damageFeeTotal ?? 0.0;
       final lateFee = currentOrder.lateFee ?? 0.0;
@@ -853,10 +904,7 @@ class OrdersService {
 
       await _supabase
           .from('orders')
-          .update({
-            'discount_amount': discount,
-            'total_amount': newTotal,
-          })
+          .update({'discount_amount': discount, 'total_amount': newTotal})
           .eq('id', orderId);
 
       final updatedOrder = await getOrder(orderId);
@@ -889,7 +937,8 @@ class OrdersService {
       final orderResponse = await _supabase
           .from('orders')
           .select(
-              'deposit_balance, security_deposit_amount, security_deposit_refunded_amount')
+            'deposit_balance, security_deposit_amount, security_deposit_refunded_amount',
+          )
           .eq('id', orderId)
           .single();
 
@@ -902,14 +951,16 @@ class OrdersService {
           (orderResponse['deposit_balance'] as num?)?.toDouble() ?? 0.0;
       final depositAmount =
           (orderResponse['security_deposit_amount'] as num?)?.toDouble() ?? 0.0;
-      final alreadyRefunded = (orderResponse['security_deposit_refunded_amount']
-                  as num?)
+      final alreadyRefunded =
+          (orderResponse['security_deposit_refunded_amount'] as num?)
               ?.toDouble() ??
           0.0;
 
       // Fallback balance = deposit - already refunded
-      final fallbackBalance =
-          (depositAmount - alreadyRefunded).clamp(0.0, double.infinity);
+      final fallbackBalance = (depositAmount - alreadyRefunded).clamp(
+        0.0,
+        double.infinity,
+      );
 
       // Effective balance prefers db balance if present, otherwise fallback
       double effectiveBalance = dbBalance > 0 ? dbBalance : fallbackBalance;
@@ -968,7 +1019,8 @@ class OrdersService {
           .eq('id', orderId)
           .single();
 
-      final updatedBalance = (updatedOrderResponse['deposit_balance'] as num?)?.toDouble() ?? 0.0;
+      final updatedBalance =
+          (updatedOrderResponse['deposit_balance'] as num?)?.toDouble() ?? 0.0;
       final isFullyRefunded = updatedBalance < 0.01;
 
       if (isFullyRefunded) {
@@ -1015,8 +1067,9 @@ class OrdersService {
 
       // Get current security deposit and additional amount collected
       final currentSecurityDeposit = currentOrder.securityDepositAmount ?? 0.0;
-      final currentAdditionalCollected = currentOrder.additionalAmountCollected ?? 0.0;
-      
+      final currentAdditionalCollected =
+          currentOrder.additionalAmountCollected ?? 0.0;
+
       // Calculate current outstanding amount
       // Outstanding = (Rental + GST + Damage + Late Fee) - Security Deposit - Additional Amount Collected
       final rentalAmount = currentOrder.subtotal ?? 0.0;
@@ -1024,20 +1077,25 @@ class OrdersService {
       final damageFees = currentOrder.damageFeeTotal ?? 0.0;
       final lateFee = currentOrder.lateFee ?? 0.0;
       final totalCharges = rentalAmount + gstAmount + damageFees + lateFee;
-      final currentOutstanding = (totalCharges - currentSecurityDeposit - currentAdditionalCollected).clamp(0.0, double.infinity);
-      
+      final currentOutstanding =
+          (totalCharges - currentSecurityDeposit - currentAdditionalCollected)
+              .clamp(0.0, double.infinity);
+
       // Validate: cannot collect more than outstanding (with small tolerance for floating-point precision)
       // Round to 2 decimal places to avoid floating-point precision issues
       final roundedAmount = (amount * 100).round() / 100;
       final roundedOutstanding = (currentOutstanding * 100).round() / 100;
-      
-      if (roundedAmount > roundedOutstanding + 0.01) { // Allow 0.01 tolerance
-        throw Exception('Cannot collect more than outstanding amount: ₹${currentOutstanding.toStringAsFixed(2)}');
+
+      if (roundedAmount > roundedOutstanding + 0.01) {
+        // Allow 0.01 tolerance
+        throw Exception(
+          'Cannot collect more than outstanding amount: ₹${currentOutstanding.toStringAsFixed(2)}',
+        );
       }
-      
+
       // Use rounded amount for consistency
       final finalAmount = roundedAmount.clamp(0.0, roundedOutstanding);
-      
+
       // Add the collected amount to additional_amount_collected (following website logic)
       // Website stores collected outstanding amounts in additional_amount_collected field
       final newAdditionalCollected = currentAdditionalCollected + finalAmount;
@@ -1062,7 +1120,7 @@ class OrdersService {
       rethrow;
     }
   }
-  
+
   /// Process order return with item-wise tracking
   /// Matches website logic: saves late fee and discount together with item returns
   Future<Map<String, dynamic>> processOrderReturn({
@@ -1083,30 +1141,33 @@ class OrdersService {
       if (itemReturns.isNotEmpty) {
         final itemUpdatePromises = itemReturns.map((itemReturn) {
           final itemUpdate = <String, dynamic>{
-          'return_status': itemReturn.returnStatus,
-        };
-        
-        if (itemReturn.returnedQuantity != null) {
-          itemUpdate['returned_quantity'] = itemReturn.returnedQuantity;
-        }
-        if (itemReturn.actualReturnDate != null) {
-          itemUpdate['actual_return_date'] = itemReturn.actualReturnDate!.toIso8601String();
-        }
-        if (itemReturn.damageCost != null) {
-          itemUpdate['damage_fee'] = itemReturn.damageCost;
-        }
-        // Store damage description in damage_description field (matching website schema)
-        if (itemReturn.description != null && itemReturn.description!.trim().isNotEmpty) {
-          itemUpdate['damage_description'] = itemReturn.description!.trim();
-        } else {
-          // Clear damage_description if empty
-          itemUpdate['damage_description'] = null;
-        }
-        // missing_note is separate - only for missing items
-        if (itemReturn.missingNote != null && itemReturn.missingNote!.trim().isNotEmpty) {
-          itemUpdate['missing_note'] = itemReturn.missingNote!.trim();
-        }
-        
+            'return_status': itemReturn.returnStatus,
+          };
+
+          if (itemReturn.returnedQuantity != null) {
+            itemUpdate['returned_quantity'] = itemReturn.returnedQuantity;
+          }
+          if (itemReturn.actualReturnDate != null) {
+            itemUpdate['actual_return_date'] = itemReturn.actualReturnDate!
+                .toIso8601String();
+          }
+          if (itemReturn.damageCost != null) {
+            itemUpdate['damage_fee'] = itemReturn.damageCost;
+          }
+          // Store damage description in damage_description field (matching website schema)
+          if (itemReturn.description != null &&
+              itemReturn.description!.trim().isNotEmpty) {
+            itemUpdate['damage_description'] = itemReturn.description!.trim();
+          } else {
+            // Clear damage_description if empty
+            itemUpdate['damage_description'] = null;
+          }
+          // missing_note is separate - only for missing items
+          if (itemReturn.missingNote != null &&
+              itemReturn.missingNote!.trim().isNotEmpty) {
+            itemUpdate['missing_note'] = itemReturn.missingNote!.trim();
+          }
+
           return _supabase
               .from('order_items')
               .update(itemUpdate)
@@ -1124,7 +1185,7 @@ class OrdersService {
           .from('order_items')
           .select('damage_fee')
           .eq('order_id', orderId);
-      
+
       final calcDamageFeeTotal = (allItemsResponse as List)
           .map((item) => (item['damage_fee'] as num?)?.toDouble() ?? 0.0)
           .fold<double>(0.0, (sum, cost) => sum + cost);
@@ -1134,24 +1195,29 @@ class OrdersService {
       // Fetch updated order to check current item state after updates
       OrderStatus? newStatus;
       final updatedOrderForStatus = await getOrder(orderId);
-      
+
       if (updatedOrderForStatus != null) {
         final allItems = updatedOrderForStatus.items ?? [];
-        
+
         if (allItems.isNotEmpty) {
           // Check if all items are fully returned
           final allReturned = allItems.every((item) {
             final returnedQty = item.returnedQuantity ?? 0;
-            return item.returnStatus == ReturnStatus.returned && returnedQty == item.quantity;
+            return item.returnStatus == ReturnStatus.returned &&
+                returnedQty == item.quantity;
           });
 
           // Check for missing items (return_status = 'missing')
-          final hasMissing = allItems.any((item) => item.returnStatus == ReturnStatus.missing);
+          final hasMissing = allItems.any(
+            (item) => item.returnStatus == ReturnStatus.missing,
+          );
 
           // Check for items not yet returned
           final hasNotReturned = allItems.any((item) {
             final returnedQty = item.returnedQuantity ?? 0;
-            return (item.returnStatus == null || item.returnStatus == ReturnStatus.notYetReturned) && returnedQty == 0;
+            return (item.returnStatus == null ||
+                    item.returnStatus == ReturnStatus.notYetReturned) &&
+                returnedQty == 0;
           });
 
           // Check for partial returns (returnedQuantity > 0 AND returnedQuantity < quantity)
@@ -1161,11 +1227,14 @@ class OrdersService {
           });
 
           // Check for damage (damage_fee > 0 OR damage_description exists)
-          final hasDamage = calcDamageFeeTotal > 0 || 
-                           allItems.any((item) => 
-                             (item.damageCost != null && item.damageCost! > 0) ||
-                             (item.damageDescription != null && item.damageDescription!.trim().isNotEmpty)
-                           );
+          final hasDamage =
+              calcDamageFeeTotal > 0 ||
+              allItems.any(
+                (item) =>
+                    (item.damageCost != null && item.damageCost! > 0) ||
+                    (item.damageDescription != null &&
+                        item.damageDescription!.trim().isNotEmpty),
+              );
 
           // Priority 1: All items fully returned, no damage, no missing, no partial returns → completed
           if (allReturned && !hasPartialReturns && !hasDamage && !hasMissing) {
@@ -1188,22 +1257,21 @@ class OrdersService {
       final gstAmount = currentOrder.gstAmount ?? 0.0;
       final gstIncluded = currentOrder.staff?.gstIncluded ?? false;
       final baseWithGst = gstIncluded ? baseTotal : baseTotal + gstAmount;
-      
+
       // Add damage fees, late fee, and subtract discount
       final discountAmount = discount ?? 0.0;
-      final newTotal = baseWithGst + calcDamageFeeTotal + lateFee - discountAmount;
+      final newTotal =
+          baseWithGst + calcDamageFeeTotal + lateFee - discountAmount;
 
       // Update order with late fee, discount, damage fees, new total, and status (matching website logic)
-      final orderUpdate = <String, dynamic>{
-        'total_amount': newTotal,
-      };
-      
+      final orderUpdate = <String, dynamic>{'total_amount': newTotal};
+
       // Update status if determined
       OrderStatus? statusToSet = newStatus;
       if (statusToSet != null) {
         orderUpdate['status'] = statusToSet.value;
       }
-      
+
       // Always update damage_fee_total (even if 0) to match website logic
       orderUpdate['damage_fee_total'] = calcDamageFeeTotal;
       if (lateFee > 0 || currentOrder.lateFee != null) {
@@ -1211,7 +1279,9 @@ class OrdersService {
       }
       if (discount != null && discount > 0) {
         orderUpdate['discount_amount'] = discount;
-      } else if (discount != null && discount == 0 && currentOrder.discountAmount != null) {
+      } else if (discount != null &&
+          discount == 0 &&
+          currentOrder.discountAmount != null) {
         // Clear discount if explicitly set to 0
         orderUpdate['discount_amount'] = 0;
       }
@@ -1228,10 +1298,11 @@ class OrdersService {
             .single();
       } on PostgrestException catch (statusError) {
         // If status constraint error (code 23514), retry with completed status
-        final isConstraintError = statusError.code == '23514' || 
-                                  statusError.message.contains('orders_status_check') ||
-                                  statusError.message.contains('check constraint');
-        
+        final isConstraintError =
+            statusError.code == '23514' ||
+            statusError.message.contains('orders_status_check') ||
+            statusError.message.contains('check constraint');
+
         if (isConstraintError && statusToSet != null) {
           AppLogger.warning(
             'Status ${statusToSet.value} not allowed by database constraint, falling back to completed',
@@ -1246,7 +1317,10 @@ class OrdersService {
                 .select()
                 .single();
           } catch (retryError) {
-            AppLogger.error('Failed to update order with completed status', retryError);
+            AppLogger.error(
+              'Failed to update order with completed status',
+              retryError,
+            );
             rethrow;
           }
         } else {
@@ -1382,53 +1456,53 @@ class OrdersService {
           .select('order_id, price_per_day')
           .eq('id', itemId)
           .single();
-      
+
       final orderId = itemResponse['order_id'] as String;
       final pricePerDay = (itemResponse['price_per_day'] as num).toDouble();
-      
+
       // Calculate new line_total (without multiplying by days)
       final newLineTotal = quantity * pricePerDay;
-      
+
       // Update the item
       await _supabase
           .from('order_items')
-          .update({
-            'quantity': quantity,
-            'line_total': newLineTotal,
-          })
+          .update({'quantity': quantity, 'line_total': newLineTotal})
           .eq('id', itemId);
-      
+
       // Recalculate order totals
       final allItemsResponse = await _supabase
           .from('order_items')
           .select('line_total')
           .eq('order_id', orderId);
-      
+
       final subtotal = (allItemsResponse as List)
           .map((item) => (item['line_total'] as num).toDouble())
           .fold<double>(0.0, (sum, total) => sum + total);
-      
+
       // Get order to calculate GST
       final orderResponse = await _supabase
           .from('orders')
           .select('gst_amount, late_fee, damage_fee_total')
           .eq('id', orderId)
           .single();
-      
-      final previousGstAmount = (orderResponse['gst_amount'] as num?)?.toDouble() ?? 0.0;
-      final previousSubtotal = subtotal - previousGstAmount; // Approximate previous subtotal
-      
+
+      final previousGstAmount =
+          (orderResponse['gst_amount'] as num?)?.toDouble() ?? 0.0;
+      final previousSubtotal =
+          subtotal - previousGstAmount; // Approximate previous subtotal
+
       // Calculate GST if it was applied before (maintain same rate)
       double gstAmount = 0.0;
       if (previousGstAmount > 0 && previousSubtotal > 0) {
         final gstRate = (previousGstAmount / previousSubtotal) * 100;
         gstAmount = subtotal * (gstRate / 100);
       }
-      
+
       final lateFee = (orderResponse['late_fee'] as num?)?.toDouble() ?? 0.0;
-      final damageFeeTotal = (orderResponse['damage_fee_total'] as num?)?.toDouble() ?? 0.0;
+      final damageFeeTotal =
+          (orderResponse['damage_fee_total'] as num?)?.toDouble() ?? 0.0;
       final totalAmount = subtotal + gstAmount + lateFee + damageFeeTotal;
-      
+
       // Update order totals
       await _supabase
           .from('orders')
@@ -1457,17 +1531,17 @@ class OrdersService {
           .select('order_id')
           .eq('id', itemId)
           .single();
-      
+
       final orderId = itemResponse['order_id'] as String;
-      
+
       final updateData = <String, dynamic>{};
-      
+
       if (damageCost != null && damageCost > 0) {
         updateData['damage_fee'] = damageCost;
       } else {
         updateData['damage_fee'] = null;
       }
-      
+
       // Store damage description in damage_description field (matching website schema)
       if (damageDescription != null && damageDescription.trim().isNotEmpty) {
         updateData['damage_description'] = damageDescription.trim();
@@ -1475,22 +1549,19 @@ class OrdersService {
         // Clear damage_description if empty
         updateData['damage_description'] = null;
       }
-      
-      await _supabase
-          .from('order_items')
-          .update(updateData)
-          .eq('id', itemId);
-      
+
+      await _supabase.from('order_items').update(updateData).eq('id', itemId);
+
       // Recalculate order damage_fee_total
       final allItemsResponse = await _supabase
           .from('order_items')
           .select('damage_fee')
           .eq('order_id', orderId);
-      
+
       final totalDamage = (allItemsResponse as List)
           .map((item) => (item['damage_fee'] as num?)?.toDouble() ?? 0.0)
           .fold<double>(0.0, (sum, cost) => sum + cost);
-      
+
       await _supabase
           .from('orders')
           .update({'damage_fee_total': totalDamage})

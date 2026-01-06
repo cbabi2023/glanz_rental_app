@@ -54,7 +54,7 @@ class OrdersInfiniteNotifier extends StateNotifier<OrdersInfiniteState> {
   final OrdersParams _baseParams;
 
   OrdersInfiniteNotifier(this._ordersService, this._baseParams)
-      : super(OrdersInfiniteState()) {
+    : super(OrdersInfiniteState()) {
     _loadInitial();
   }
 
@@ -70,6 +70,7 @@ class OrdersInfiniteNotifier extends StateNotifier<OrdersInfiniteState> {
         limit: 10, // Match website: 10 items per page
         offset: 0,
         includePartialReturns: _baseParams.includePartialReturns,
+        includeLateOrders: _baseParams.includeLateOrders,
       );
       state = state.copyWith(
         orders: orders,
@@ -78,10 +79,7 @@ class OrdersInfiniteNotifier extends StateNotifier<OrdersInfiniteState> {
         currentPage: 0,
       );
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
-      );
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
@@ -100,13 +98,11 @@ class OrdersInfiniteNotifier extends StateNotifier<OrdersInfiniteState> {
         limit: 10,
         offset: nextPage * 10,
         includePartialReturns: _baseParams.includePartialReturns,
+        includeLateOrders: _baseParams.includeLateOrders,
       );
 
       if (orders.isEmpty) {
-        state = state.copyWith(
-          isLoadingMore: false,
-          hasMore: false,
-        );
+        state = state.copyWith(isLoadingMore: false, hasMore: false);
       } else {
         state = state.copyWith(
           orders: [...state.orders, ...orders],
@@ -116,10 +112,7 @@ class OrdersInfiniteNotifier extends StateNotifier<OrdersInfiniteState> {
         );
       }
     } catch (e) {
-      state = state.copyWith(
-        isLoadingMore: false,
-        error: e.toString(),
-      );
+      state = state.copyWith(isLoadingMore: false, error: e.toString());
     }
   }
 
@@ -130,75 +123,83 @@ class OrdersInfiniteNotifier extends StateNotifier<OrdersInfiniteState> {
 }
 
 /// Orders Infinite Provider
-final ordersInfiniteProvider = StateNotifierProvider.family<
-    OrdersInfiniteNotifier, OrdersInfiniteState, OrdersParams>(
-  (ref, params) {
-    final service = ref.watch(ordersServiceProvider);
-    // Watch refresh trigger to reset state
-    ref.watch(ordersRefreshTriggerProvider);
-    return OrdersInfiniteNotifier(service, params);
-  },
-);
+final ordersInfiniteProvider =
+    StateNotifierProvider.family<
+      OrdersInfiniteNotifier,
+      OrdersInfiniteState,
+      OrdersParams
+    >((ref, params) {
+      final service = ref.watch(ordersServiceProvider);
+      // Watch refresh trigger to reset state
+      ref.watch(ordersRefreshTriggerProvider);
+      return OrdersInfiniteNotifier(service, params);
+    });
 
 /// Orders List Provider
-/// 
+///
 /// Fetches orders with optional filters
 /// Automatically refreshes when ordersRefreshTriggerProvider changes
-final ordersProvider = FutureProvider.family<List<Order>, OrdersParams>(
-  (ref, params) async {
-    // Watch the refresh trigger to automatically refetch when it changes
-    ref.watch(ordersRefreshTriggerProvider);
-    
-    final service = ref.watch(ordersServiceProvider);
-    return await service.getOrders(
-      branchId: params.branchId,
-      status: params.status,
-      startDate: params.startDate,
-      endDate: params.endDate,
-      limit: params.limit,
-      offset: params.offset,
-      includePartialReturns: params.includePartialReturns,
-    );
-  },
-);
+final ordersProvider = FutureProvider.family<List<Order>, OrdersParams>((
+  ref,
+  params,
+) async {
+  // Watch the refresh trigger to automatically refetch when it changes
+  ref.watch(ordersRefreshTriggerProvider);
+
+  final service = ref.watch(ordersServiceProvider);
+  return await service.getOrders(
+    branchId: params.branchId,
+    status: params.status,
+    startDate: params.startDate,
+    endDate: params.endDate,
+    limit: params.limit,
+    offset: params.offset,
+    includePartialReturns: params.includePartialReturns,
+  );
+});
 
 /// Order Stream Provider
-/// 
+///
 /// Provides real-time stream of orders
-final ordersStreamProvider = StreamProvider.family<List<Order>, String?>(
-  (ref, branchId) {
-    final service = ref.watch(ordersServiceProvider);
-    return service.watchOrders(branchId: branchId);
-  },
-);
+final ordersStreamProvider = StreamProvider.family<List<Order>, String?>((
+  ref,
+  branchId,
+) {
+  final service = ref.watch(ordersServiceProvider);
+  return service.watchOrders(branchId: branchId);
+});
 
 /// Single Order Provider
-final orderProvider = FutureProvider.family<Order?, String>(
-  (ref, orderId) async {
-    final service = ref.watch(ordersServiceProvider);
-    return await service.getOrder(orderId);
-  },
-);
+final orderProvider = FutureProvider.family<Order?, String>((
+  ref,
+  orderId,
+) async {
+  final service = ref.watch(ordersServiceProvider);
+  return await service.getOrder(orderId);
+});
 
 /// Customer Orders Provider
-final customerOrdersProvider = FutureProvider.family<List<Order>, String>(
-  (ref, customerId) async {
-    final service = ref.watch(ordersServiceProvider);
-    return await service.getCustomerOrders(customerId);
-  },
-);
+final customerOrdersProvider = FutureProvider.family<List<Order>, String>((
+  ref,
+  customerId,
+) async {
+  final service = ref.watch(ordersServiceProvider);
+  return await service.getCustomerOrders(customerId);
+});
 
 /// Order Stats Provider
-final orderStatsProvider = FutureProvider.family<Map<String, dynamic>, OrdersStatsParams>(
-  (ref, params) async {
-    final service = ref.watch(ordersServiceProvider);
-    return await service.getOrderStats(
-      branchId: params.branchId,
-      startDate: params.startDate,
-      endDate: params.endDate,
-    );
-  },
-);
+final orderStatsProvider =
+    FutureProvider.family<Map<String, dynamic>, OrdersStatsParams>((
+      ref,
+      params,
+    ) async {
+      final service = ref.watch(ordersServiceProvider);
+      return await service.getOrderStats(
+        branchId: params.branchId,
+        startDate: params.startDate,
+        endDate: params.endDate,
+      );
+    });
 
 /// Order Stats Parameters
 class OrdersStatsParams {
@@ -206,11 +207,7 @@ class OrdersStatsParams {
   final DateTime? startDate;
   final DateTime? endDate;
 
-  OrdersStatsParams({
-    this.branchId,
-    this.startDate,
-    this.endDate,
-  });
+  OrdersStatsParams({this.branchId, this.startDate, this.endDate});
 
   @override
   bool operator ==(Object other) =>
@@ -222,10 +219,7 @@ class OrdersStatsParams {
           endDate == other.endDate;
 
   @override
-  int get hashCode =>
-      branchId.hashCode ^
-      startDate.hashCode ^
-      endDate.hashCode;
+  int get hashCode => branchId.hashCode ^ startDate.hashCode ^ endDate.hashCode;
 }
 
 /// Orders Parameters
@@ -237,7 +231,10 @@ class OrdersParams {
   final String? searchQuery;
   final int? limit;
   final int? offset;
-  final bool? includePartialReturns; // Load orders for partial returns detection
+  final bool?
+  includePartialReturns; // Load orders for partial returns detection
+  final bool?
+  includeLateOrders; // Load orders for late orders detection (server-side filtering)
 
   OrdersParams({
     this.branchId,
@@ -248,6 +245,7 @@ class OrdersParams {
     this.limit,
     this.offset,
     this.includePartialReturns,
+    this.includeLateOrders,
   });
 
   @override
@@ -262,7 +260,8 @@ class OrdersParams {
           searchQuery == other.searchQuery &&
           limit == other.limit &&
           offset == other.offset &&
-          includePartialReturns == other.includePartialReturns;
+          includePartialReturns == other.includePartialReturns &&
+          includeLateOrders == other.includeLateOrders;
 
   @override
   int get hashCode =>
@@ -273,6 +272,6 @@ class OrdersParams {
       searchQuery.hashCode ^
       limit.hashCode ^
       offset.hashCode ^
-      (includePartialReturns?.hashCode ?? 0);
+      (includePartialReturns?.hashCode ?? 0) ^
+      (includeLateOrders?.hashCode ?? 0);
 }
-
