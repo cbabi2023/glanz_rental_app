@@ -1086,10 +1086,16 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           final canEdit = order.canEdit;
 
           // Calculate bottom padding based on number of buttons
+          // For scheduled orders with Start Rental and Edit, they're in one row (count as 1)
           int buttonCount = 0;
-          if (canStartRental) buttonCount++;
           if (canMarkReturned) buttonCount++;
-          if (canEdit) buttonCount++;
+          if (order.isScheduled && canStartRental && canEdit) {
+            // Start Rental and Edit are in one row, count as 1
+            buttonCount++;
+          } else {
+            if (canStartRental) buttonCount++;
+            if (canEdit) buttonCount++;
+          }
           if (canCancel) buttonCount++;
 
           // Calculate bottom padding to ensure pricing breakdown is fully visible
@@ -2715,81 +2721,160 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (canStartRental)
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: _isUpdating
-                                    ? null
-                                    : () => _handleStartRental(order),
-                                icon: _isUpdating
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                Colors.white,
-                                              ),
-                                        ),
-                                      )
-                                    : const Icon(Icons.play_arrow, size: 20),
-                                label: Text(
-                                  _isUpdating
-                                      ? 'Processing...'
-                                      : 'Start Rental',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-                                  backgroundColor: Colors.orange.shade600,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          if (canEdit) ...[
-                            if (canMarkReturned || canStartRental)
-                              const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: _isUpdating
-                                    ? null
-                                    : () => context.push(
-                                        '/orders/${order.id}/edit',
+                          // For scheduled orders: Show Start Rental and Edit Order in a row
+                          if (order.isScheduled && canStartRental && canEdit)
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: _isUpdating
+                                        ? null
+                                        : () => _handleStartRental(order),
+                                    icon: _isUpdating
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Colors.white,
+                                                  ),
+                                            ),
+                                          )
+                                        : const Icon(Icons.play_arrow, size: 20),
+                                    label: Text(
+                                      _isUpdating
+                                          ? 'Processing...'
+                                          : 'Start Rental',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                icon: const Icon(Icons.edit_outlined, size: 20),
-                                label: const Text(
-                                  'Edit Order',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
+                                      backgroundColor: Colors.orange.shade600,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: _isUpdating
+                                        ? null
+                                        : () => context.push(
+                                            '/orders/${order.id}/edit',
+                                          ),
+                                    icon: const Icon(Icons.edit_outlined, size: 20),
+                                    label: const Text(
+                                      'Edit Order',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
+                                      foregroundColor: const Color(0xFF0F1724),
+                                      side: BorderSide(color: Colors.grey.shade300),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
                                   ),
-                                  foregroundColor: const Color(0xFF0F1724),
-                                  side: BorderSide(color: Colors.grey.shade300),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                ),
+                              ],
+                            )
+                          else ...[
+                            // For non-scheduled orders or when not both buttons are available, show full-width buttons
+                            if (canStartRental)
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: _isUpdating
+                                      ? null
+                                      : () => _handleStartRental(order),
+                                  icon: _isUpdating
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                  Colors.white,
+                                                ),
+                                          ),
+                                        )
+                                      : const Icon(Icons.play_arrow, size: 20),
+                                  label: Text(
+                                    _isUpdating
+                                        ? 'Processing...'
+                                        : 'Start Rental',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                    backgroundColor: Colors.orange.shade600,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
+                            if (canEdit) ...[
+                              if (canMarkReturned || canStartRental)
+                                const SizedBox(height: 8),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _isUpdating
+                                      ? null
+                                      : () => context.push(
+                                          '/orders/${order.id}/edit',
+                                        ),
+                                  icon: const Icon(Icons.edit_outlined, size: 20),
+                                  label: const Text(
+                                    'Edit Order',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                    foregroundColor: const Color(0xFF0F1724),
+                                    side: BorderSide(color: Colors.grey.shade300),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
+                          // Cancel button - show below
                           if (canCancel) ...[
-                            if (canMarkReturned || canStartRental || canEdit)
+                            if (order.isScheduled && canStartRental && canEdit)
+                              const SizedBox(height: 12)
+                            else if (canMarkReturned || canStartRental || canEdit)
                               const SizedBox(height: 8),
                             SizedBox(
                               width: double.infinity,
