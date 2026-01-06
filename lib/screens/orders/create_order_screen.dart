@@ -38,8 +38,10 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   @override
   void initState() {
     super.initState();
-    // Generate and display auto invoice number when screen loads
+    // Clear draft when creating a new order to prevent old items from showing
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Clear draft first to ensure clean state for new order
+      ref.read(orderDraftProvider.notifier).clear();
       _initializeInvoiceNumber();
       _initializeBranchSelection();
     });
@@ -377,6 +379,9 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         // will automatically refetch their data
         ref.read(ordersRefreshTriggerProvider.notifier).state++;
         
+        // Unfocus any text fields to prevent keyboard state issues
+        FocusScope.of(context).unfocus();
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Order created successfully!'),
@@ -445,6 +450,12 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
     return PopScope(
       canPop: true,
+      onPopInvoked: (didPop) {
+        if (didPop) {
+          // Unfocus when popping to prevent keyboard state issues
+          FocusScope.of(context).unfocus();
+        }
+      },
       child: Scaffold(
       backgroundColor: const Color(0xFFF7F9FB),
       body: CustomScrollView(
@@ -459,7 +470,10 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
             backgroundColor: Colors.white,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () {
+                FocusScope.of(context).unfocus();
+                context.pop();
+              },
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(

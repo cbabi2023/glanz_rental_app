@@ -255,12 +255,32 @@ class Order {
     }
 
     // Handle items - might be a list or null
+    // CRITICAL: Remove duplicates when parsing from database
+    // This prevents duplicates from being loaded into the app
     List<OrderItem>? items;
     if (json['items'] != null && json['items'] is List) {
-      items = (json['items'] as List)
+      final rawItems = (json['items'] as List)
           .where((item) => item != null)
           .map((item) => OrderItem.fromJson(item as Map<String, dynamic>))
           .toList();
+      
+      // Remove duplicates using a Map
+      // CRITICAL: This prevents duplicates from entering the app from database
+      final uniqueItemsMap = <String, OrderItem>{};
+      for (final item in rawItems) {
+        String key;
+        if (item.id != null && item.id!.isNotEmpty) {
+          key = 'id_${item.id}';
+        } else {
+          // For items without ID, create comprehensive composite key
+          // Include all identifying fields to ensure uniqueness
+          key = 'key_${item.photoUrl}_${item.productName ?? ''}_${item.quantity}_${item.pricePerDay}_${item.days}_${item.lineTotal}';
+        }
+        if (!uniqueItemsMap.containsKey(key)) {
+          uniqueItemsMap[key] = item;
+        }
+      }
+      items = List<OrderItem>.from(uniqueItemsMap.values);
     }
 
     return Order(

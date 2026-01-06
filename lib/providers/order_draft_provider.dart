@@ -65,6 +65,10 @@ class OrderDraftState {
 /// Order Draft Notifier
 class OrderDraftNotifier extends StateNotifier<OrderDraftState> {
   OrderDraftNotifier() : super(_initialState());
+  
+  // Lock to prevent modifications during critical operations
+  bool _isLocked = false;
+  String? _lastLoadedOrderId; // Track which order was last loaded
 
   static OrderDraftState _initialState() {
     final now = DateTime.now();
@@ -106,8 +110,47 @@ class OrderDraftNotifier extends StateNotifier<OrderDraftState> {
   }
 
   void addItem(OrderItem item) {
+    print('🟡 addItem called. Current items count: ${state.items.length}');
+    print('🟡 Item to add - ID: ${item.id}, photoUrl: ${item.photoUrl}, productName: ${item.productName}');
+    
+    // Don't allow adding items if locked (during critical operations)
+    if (_isLocked) {
+      print('🔴 addItem BLOCKED - draft is locked');
+      return;
+    }
+    
+    // Check for duplicates before adding
+    // Use item ID if available, otherwise use composite key
+    final existingItemIds = state.items
+        .where((i) => i.id != null && i.id!.isNotEmpty)
+        .map((i) => i.id!)
+        .toSet();
+    
+    // If item has an ID, check if it already exists
+    if (item.id != null && item.id!.isNotEmpty) {
+      if (existingItemIds.contains(item.id)) {
+        // Item with this ID already exists, don't add duplicate
+        print('🔴 addItem BLOCKED - duplicate ID: ${item.id}');
+        return;
+      }
+    }
+    
+    // For items without ID, check using composite key (include days and lineTotal for better uniqueness)
+    final itemKey = '${item.photoUrl}_${item.productName ?? ''}_${item.quantity}_${item.pricePerDay}_${item.days}_${item.lineTotal}';
+    final existingKeys = state.items
+        .where((i) => i.id == null || i.id!.isEmpty)
+        .map((i) => '${i.photoUrl}_${i.productName ?? ''}_${i.quantity}_${i.pricePerDay}_${i.days}_${i.lineTotal}')
+        .toSet();
+    
+    if (existingKeys.contains(itemKey)) {
+      // Duplicate item found, don't add
+      print('🔴 addItem BLOCKED - duplicate composite key: $itemKey');
+      return;
+    }
+    
     final newItems = [item, ...state.items];
     state = state.copyWith(items: newItems);
+    print('🟢 addItem SUCCESS. New items count: ${state.items.length}');
   }
 
   void updateItem(int index, OrderItem updatedItem) {
@@ -127,23 +170,127 @@ class OrderDraftNotifier extends StateNotifier<OrderDraftState> {
   }
 
   void loadOrder(Order order) {
-    // Use datetime fields if available, otherwise use date fields
-    final startDate = order.startDatetime ?? order.startDate;
-    final endDate = order.endDatetime ?? order.endDate;
+    // DEBUG: Log when loadOrder is called
+    print('🔵 loadOrder called for order: ${order.id}');
+    print('🔵 Current state items count: ${state.items.length}');
+    print('🔵 Order items count from DB: ${order.items?.length ?? 0}');
     
-    state = OrderDraftState(
-      customerId: order.customerId,
-      customerName: order.customer?.name,
-      customerPhone: order.customer?.phone,
-      startDate: startDate,
-      endDate: endDate,
-      invoiceNumber: order.invoiceNumber,
-      items: order.items ?? [],
-      securityDeposit: order.securityDeposit,
-    );
+    // CRITICAL: Prevent loading the same order multiple times
+    // If we're already loading this order, don't load again
+    if (_isLocked && _lastLoadedOrderId == order.id) {
+      print('🔴 loadOrder BLOCKED - already loading order ${order.id}');
+      return;
+    }
+    
+    // Lock to prevent any modifications during loading
+    _isLocked = true;
+    _lastLoadedOrderId = order.id;
+    
+    try {
+      // CRITICAL: First, completely clear the state to ensure we start fresh
+      // This prevents any possibility of items being appended instead of replaced
+      final itemsBeforeClear = state.items.length;
+      state = _initialState();
+      print('🔵 Cleared state. Items before: $itemsBeforeClear, after: ${state.items.length}');
+      
+      // Use datetime fields if available, otherwise use date fields
+      final startDate = order.startDatetime ?? order.startDate;
+      final endDate = order.endDatetime ?? order.endDate;
+      
+      // CRITICAL: Remove ALL duplicates from order items
+      // Use a single Map-based approach for simplicity and reliability
+      final uniqueItemsMap = <String, OrderItem>{};
+      final duplicateKeys = <String>[];
+      
+      // Process ALL items and remove duplicates
+      for (final item in (order.items ?? [])) {
+        String key;
+        
+        // Use item ID if available (most reliable)
+        if (item.id != null && item.id!.isNotEmpty) {
+          key = 'id_${item.id}';
+        } else {
+          // For items without ID, create a comprehensive composite key
+          // Include ALL identifying fields to ensure uniqueness
+          final photoUrl = item.photoUrl;
+          final productName = item.productName ?? '';
+          final quantity = item.quantity;
+          final pricePerDay = item.pricePerDay;
+          final days = item.days;
+          final lineTotal = item.lineTotal;
+          
+          // Create a comprehensive key that includes all identifying information
+          key = 'key_${photoUrl}_${productName}_${quantity}_${pricePerDay}_${days}_${lineTotal}';
+        }
+        
+        // Only add if we haven't seen this key before
+        // This ensures each item appears exactly once
+        if (!uniqueItemsMap.containsKey(key)) {
+          uniqueItemsMap[key] = item;
+        } else {
+          duplicateKeys.add(key);
+          print('🔴 DUPLICATE FOUND: $key');
+        }
+      }
+      
+      print('🔵 Unique items map size: ${uniqueItemsMap.length}');
+      print('🔵 Duplicates found: ${duplicateKeys.length}');
+      if (duplicateKeys.isNotEmpty) {
+        print('🔴 Duplicate keys: $duplicateKeys');
+      }
+      
+      // Convert map values to list - this guarantees unique items only
+      // Create a completely new list to avoid any reference issues
+      final finalUniqueItems = List<OrderItem>.from(uniqueItemsMap.values);
+      
+      // FINAL VERIFICATION: Double-check for duplicates (safety measure)
+      // This catches any edge cases where duplicate detection might have failed
+      final verifiedUniqueItems = <String, OrderItem>{};
+      final verificationDuplicates = <String>[];
+      for (final item in finalUniqueItems) {
+        String key;
+        if (item.id != null && item.id!.isNotEmpty) {
+          key = 'id_${item.id}';
+        } else {
+          key = 'key_${item.photoUrl}_${item.productName ?? ''}_${item.quantity}_${item.pricePerDay}_${item.days}_${item.lineTotal}';
+        }
+        if (!verifiedUniqueItems.containsKey(key)) {
+          verifiedUniqueItems[key] = item;
+        } else {
+          verificationDuplicates.add(key);
+          print('🔴 VERIFICATION DUPLICATE FOUND: $key');
+        }
+      }
+      final verifiedItems = List<OrderItem>.from(verifiedUniqueItems.values);
+      
+      print('🔵 Verified items count: ${verifiedItems.length}');
+      print('🔵 Verification duplicates: ${verificationDuplicates.length}');
+      
+      // IMPORTANT: Create a completely new state to replace existing state
+      // This ensures items are replaced, not appended
+      state = OrderDraftState(
+        customerId: order.customerId,
+        customerName: order.customer?.name,
+        customerPhone: order.customer?.phone,
+        startDate: startDate,
+        endDate: endDate,
+        invoiceNumber: order.invoiceNumber,
+        items: verifiedItems, // This is a new list, completely replacing old items
+        securityDeposit: order.securityDeposit,
+      );
+      
+      print('🟢 loadOrder COMPLETE. Final state items count: ${state.items.length}');
+    } finally {
+      // Always unlock after loading
+      _isLocked = false;
+    }
   }
 
   void clear() {
+    // CRITICAL: Completely reset state to initial state
+    // This ensures all items are removed, not just cleared
+    _isLocked = false; // Reset lock as well
+    _lastLoadedOrderId = null; // Reset loaded order ID
     state = _initialState();
   }
 }
