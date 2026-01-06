@@ -768,7 +768,7 @@ class OrdersService {
           '🟡 This likely means the RPC function is not yet created in Supabase',
         );
         print(
-          '� Please run the SQL from supabase_delete_order_items.sql in Supabase SQL Editor',
+          '� Please run the SQL from supabase/migrations/supabase_delete_order_items.sql in Supabase SQL Editor',
         );
 
         // Fallback: Try direct delete (may fail due to RLS)
@@ -804,7 +804,7 @@ class OrdersService {
           '🔴 Remaining item IDs: ${remainingItems.map((i) => i['id']).toList()}',
         );
         print(
-          '🔴 Please run the SQL from supabase_delete_order_items.sql in Supabase SQL Editor',
+          '🔴 Please run the SQL from supabase/migrations/supabase/migrations/supabase_delete_order_items.sql in Supabase SQL Editor',
         );
       }
     }

@@ -19,7 +19,7 @@ The database constraint needs to be updated to include `completed_with_issues` a
    - Navigate to SQL Editor
 
 2. **Run the Migration SQL**
-   - Open the file `fix_order_status_constraint.sql` in this project
+   - Open the file `supabase/migrations/fix_order_status_constraint.sql` in this project
    - Copy and paste the SQL into the Supabase SQL Editor
    - Click "Run" to execute
 
