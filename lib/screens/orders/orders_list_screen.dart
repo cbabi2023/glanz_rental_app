@@ -123,6 +123,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
               startDate: startDate,
               endDate: endDate,
               searchQuery: newSearchQuery,
+              includePartialReturns: _selectedTab == _OrdersTab.partiallyReturned,
             );
             
             ref.read(ordersInfiniteProvider(params).notifier).refresh();
@@ -178,6 +179,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
         startDate: startDate,
         endDate: endDate,
         searchQuery: _searchQuery,
+        includePartialReturns: _selectedTab == _OrdersTab.partiallyReturned,
       );
       
       ref.read(ordersInfiniteProvider(params).notifier).loadMore();
@@ -227,6 +229,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
           startDate: startDate,
           endDate: endDate,
           searchQuery: _searchQuery,
+          includePartialReturns: _selectedTab == _OrdersTab.partiallyReturned,
         );
         ref.read(ordersInfiniteProvider(params).notifier).refresh();
       }
@@ -432,9 +435,9 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
         status = OrderStatus.flagged;
         break;
       case _OrdersTab.partiallyReturned:
-        // Do NOT filter by status on the server.
-        // We need all relevant orders so _getOrderCategory() can detect partial returns by items.
-        status = null;
+        // Use server-side filtering: load orders with status IN ('partially_returned', 'active', 'pending_return')
+        // This reduces data load and ensures fresh data from server
+        status = null; // Will use includePartialReturns flag instead
         break;
       case _OrdersTab.late:
       case _OrdersTab.all:
@@ -804,6 +807,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
                     startDate: startDate,
                     endDate: endDate,
                     searchQuery: _searchQuery,
+                    includePartialReturns: _selectedTab == _OrdersTab.partiallyReturned,
                   );
                   final ordersState = ref.watch(ordersInfiniteProvider(params));
                   final statsParams = OrdersStatsParams(
@@ -999,10 +1003,6 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
     if (status == OrderStatus.flagged) return _OrderCategory.flagged;
     if (status == OrderStatus.partiallyReturned)
       return _OrderCategory.partiallyReturned;
-    if (status == OrderStatus.completed || 
-        status == OrderStatus.completedWithIssues) {
-      return _OrderCategory.returned;
-    }
 
     // ⚠️ CRITICAL: Scheduled orders ALWAYS return "scheduled" regardless of date
     // Do NOT check dates for scheduled orders - they remain scheduled until explicitly started
@@ -1010,15 +1010,43 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
       return _OrderCategory.scheduled;
     }
 
-    // Check for partial returns via items (if status is active but some items returned)
+    // Check for partial returns via items (if status is active/pending_return but some items returned)
+    // This must happen BEFORE checking completed/late to catch all partial returns
+    // Match website logic exactly: check return_status values and exclude missing items
+    // Check for ALL orders (not just active) to catch partial returns in any status
     if (order.items != null && order.items!.isNotEmpty) {
-      final hasReturned = order.items!.any((item) => item.isReturned);
-      final hasNotReturned = order.items!.any((item) => item.isPending);
+      // Check for missing items (exclude from partial returns)
+      final hasMissingItems = order.items!.any((item) => item.isMissing);
+      
+      // Check if some items have return_status = 'returned' OR have returnedQuantity > 0
+      final hasReturnedItems = order.items!.any((item) {
+        if (item.isReturned) return true;
+        // Also check if returnedQuantity > 0 (partial return by quantity)
+        final returnedQty = item.returnedQuantity ?? 0;
+        return returnedQty > 0;
+      });
+      
+      // Check if some items are not yet returned (return_status is null or 'not_yet_returned')
+      // OR have returnedQuantity = 0 or null
+      final hasNotReturnedItems = order.items!.any((item) {
+        if (item.isPending) return true;
+        // Also check if returnedQuantity is 0 or null (not returned)
+        final returnedQty = item.returnedQuantity ?? 0;
+        final quantity = item.quantity;
+        return returnedQty == 0 && quantity > 0;
+      });
 
-      // If some items are returned but not all, it's partially returned
-      if (hasReturned && hasNotReturned) {
+      // Website logic: If some items are returned AND some are not returned (and no missing items)
+      // This applies to orders with status='active', 'pending_return', or even 'partially_returned' (double-check)
+      if (hasReturnedItems && hasNotReturnedItems && !hasMissingItems) {
         return _OrderCategory.partiallyReturned;
       }
+    }
+
+    // Check completed status AFTER checking for partial returns
+    if (status == OrderStatus.completed || 
+        status == OrderStatus.completedWithIssues) {
+      return _OrderCategory.returned;
     }
 
     // Parse dates for active orders
@@ -1033,6 +1061,8 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
     }
 
     // Check if late (end date passed and not completed/cancelled)
+    // BUT: Don't mark as late if it's already detected as partially returned
+    // Partial returns take priority over late status
     final isLate =
         DateTime.now().isAfter(endDate) &&
         status != OrderStatus.completed &&
@@ -1041,6 +1071,8 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
         status != OrderStatus.cancelled &&
         status != OrderStatus.partiallyReturned;
 
+    // Only return late if we haven't already detected it as partially returned
+    // (The partial return check above already handled orders with partial returns)
     if (isLate) return _OrderCategory.late;
     if (status == OrderStatus.active) return _OrderCategory.ongoing;
 
@@ -1067,6 +1099,9 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> with Widget
         case _OrdersTab.returned:
           return category == _OrderCategory.returned;
         case _OrdersTab.partiallyReturned:
+          // Filter for partial returns:
+          // 1. Orders with status='partially_returned'
+          // 2. Active/pending_return orders with some items returned (detected by items)
           return category == _OrderCategory.partiallyReturned;
         case _OrdersTab.cancelled:
           return category == _OrderCategory.cancelled;
@@ -1448,12 +1483,19 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
     }
 
     // Check for partial returns via items (if status is active but some items returned)
+    // Match website logic exactly: check return_status values and exclude missing items
     if (order.items != null && order.items!.isNotEmpty) {
-      final hasReturned = order.items!.any((item) => item.isReturned);
-      final hasNotReturned = order.items!.any((item) => item.isPending);
+      // Check for missing items (exclude from partial returns)
+      final hasMissingItems = order.items!.any((item) => item.isMissing);
+      
+      // Check if some items have return_status = 'returned'
+      final hasReturnedItems = order.items!.any((item) => item.isReturned);
+      
+      // Check if some items are not yet returned (return_status is null or 'not_yet_returned')
+      final hasNotReturnedItems = order.items!.any((item) => item.isPending);
 
-      // If some items are returned but not all, it's partially returned
-      if (hasReturned && hasNotReturned) {
+      // Website logic: If some items are returned AND some are not returned (and no missing items)
+      if (hasReturnedItems && hasNotReturnedItems && !hasMissingItems) {
         return _OrderCategory.partiallyReturned;
       }
     }

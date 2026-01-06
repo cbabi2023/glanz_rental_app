@@ -87,6 +87,7 @@ class OrdersService {
     String? searchQuery,
     int? limit,
     int? offset,
+    bool? includePartialReturns, // Special flag to load orders for partial returns detection
   }) async {
     // Build query - apply all filters first, then ordering, then pagination
     dynamic query = _supabase
@@ -108,7 +109,12 @@ class OrdersService {
 
     if (status != null) {
       query = query.eq('status', status.value);
+    } else if (includePartialReturns == true) {
+      // For partial returns: load orders with status IN ('partially_returned', 'active', 'pending_return')
+      // This is server-side filtering to reduce data load
+      query = query.or('status.eq.partially_returned,status.eq.active,status.eq.pending_return');
     }
+    // If status is null and includePartialReturns is false/null, load all orders (for client-side filtering like late, etc.)
 
     if (startDate != null) {
       query = query.gte('created_at', startDate.toIso8601String());

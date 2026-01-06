@@ -69,6 +69,7 @@ class OrdersInfiniteNotifier extends StateNotifier<OrdersInfiniteState> {
         searchQuery: _baseParams.searchQuery,
         limit: 10, // Match website: 10 items per page
         offset: 0,
+        includePartialReturns: _baseParams.includePartialReturns,
       );
       state = state.copyWith(
         orders: orders,
@@ -98,6 +99,7 @@ class OrdersInfiniteNotifier extends StateNotifier<OrdersInfiniteState> {
         searchQuery: _baseParams.searchQuery,
         limit: 10,
         offset: nextPage * 10,
+        includePartialReturns: _baseParams.includePartialReturns,
       );
 
       if (orders.isEmpty) {
@@ -155,6 +157,7 @@ final ordersProvider = FutureProvider.family<List<Order>, OrdersParams>(
       endDate: params.endDate,
       limit: params.limit,
       offset: params.offset,
+      includePartialReturns: params.includePartialReturns,
     );
   },
 );
@@ -234,6 +237,7 @@ class OrdersParams {
   final String? searchQuery;
   final int? limit;
   final int? offset;
+  final bool? includePartialReturns; // Load orders for partial returns detection
 
   OrdersParams({
     this.branchId,
@@ -243,6 +247,7 @@ class OrdersParams {
     this.searchQuery,
     this.limit,
     this.offset,
+    this.includePartialReturns,
   });
 
   @override
@@ -256,7 +261,8 @@ class OrdersParams {
           endDate == other.endDate &&
           searchQuery == other.searchQuery &&
           limit == other.limit &&
-          offset == other.offset;
+          offset == other.offset &&
+          includePartialReturns == other.includePartialReturns;
 
   @override
   int get hashCode =>
@@ -266,6 +272,7 @@ class OrdersParams {
       endDate.hashCode ^
       searchQuery.hashCode ^
       limit.hashCode ^
-      offset.hashCode;
+      offset.hashCode ^
+      (includePartialReturns?.hashCode ?? 0);
 }
 
