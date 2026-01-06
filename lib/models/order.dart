@@ -394,7 +394,7 @@ class Order {
   // Check if order is in any completed state (completed or completed_with_issues)
   bool get isAnyCompleted => isCompleted || isCompletedWithIssues;
 
-  bool get canEdit => isActive || isPendingReturn;
+  bool get canEdit => isScheduled || isActive || isPendingReturn;
   bool get canMarkReturned {
     // Can return if active, pending return, or partially returned
     if (isActive || isPendingReturn || isPartiallyReturned) {
