@@ -1732,10 +1732,9 @@ class _OrderCardItemState extends ConsumerState<_OrderCardItem> {
         lateFee: 0.0,
       );
 
-      // Invalidate order queries to refresh the list
-      final userProfile = ref.read(userProfileProvider).value;
-      final branchId = userProfile?.branchId;
-      ref.invalidate(ordersProvider(OrdersParams(branchId: branchId)));
+      // Refresh the orders list by incrementing the refresh trigger
+      // This will cause all orders providers to refetch data
+      ref.read(ordersRefreshTriggerProvider.notifier).state++;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
