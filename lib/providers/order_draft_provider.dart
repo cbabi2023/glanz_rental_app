@@ -65,7 +65,7 @@ class OrderDraftState {
 /// Order Draft Notifier
 class OrderDraftNotifier extends StateNotifier<OrderDraftState> {
   OrderDraftNotifier() : super(_initialState());
-  
+
   // Lock to prevent modifications during critical operations
   bool _isLocked = false;
   String? _lastLoadedOrderId; // Track which order was last loaded
@@ -110,47 +110,57 @@ class OrderDraftNotifier extends StateNotifier<OrderDraftState> {
   }
 
   void addItem(OrderItem item) {
-    print('🟡 addItem called. Current items count: ${state.items.length}');
-    print('🟡 Item to add - ID: ${item.id}, photoUrl: ${item.photoUrl}, productName: ${item.productName}');
-    
+    AppLogger.debug(
+      'addItem called. Current items count: ${state.items.length}',
+    );
+    AppLogger.debug(
+      'Item to add - ID: ${item.id}, photoUrl: ${item.photoUrl}, productName: ${item.productName}',
+    );
+
     // Don't allow adding items if locked (during critical operations)
     if (_isLocked) {
-      print('🔴 addItem BLOCKED - draft is locked');
+      AppLogger.warning('addItem BLOCKED - draft is locked');
       return;
     }
-    
+
     // Check for duplicates before adding
     // Use item ID if available, otherwise use composite key
     final existingItemIds = state.items
         .where((i) => i.id != null && i.id!.isNotEmpty)
         .map((i) => i.id!)
         .toSet();
-    
+
     // If item has an ID, check if it already exists
     if (item.id != null && item.id!.isNotEmpty) {
       if (existingItemIds.contains(item.id)) {
         // Item with this ID already exists, don't add duplicate
-        print('🔴 addItem BLOCKED - duplicate ID: ${item.id}');
+        AppLogger.warning('addItem BLOCKED - duplicate ID: ${item.id}');
         return;
       }
     }
-    
+
     // For items without ID, check using composite key (include days and lineTotal for better uniqueness)
-    final itemKey = '${item.photoUrl}_${item.productName ?? ''}_${item.quantity}_${item.pricePerDay}_${item.days}_${item.lineTotal}';
+    final itemKey =
+        '${item.photoUrl}_${item.productName ?? ''}_${item.quantity}_${item.pricePerDay}_${item.days}_${item.lineTotal}';
     final existingKeys = state.items
         .where((i) => i.id == null || i.id!.isEmpty)
-        .map((i) => '${i.photoUrl}_${i.productName ?? ''}_${i.quantity}_${i.pricePerDay}_${i.days}_${i.lineTotal}')
+        .map(
+          (i) =>
+              '${i.photoUrl}_${i.productName ?? ''}_${i.quantity}_${i.pricePerDay}_${i.days}_${i.lineTotal}',
+        )
         .toSet();
-    
+
     if (existingKeys.contains(itemKey)) {
       // Duplicate item found, don't add
-      print('🔴 addItem BLOCKED - duplicate composite key: $itemKey');
+      AppLogger.warning('addItem BLOCKED - duplicate composite key: $itemKey');
       return;
     }
-    
+
     final newItems = [item, ...state.items];
     state = state.copyWith(items: newItems);
-    print('🟢 addItem SUCCESS. New items count: ${state.items.length}');
+    AppLogger.success(
+      'addItem SUCCESS. New items count: ${state.items.length}',
+    );
   }
 
   void updateItem(int index, OrderItem updatedItem) {
@@ -171,41 +181,45 @@ class OrderDraftNotifier extends StateNotifier<OrderDraftState> {
 
   void loadOrder(Order order) {
     // DEBUG: Log when loadOrder is called
-    print('🔵 loadOrder called for order: ${order.id}');
-    print('🔵 Current state items count: ${state.items.length}');
-    print('🔵 Order items count from DB: ${order.items?.length ?? 0}');
-    
+    AppLogger.debug('loadOrder called for order: ${order.id}');
+    AppLogger.debug('Current state items count: ${state.items.length}');
+    AppLogger.debug('Order items count from DB: ${order.items?.length ?? 0}');
+
     // CRITICAL: Prevent loading the same order multiple times
     // If we're already loading this order, don't load again
     if (_isLocked && _lastLoadedOrderId == order.id) {
-      print('🔴 loadOrder BLOCKED - already loading order ${order.id}');
+      AppLogger.warning(
+        'loadOrder BLOCKED - already loading order ${order.id}',
+      );
       return;
     }
-    
+
     // Lock to prevent any modifications during loading
     _isLocked = true;
     _lastLoadedOrderId = order.id;
-    
+
     try {
       // CRITICAL: First, completely clear the state to ensure we start fresh
       // This prevents any possibility of items being appended instead of replaced
       final itemsBeforeClear = state.items.length;
       state = _initialState();
-      print('🔵 Cleared state. Items before: $itemsBeforeClear, after: ${state.items.length}');
-      
+      AppLogger.debug(
+        'Cleared state. Items before: $itemsBeforeClear, after: ${state.items.length}',
+      );
+
       // Use datetime fields if available, otherwise use date fields
       final startDate = order.startDatetime ?? order.startDate;
       final endDate = order.endDatetime ?? order.endDate;
-      
+
       // CRITICAL: Remove ALL duplicates from order items
       // Use a single Map-based approach for simplicity and reliability
       final uniqueItemsMap = <String, OrderItem>{};
       final duplicateKeys = <String>[];
-      
+
       // Process ALL items and remove duplicates
       for (final item in (order.items ?? [])) {
         String key;
-        
+
         // Use item ID if available (most reliable)
         if (item.id != null && item.id!.isNotEmpty) {
           key = 'id_${item.id}';
@@ -218,31 +232,32 @@ class OrderDraftNotifier extends StateNotifier<OrderDraftState> {
           final pricePerDay = item.pricePerDay;
           final days = item.days;
           final lineTotal = item.lineTotal;
-          
+
           // Create a comprehensive key that includes all identifying information
-          key = 'key_${photoUrl}_${productName}_${quantity}_${pricePerDay}_${days}_${lineTotal}';
+          key =
+              'key_${photoUrl}_${productName}_${quantity}_${pricePerDay}_${days}_$lineTotal';
         }
-        
+
         // Only add if we haven't seen this key before
         // This ensures each item appears exactly once
         if (!uniqueItemsMap.containsKey(key)) {
           uniqueItemsMap[key] = item;
         } else {
           duplicateKeys.add(key);
-          print('🔴 DUPLICATE FOUND: $key');
+          AppLogger.warning('DUPLICATE FOUND: $key');
         }
       }
-      
-      print('🔵 Unique items map size: ${uniqueItemsMap.length}');
-      print('🔵 Duplicates found: ${duplicateKeys.length}');
+
+      AppLogger.debug('Unique items map size: ${uniqueItemsMap.length}');
+      AppLogger.debug('Duplicates found: ${duplicateKeys.length}');
       if (duplicateKeys.isNotEmpty) {
-        print('🔴 Duplicate keys: $duplicateKeys');
+        AppLogger.warning('Duplicate keys: $duplicateKeys');
       }
-      
+
       // Convert map values to list - this guarantees unique items only
       // Create a completely new list to avoid any reference issues
       final finalUniqueItems = List<OrderItem>.from(uniqueItemsMap.values);
-      
+
       // FINAL VERIFICATION: Double-check for duplicates (safety measure)
       // This catches any edge cases where duplicate detection might have failed
       final verifiedUniqueItems = <String, OrderItem>{};
@@ -252,20 +267,23 @@ class OrderDraftNotifier extends StateNotifier<OrderDraftState> {
         if (item.id != null && item.id!.isNotEmpty) {
           key = 'id_${item.id}';
         } else {
-          key = 'key_${item.photoUrl}_${item.productName ?? ''}_${item.quantity}_${item.pricePerDay}_${item.days}_${item.lineTotal}';
+          key =
+              'key_${item.photoUrl}_${item.productName ?? ''}_${item.quantity}_${item.pricePerDay}_${item.days}_${item.lineTotal}';
         }
         if (!verifiedUniqueItems.containsKey(key)) {
           verifiedUniqueItems[key] = item;
         } else {
           verificationDuplicates.add(key);
-          print('🔴 VERIFICATION DUPLICATE FOUND: $key');
+          AppLogger.warning('VERIFICATION DUPLICATE FOUND: $key');
         }
       }
       final verifiedItems = List<OrderItem>.from(verifiedUniqueItems.values);
-      
-      print('🔵 Verified items count: ${verifiedItems.length}');
-      print('🔵 Verification duplicates: ${verificationDuplicates.length}');
-      
+
+      AppLogger.debug('Verified items count: ${verifiedItems.length}');
+      AppLogger.debug(
+        'Verification duplicates: ${verificationDuplicates.length}',
+      );
+
       // IMPORTANT: Create a completely new state to replace existing state
       // This ensures items are replaced, not appended
       state = OrderDraftState(
@@ -275,11 +293,14 @@ class OrderDraftNotifier extends StateNotifier<OrderDraftState> {
         startDate: startDate,
         endDate: endDate,
         invoiceNumber: order.invoiceNumber,
-        items: verifiedItems, // This is a new list, completely replacing old items
+        items:
+            verifiedItems, // This is a new list, completely replacing old items
         securityDeposit: order.securityDeposit,
       );
-      
-      print('🟢 loadOrder COMPLETE. Final state items count: ${state.items.length}');
+
+      AppLogger.success(
+        'loadOrder COMPLETE. Final state items count: ${state.items.length}',
+      );
     } finally {
       // Always unlock after loading
       _isLocked = false;
@@ -298,8 +319,8 @@ class OrderDraftNotifier extends StateNotifier<OrderDraftState> {
 /// Order Draft Provider
 final orderDraftProvider =
     StateNotifierProvider<OrderDraftNotifier, OrderDraftState>((ref) {
-  return OrderDraftNotifier();
-});
+      return OrderDraftNotifier();
+    });
 
 /// Calculate days between two dates
 /// Normalizes dates to midnight to ensure accurate day calculation
@@ -311,11 +332,11 @@ int calculateDays(String startDate, String endDate) {
   try {
     final start = DateTime.parse(startDate);
     final end = DateTime.parse(endDate);
-    
+
     // Normalize to date only (midnight) to avoid time component issues
     final startDateOnly = DateTime(start.year, start.month, start.day);
     final endDateOnly = DateTime(end.year, end.month, end.day);
-    
+
     // Calculate difference in days
     // For rental: same day = 1 day, next day = 1 day (overnight), etc.
     // Use max(1, ...) to ensure at least 1 day for same-day rentals
@@ -339,7 +360,7 @@ double calculateGstAmount({
   required UserProfile? user,
 }) {
   if (user == null) return 0.0;
-  
+
   // Determine if GST should be applied.
   // Check gstEnabled flag first, then fall back to presence of gstRate or gstNumber
   bool gstEnabled;
@@ -347,7 +368,8 @@ double calculateGstAmount({
     gstEnabled = user.gstEnabled!;
   } else {
     // Infer from gstRate or gstNumber
-    gstEnabled = (user.gstRate != null && user.gstRate! > 0) ||
+    gstEnabled =
+        (user.gstRate != null && user.gstRate! > 0) ||
         (user.gstNumber != null && user.gstNumber!.isNotEmpty);
   }
 
@@ -371,17 +393,18 @@ double calculateGrandTotal({
   required UserProfile? user,
 }) {
   if (user == null) return subtotal;
-  
+
   // Determine if GST should be applied
   bool gstEnabled;
   if (user.gstEnabled != null) {
     gstEnabled = user.gstEnabled!;
   } else {
     // Infer from gstRate or gstNumber
-    gstEnabled = (user.gstRate != null && user.gstRate! > 0) ||
+    gstEnabled =
+        (user.gstRate != null && user.gstRate! > 0) ||
         (user.gstNumber != null && user.gstNumber!.isNotEmpty);
   }
-  
+
   if (!gstEnabled) return subtotal;
 
   final gstAmount = calculateGstAmount(subtotal: subtotal, user: user);
@@ -405,14 +428,16 @@ final superAdminProfileProvider = FutureProvider<UserProfile?>((ref) async {
         .eq('role', 'super_admin')
         .limit(1)
         .maybeSingle();
-    
+
     if (response == null) {
       AppLogger.warning('No super admin found');
       return null;
     }
-    
+
     final admin = UserProfile.fromJson(response);
-    AppLogger.info('Super admin found: ${admin.fullName}, GST enabled: ${admin.gstEnabled}, GST rate: ${admin.gstRate}');
+    AppLogger.info(
+      'Super admin found: ${admin.fullName}, GST enabled: ${admin.gstEnabled}, GST rate: ${admin.gstRate}',
+    );
     return admin;
   } catch (e) {
     AppLogger.error('Error fetching super admin profile', e);
@@ -424,7 +449,7 @@ final superAdminProfileProvider = FutureProvider<UserProfile?>((ref) async {
 final orderGstAmountProvider = Provider<double>((ref) {
   final subtotal = ref.watch(orderSubtotalProvider);
   final userProfile = ref.watch(userProfileProvider).value;
-  
+
   // If user is staff or branch admin, get super admin's GST settings
   if (userProfile?.isStaff == true || userProfile?.isBranchAdmin == true) {
     final superAdminAsync = ref.watch(superAdminProfileProvider);
@@ -447,7 +472,7 @@ final orderGstAmountProvider = Provider<double>((ref) {
       },
     );
   }
-  
+
   // For super admin, use their own GST settings
   return calculateGstAmount(subtotal: subtotal, user: userProfile);
 });
@@ -456,7 +481,7 @@ final orderGstAmountProvider = Provider<double>((ref) {
 final orderGrandTotalProvider = Provider<double>((ref) {
   final subtotal = ref.watch(orderSubtotalProvider);
   final userProfile = ref.watch(userProfileProvider).value;
-  
+
   // If user is staff or branch admin, get super admin's GST settings
   if (userProfile?.isStaff == true || userProfile?.isBranchAdmin == true) {
     final superAdminAsync = ref.watch(superAdminProfileProvider);
@@ -479,8 +504,7 @@ final orderGrandTotalProvider = Provider<double>((ref) {
       },
     );
   }
-  
+
   // For super admin, use their own GST settings
   return calculateGrandTotal(subtotal: subtotal, user: userProfile);
 });
-

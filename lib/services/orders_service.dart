@@ -544,12 +544,12 @@ class OrdersService {
     await _supabase.from('orders').update(updateData).eq('id', orderId);
 
     // DEBUG: Log items being sent to update
-    print('🟠 updateOrder called for order: $orderId');
-    print('🟠 Items count received: ${items.length}');
+    AppLogger.debug('updateOrder called for order: $orderId');
+    AppLogger.debug('Items count received: ${items.length}');
 
     // CRITICAL: First, remove duplicates from incoming items
     // This ensures we don't process duplicates
-    print('🟠 Removing duplicates from incoming items...');
+    AppLogger.debug('Removing duplicates from incoming items...');
     final seenItemKeys = <String>{};
     final deduplicatedItems = <Map<String, dynamic>>[];
 
@@ -569,15 +569,17 @@ class OrdersService {
       }
     }
 
-    print('🟠 Items before deduplication: ${items.length}');
-    print('🟠 Items after deduplication: ${deduplicatedItems.length}');
+    AppLogger.debug('Items before deduplication: ${items.length}');
+    AppLogger.debug('Items after deduplication: ${deduplicatedItems.length}');
 
     // Use deduplicated items for the rest of the process
     final processedItems = deduplicatedItems;
 
     // CRITICAL: Use UPDATE/UPSERT approach instead of DELETE+INSERT
     // This avoids RLS policy issues with deletes
-    print('🟠 Updating order items using upsert approach for order: $orderId');
+    AppLogger.debug(
+      'Updating order items using upsert approach for order: $orderId',
+    );
 
     // Get existing items to compare
     final existingItemsResponse = await _supabase
@@ -589,7 +591,7 @@ class OrdersService {
     final existingItems = (existingItemsResponse as List)
         .cast<Map<String, dynamic>>();
     final existingItemsCount = existingItems.length;
-    print('🟠 Existing items count: $existingItemsCount');
+    AppLogger.debug('Existing items count: $existingItemsCount');
 
     // Create maps for different lookup strategies
     // 1. Map by ID (for items that have IDs - most reliable)
@@ -621,7 +623,7 @@ class OrdersService {
     final existingItemIdsToKeep = <String>{};
     final processedItemIds = <String>{};
 
-    print('🟠 Processing ${processedItems.length} unique items...');
+    AppLogger.debug('Processing ${processedItems.length} unique items...');
     for (final item in processedItems) {
       // CRITICAL: Check if item has an ID first (from frontend)
       // If it has an ID, try to match by ID (even if properties changed)
@@ -635,7 +637,7 @@ class OrdersService {
         // Item has ID and exists in database - update it (even if properties changed)
         existingItem = existingItemsById[itemId];
         matchedItemId = itemId;
-        print('🟢 Matching item by ID: $itemId');
+        AppLogger.debug('Matching item by ID: $itemId');
       } else {
         // No ID or ID doesn't match - try matching by composite key
         final photoUrl = item['photo_url'] as String? ?? '';
@@ -650,7 +652,7 @@ class OrdersService {
         if (existingItemsByKey.containsKey(key)) {
           existingItem = existingItemsByKey[key];
           matchedItemId = existingItem!['id'] as String?;
-          print('🟢 Matching item by composite key: $key');
+          AppLogger.debug('Matching item by composite key: $key');
         }
       }
 
@@ -684,9 +686,9 @@ class OrdersService {
                 .update(updateData)
                 .eq('id', matchedItemId);
             itemsToUpdate.add(item);
-            print('🟢 Updated item $matchedItemId');
+            AppLogger.success('Updated item $matchedItemId');
           } catch (e) {
-            print('🔴 Error updating item $matchedItemId: $e');
+            AppLogger.error('Error updating item $matchedItemId', e);
             // If update fails, try insert instead
             final itemData = Map<String, dynamic>.from(item);
             itemData.remove('id'); // Remove ID for new insert
@@ -694,8 +696,8 @@ class OrdersService {
             itemsToInsert.add(itemData);
           }
         } else {
-          print(
-            '🟡 Skipping duplicate item (already processed): $matchedItemId',
+          AppLogger.info(
+            'Skipping duplicate item (already processed): $matchedItemId',
           );
         }
       } else {
@@ -704,18 +706,18 @@ class OrdersService {
         itemData.remove('id'); // Remove ID for new insert
         itemData['order_id'] = orderId;
         itemsToInsert.add(itemData);
-        print('🟢 New item to insert');
+        AppLogger.debug('New item to insert');
       }
     }
 
-    print('🟠 Items to update: ${itemsToUpdate.length}');
-    print('🟠 Items to insert: ${itemsToInsert.length}');
+    AppLogger.debug('Items to update: ${itemsToUpdate.length}');
+    AppLogger.debug('Items to insert: ${itemsToInsert.length}');
 
     // Insert new items
     if (itemsToInsert.isNotEmpty) {
-      print('🟠 Inserting ${itemsToInsert.length} new items...');
+      AppLogger.debug('Inserting ${itemsToInsert.length} new items...');
       await _supabase.from('order_items').insert(itemsToInsert);
-      print('🟢 New items inserted');
+      AppLogger.success('New items inserted');
     }
 
     // Delete items that no longer exist in the new list
@@ -725,10 +727,10 @@ class OrdersService {
         .toList();
 
     if (itemsToDelete.isNotEmpty) {
-      print(
-        '🟠 Deleting ${itemsToDelete.length} items that are no longer needed...',
+      AppLogger.debug(
+        'Deleting ${itemsToDelete.length} items that are no longer needed...',
       );
-      print('🟠 Item IDs to delete: $itemsToDelete');
+      AppLogger.debug('Item IDs to delete: $itemsToDelete');
 
       // CRITICAL FIX: Use RPC function to bypass RLS policies
       // The delete_order_items function uses SECURITY DEFINER to bypass RLS
@@ -738,17 +740,19 @@ class OrdersService {
           params: {'p_order_id': orderId, 'p_item_ids': itemsToDelete},
         );
 
-        print('🟠 RPC delete_order_items result: $result');
+        AppLogger.debug('RPC delete_order_items result: $result');
 
         if (result != null && result['success'] == true) {
-          print(
-            '🟢 Successfully deleted ${result['deleted_count']} items via RPC',
+          AppLogger.success(
+            'Successfully deleted ${result['deleted_count']} items via RPC',
           );
         } else {
-          print('🔴 RPC delete failed: ${result?['error'] ?? 'Unknown error'}');
+          AppLogger.error(
+            'RPC delete failed: ${result?['error'] ?? 'Unknown error'}',
+          );
 
           // Fallback: Try direct delete (may fail due to RLS)
-          print('🟡 Attempting fallback direct delete...');
+          AppLogger.info('Attempting fallback direct delete...');
           for (final itemId in itemsToDelete) {
             try {
               await _supabase
@@ -756,19 +760,19 @@ class OrdersService {
                   .delete()
                   .eq('id', itemId)
                   .eq('order_id', orderId);
-              print('� Direct delete executed for item $itemId');
+              AppLogger.debug('Direct delete executed for item $itemId');
             } catch (e) {
-              print('🔴 Direct delete failed for item $itemId: $e');
+              AppLogger.error('Direct delete failed for item $itemId', e);
             }
           }
         }
       } catch (e) {
-        print('🔴 RPC call failed: $e');
-        print(
-          '🟡 This likely means the RPC function is not yet created in Supabase',
+        AppLogger.error('RPC call failed', e);
+        AppLogger.info(
+          'This likely means the RPC function is not yet created in Supabase',
         );
-        print(
-          '� Please run the SQL from supabase/migrations/supabase_delete_order_items.sql in Supabase SQL Editor',
+        AppLogger.info(
+          'Please run the SQL from supabase/migrations/supabase_delete_order_items.sql in Supabase SQL Editor',
         );
 
         // Fallback: Try direct delete (may fail due to RLS)
@@ -779,9 +783,9 @@ class OrdersService {
                 .delete()
                 .eq('id', itemId)
                 .eq('order_id', orderId);
-            print('🟡 Direct delete attempted for item $itemId');
+            AppLogger.info('Direct delete attempted for item $itemId');
           } catch (e2) {
-            print('🔴 Direct delete also failed for item $itemId: $e2');
+            AppLogger.error('Direct delete also failed for item $itemId', e2);
           }
         }
       }
@@ -795,16 +799,18 @@ class OrdersService {
 
       final remainingCount = (remainingItems as List).length;
       if (remainingCount == 0) {
-        print('🟢 All ${itemsToDelete.length} items successfully deleted');
+        AppLogger.success(
+          'All ${itemsToDelete.length} items successfully deleted',
+        );
       } else {
-        print(
-          '🔴 DELETION FAILED: $remainingCount/${itemsToDelete.length} items still exist in database',
+        AppLogger.error(
+          'DELETION FAILED: $remainingCount/${itemsToDelete.length} items still exist in database',
         );
-        print(
-          '🔴 Remaining item IDs: ${remainingItems.map((i) => i['id']).toList()}',
+        AppLogger.error(
+          'Remaining item IDs: ${remainingItems.map((i) => i['id']).toList()}',
         );
-        print(
-          '🔴 Please run the SQL from supabase/migrations/supabase/migrations/supabase_delete_order_items.sql in Supabase SQL Editor',
+        AppLogger.error(
+          'Please run the SQL from supabase/migrations/supabase_delete_order_items.sql in Supabase SQL Editor',
         );
       }
     }
@@ -816,22 +822,22 @@ class OrdersService {
         .select('id')
         .eq('order_id', orderId);
     final finalItemsCount = (finalItems as List).length;
-    print('🟠 Final items count: $finalItemsCount');
-    print('🟠 Expected items count: ${processedItems.length}');
+    AppLogger.debug('Final items count: $finalItemsCount');
+    AppLogger.debug('Expected items count: ${processedItems.length}');
 
     if (finalItemsCount > processedItems.length) {
-      print(
-        '🟡 WARNING: More items than expected (some deletions may have failed due to RLS)',
+      AppLogger.warning(
+        'More items than expected (some deletions may have failed due to RLS)',
       );
-      print(
-        '🟡 This is acceptable - the extra items will be cleaned up on next update',
+      AppLogger.info(
+        'This is acceptable - the extra items will be cleaned up on next update',
       );
     } else if (finalItemsCount < processedItems.length) {
-      print(
-        '🟡 WARNING: Fewer items than expected - some inserts may have failed',
+      AppLogger.warning(
+        'Fewer items than expected - some inserts may have failed',
       );
     } else {
-      print('🟢 SUCCESS: Item count matches expected count');
+      AppLogger.success('Item count matches expected count');
     }
 
     // Return updated order
@@ -841,8 +847,8 @@ class OrdersService {
     }
 
     if (updatedOrder.items != null) {
-      print(
-        '🟠 Final order items count from getOrder: ${updatedOrder.items!.length}',
+      AppLogger.debug(
+        'Final order items count from getOrder: ${updatedOrder.items!.length}',
       );
     }
 

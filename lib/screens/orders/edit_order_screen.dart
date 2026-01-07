@@ -12,6 +12,7 @@ import '../../widgets/orders/order_datetime_widget.dart';
 import '../../widgets/orders/order_items_widget.dart';
 import '../../widgets/orders/order_summary_widget.dart';
 import '../../models/user_profile.dart';
+import '../../core/logger.dart';
 
 /// Edit Order Screen
 ///
@@ -98,29 +99,29 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
   }
 
   Future<void> _initializeFromOrder() async {
-    print('🟣 _initializeFromOrder called for order: ${widget.orderId}');
-    print(
-      '🟣 _isInitialized: $_isInitialized, _isInitializing: $_isInitializing',
+    AppLogger.debug('_initializeFromOrder called for order: ${widget.orderId}');
+    AppLogger.debug(
+      '_isInitialized: $_isInitialized, _isInitializing: $_isInitializing',
     );
-    print('🟣 _lastLoadedOrderId: $_lastLoadedOrderId');
+    AppLogger.debug('_lastLoadedOrderId: $_lastLoadedOrderId');
 
     // CRITICAL: Prevent multiple calls with multiple checks
     if (_isInitialized || _isInitializing) {
-      print(
-        '🔴 _initializeFromOrder BLOCKED - already initialized or initializing',
+      AppLogger.warning(
+        '_initializeFromOrder BLOCKED - already initialized or initializing',
       );
       return;
     }
 
     // Check if we've already loaded this order
     if (_lastLoadedOrderId == widget.orderId && _isInitialized) {
-      print('🔴 _initializeFromOrder BLOCKED - order already loaded');
+      AppLogger.warning('_initializeFromOrder BLOCKED - order already loaded');
       return;
     }
 
     // Set flag immediately to prevent concurrent calls
     _isInitializing = true;
-    print('🟣 _initializeFromOrder proceeding...');
+    AppLogger.debug('_initializeFromOrder proceeding...');
 
     // CRITICAL: Clear draft FIRST to ensure completely clean state
     // This prevents any items from previous sessions or partial loads
@@ -186,7 +187,9 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
         final draftCheckBeforeLoad = ref.read(orderDraftProvider);
         if (draftCheckBeforeLoad.items.isNotEmpty) {
           // Draft still has items - clear again
-          print('🟡 Draft still has items before load, clearing again...');
+          AppLogger.info(
+            'Draft still has items before load, clearing again...',
+          );
           ref.read(orderDraftProvider.notifier).clear();
           await Future.microtask(() {});
         }
@@ -197,12 +200,12 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
         // This prevents loadOrder from being called multiple times
         _lastLoadedOrderId = widget.orderId;
 
-        print(
-          '🟣 About to call loadOrder. Order items count: ${order.items?.length ?? 0}',
+        AppLogger.debug(
+          'About to call loadOrder. Order items count: ${order.items?.length ?? 0}',
         );
         final draftStateBeforeLoad = ref.read(orderDraftProvider);
-        print(
-          '🟣 Draft items count before loadOrder: ${draftStateBeforeLoad.items.length}',
+        AppLogger.debug(
+          'Draft items count before loadOrder: ${draftStateBeforeLoad.items.length}',
         );
 
         // Load order - this will replace all items
@@ -212,21 +215,21 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
         await Future.microtask(() {});
 
         final draftAfterLoad = ref.read(orderDraftProvider);
-        print(
-          '🟣 Draft items count after loadOrder: ${draftAfterLoad.items.length}',
+        AppLogger.debug(
+          'Draft items count after loadOrder: ${draftAfterLoad.items.length}',
         );
-        print('🟣 Order items from DB: ${order.items?.length ?? 0}');
+        AppLogger.debug('Order items from DB: ${order.items?.length ?? 0}');
 
         if (draftAfterLoad.items.length > (order.items?.length ?? 0)) {
-          print(
-            '🔴 WARNING: Draft has MORE items than order! This indicates a problem.',
+          AppLogger.warning(
+            'Draft has MORE items than order! This indicates a problem.',
           );
         } else if (draftAfterLoad.items.length < (order.items?.length ?? 0)) {
-          print(
-            '🟡 INFO: Draft has fewer items than order (duplicates were removed)',
+          AppLogger.info(
+            'Draft has fewer items than order (duplicates were removed)',
           );
         } else {
-          print('🟢 SUCCESS: Draft items count matches order items count');
+          AppLogger.success('Draft items count matches order items count');
         }
 
         // Set customer
@@ -256,17 +259,19 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
   }
 
   Future<void> _handleUpdateOrder() async {
-    print('🟠 _handleUpdateOrder called for order: ${widget.orderId}');
+    AppLogger.debug('_handleUpdateOrder called for order: ${widget.orderId}');
 
     // CRITICAL: Get a snapshot of the draft IMMEDIATELY to prevent any changes during update
     // This ensures we're working with a fixed set of items
     final draft = ref.read(orderDraftProvider);
-    print('🟠 Draft items count: ${draft.items.length}');
+    AppLogger.debug('Draft items count: ${draft.items.length}');
 
     // CRITICAL: First, remove any duplicates that might already exist in the draft
     // This is a safety measure in case duplicates somehow got into the draft
     final draftItemsBeforeDedup = draft.items;
-    print('🟠 Draft items before dedup: ${draftItemsBeforeDedup.length}');
+    AppLogger.debug(
+      'Draft items before dedup: ${draftItemsBeforeDedup.length}',
+    );
 
     // Use comprehensive key that matches what we use in loadOrder and updateOrder
     final deduplicatedDraftItems = <String, OrderItem>{};
@@ -288,17 +293,17 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
         deduplicatedDraftItems[key] = item;
       } else {
         foundDuplicates.add(key);
-        print('🔴 DUPLICATE FOUND in draft: $key');
+        AppLogger.warning('DUPLICATE FOUND in draft: $key');
       }
     }
 
     // Use the deduplicated items as our starting point
     final cleanDraftItems = List<OrderItem>.from(deduplicatedDraftItems.values);
-    print('🟠 Draft items after dedup: ${cleanDraftItems.length}');
-    print('🟠 Duplicates found in draft: ${foundDuplicates.length}');
+    AppLogger.debug('Draft items after dedup: ${cleanDraftItems.length}');
+    AppLogger.debug('Duplicates found in draft: ${foundDuplicates.length}');
     if (draftItemsBeforeDedup.length != cleanDraftItems.length) {
-      print(
-        '🔴 DUPLICATES FOUND in draft before update! Removed ${draftItemsBeforeDedup.length - cleanDraftItems.length} duplicates',
+      AppLogger.warning(
+        'DUPLICATES FOUND in draft before update! Removed ${draftItemsBeforeDedup.length - cleanDraftItems.length} duplicates',
       );
     }
 
@@ -445,8 +450,8 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
 
       // FINAL VERIFICATION: Ensure we have unique items
       // Double-check by creating another map to catch any edge cases
-      print(
-        '🟠 First deduplication: ${draftItemsSnapshot.length} -> ${uniqueItems.length}',
+      AppLogger.debug(
+        'First deduplication: ${draftItemsSnapshot.length} -> ${uniqueItems.length}',
       );
       final finalUniqueItemsMap = <String, OrderItem>{};
       final verificationDuplicates = <String>[];
@@ -462,14 +467,16 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
           finalUniqueItemsMap[key] = item;
         } else {
           verificationDuplicates.add(key);
-          print('🔴 VERIFICATION DUPLICATE in update: $key');
+          AppLogger.warning('VERIFICATION DUPLICATE in update: $key');
         }
       }
       final finalUniqueItems = List<OrderItem>.from(finalUniqueItemsMap.values);
-      print(
-        '🟠 Final unique items after verification: ${finalUniqueItems.length}',
+      AppLogger.debug(
+        'Final unique items after verification: ${finalUniqueItems.length}',
       );
-      print('🟠 Verification duplicates: ${verificationDuplicates.length}');
+      AppLogger.debug(
+        'Verification duplicates: ${verificationDuplicates.length}',
+      );
 
       final itemsForDb = finalUniqueItems.map((item) {
         // Update days for each item based on start/end dates
@@ -501,8 +508,8 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
       final subtotal = itemsForDb.fold<double>(0.0, (sum, item) {
         return sum + (item['line_total'] as double);
       });
-      print(
-        '🟠 Calculated subtotal from ${finalUniqueItems.length} items: $subtotal',
+      AppLogger.debug(
+        'Calculated subtotal from ${finalUniqueItems.length} items: $subtotal',
       );
 
       final gstAmount = calculateGstAmount(
@@ -513,12 +520,14 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
         subtotal: subtotal,
         user: gstProfile,
       );
-      print('🟠 GST: $gstAmount, Grand Total: $grandTotal');
+      AppLogger.debug('GST: $gstAmount, Grand Total: $grandTotal');
 
       // Update order
-      print('🟠 Sending ${itemsForDb.length} items to updateOrder service');
-      print(
-        '🟠 Items for DB: ${itemsForDb.map((i) => '${i['photo_url']}_${i['product_name']}_${i['quantity']}_${i['price_per_day']}_${i['days']}').join(", ")}',
+      AppLogger.debug(
+        'Sending ${itemsForDb.length} items to updateOrder service',
+      );
+      AppLogger.debug(
+        'Items for DB: ${itemsForDb.map((i) => '${i['photo_url']}_${i['product_name']}_${i['quantity']}_${i['price_per_day']}_${i['days']}').join(", ")}',
       );
 
       await ordersService.updateOrder(
@@ -536,7 +545,7 @@ class _EditOrderScreenState extends ConsumerState<EditOrderScreen> {
         items: itemsForDb,
       );
 
-      print('🟢 updateOrder service call completed');
+      AppLogger.success('updateOrder service call completed');
 
       // CRITICAL: Clear draft IMMEDIATELY after successful update
       // This prevents any chance of items being reused or duplicated
