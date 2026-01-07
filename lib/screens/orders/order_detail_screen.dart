@@ -44,17 +44,23 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   DateTime _parseDateTimeWithTimezone(String dateString) {
     try {
       final trimmed = dateString.trim();
-      final hasTimezone = trimmed.endsWith('Z') || 
-                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
-      
+      final hasTimezone =
+          trimmed.endsWith('Z') ||
+          RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+
       if (hasTimezone) {
         return DateTime.parse(trimmed).toLocal();
       } else {
         final parsed = DateTime.parse(trimmed);
         final utcDate = DateTime.utc(
-          parsed.year, parsed.month, parsed.day,
-          parsed.hour, parsed.minute, parsed.second, 
-          parsed.millisecond, parsed.microsecond
+          parsed.year,
+          parsed.month,
+          parsed.day,
+          parsed.hour,
+          parsed.minute,
+          parsed.second,
+          parsed.millisecond,
+          parsed.microsecond,
         );
         return utcDate.toLocal();
       }
@@ -672,25 +678,33 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         if (isChecked) {
           // Item is checked - either being returned or updating damage info
           final currentReturnedQty = item.returnedQuantity ?? 0;
-          
+
           // Check if there are changes or if item is already returned
-          final hasQtyChange = returnedQty != null && returnedQty != currentReturnedQty && returnedQty > 0;
+          final hasQtyChange =
+              returnedQty != null &&
+              returnedQty != currentReturnedQty &&
+              returnedQty > 0;
           final hasDamageCost = damageCost != null;
-          final hasDamageDesc = damageDesc != null && damageDesc.trim().isNotEmpty;
-          
+          final hasDamageDesc =
+              damageDesc != null && damageDesc.trim().isNotEmpty;
+
           // Include item if: quantity change, damage info provided, or already returned
-          if (hasQtyChange || hasDamageCost || hasDamageDesc || currentReturnedQty > 0) {
+          if (hasQtyChange ||
+              hasDamageCost ||
+              hasDamageDesc ||
+              currentReturnedQty > 0) {
             // Use entered quantity if specified, otherwise use current returned quantity
             final qtyToUse = returnedQty ?? currentReturnedQty;
-            
+
             // Only validate quantity if user is changing it
             bool shouldInclude = true;
             if (returnedQty != null && returnedQty != currentReturnedQty) {
               final pendingQty = item.quantity - currentReturnedQty;
               shouldInclude = returnedQty <= pendingQty;
             }
-            
-            if (shouldInclude && (qtyToUse > 0 || hasDamageCost || hasDamageDesc)) {
+
+            if (shouldInclude &&
+                (qtyToUse > 0 || hasDamageCost || hasDamageDesc)) {
               // Create item return with damage info
               itemReturns.add(
                 ItemReturn(
@@ -698,16 +712,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                   returnStatus: qtyToUse >= item.quantity
                       ? 'returned'
                       : 'returned',
-                  actualReturnDate: hasQtyChange && (returnedQty ?? 0) > currentReturnedQty
-                      ? DateTime.now() 
+                  actualReturnDate:
+                      hasQtyChange && (returnedQty ?? 0) > currentReturnedQty
+                      ? DateTime.now()
                       : null, // Don't update return date if quantity unchanged
                   returnedQuantity: hasQtyChange
-                      ? returnedQty 
+                      ? returnedQty
                       : null, // Only include if quantity changed
                   damageCost: damageCost,
-                  description: hasDamageDesc
-                      ? damageDesc!.trim()
-                      : null,
+                  description: hasDamageDesc ? damageDesc!.trim() : null,
                 ),
               );
             }
@@ -729,7 +742,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       // Parse late fee and discount (matching website logic)
       double lateFee = 0.0;
       double? discount;
-      
+
       final lateFeeText = _lateFeeController.text.trim();
       if (lateFeeText.isNotEmpty) {
         try {
@@ -775,7 +788,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
 
       // Process order return with late fee and discount together (matching website logic)
       // If no item returns but late fee or discount changed, still call processOrderReturn
-      if (itemReturns.isNotEmpty || (lateFee != (order.lateFee ?? 0)) || (discount != null && discount != (order.discountAmount ?? 0))) {
+      if (itemReturns.isNotEmpty ||
+          (lateFee != (order.lateFee ?? 0)) ||
+          (discount != null && discount != (order.discountAmount ?? 0))) {
         await ordersService.processOrderReturn(
           orderId: widget.orderId,
           itemReturns: itemReturns,
@@ -913,11 +928,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
             // Don't clear if user has entered a value
           }
         }
-        
+
         // Initialize discount controller
         if (order.discountAmount != null && order.discountAmount! > 0) {
           if (_discountController.text.isEmpty ||
-              _discountController.text != order.discountAmount!.toStringAsFixed(2)) {
+              _discountController.text !=
+                  order.discountAmount!.toStringAsFixed(2)) {
             _discountController.text = order.discountAmount!.toStringAsFixed(2);
           }
         } else {
@@ -941,678 +957,441 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
             icon: const Icon(Icons.arrow_back, color: Color(0xFF0F1724)),
             onPressed: () => context.pop(),
           ),
-        title: const Text(
-          'Order Details',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF0F1724),
+          title: const Text(
+            'Order Details',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F1724),
+            ),
           ),
-        ),
-        actions: [
-          // Refresh button to manually refresh order data
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Color(0xFF0F1724)),
-            onPressed: () async {
-              // Force refresh order data from database
-              await _refreshOrder();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Order data refreshed'),
-                    duration: Duration(seconds: 1),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-            },
-            tooltip: 'Refresh Order',
-          ),
-          orderAsync.when(
-            data: (order) {
-              if (order != null) {
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Start Rental button for scheduled orders
-                    if (order.isScheduled)
-                      IconButton(
+          actions: [
+            // Refresh button to manually refresh order data
+            IconButton(
+              icon: const Icon(Icons.refresh, color: Color(0xFF0F1724)),
+              onPressed: () async {
+                // Force refresh order data from database
+                await _refreshOrder();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Order data refreshed'),
+                      duration: Duration(seconds: 1),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              },
+              tooltip: 'Refresh Order',
+            ),
+            orderAsync.when(
+              data: (order) {
+                if (order != null) {
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Start Rental button for scheduled orders
+                      if (order.isScheduled)
+                        IconButton(
+                          icon: const Icon(
+                            Icons.play_arrow,
+                            color: Colors.orange,
+                          ),
+                          onPressed: _isUpdating
+                              ? null
+                              : () => _handleStartRental(order),
+                          tooltip: 'Start Rental',
+                        ),
+                      // Invoice Actions Menu
+                      PopupMenuButton<String>(
                         icon: const Icon(
-                          Icons.play_arrow,
-                          color: Colors.orange,
+                          Icons.more_vert,
+                          color: Color(0xFF0F1724),
                         ),
-                        onPressed: _isUpdating
-                            ? null
-                            : () => _handleStartRental(order),
-                        tooltip: 'Start Rental',
+                        onSelected: (value) =>
+                            _handleInvoiceAction(value, order),
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'view',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.visibility_outlined,
+                                  size: 20,
+                                  color: Color(0xFF0F1724),
+                                ),
+                                SizedBox(width: 12),
+                                Text('View Invoice'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'share',
+                            child: Row(
+                              children: [
+                                FaIcon(
+                                  FontAwesomeIcons.whatsapp,
+                                  size: 18,
+                                  color: Colors.green,
+                                ),
+                                SizedBox(width: 12),
+                                Text('Share on WhatsApp'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'download',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.download_outlined,
+                                  size: 20,
+                                  color: Color(0xFF0F1724),
+                                ),
+                                SizedBox(width: 12),
+                                Text('Download PDF'),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    // Invoice Actions Menu
-                    PopupMenuButton<String>(
-                      icon: const Icon(
-                        Icons.more_vert,
-                        color: Color(0xFF0F1724),
+                    ],
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+              loading: () => const SizedBox.shrink(),
+              error: (_, __) => const SizedBox.shrink(),
+            ),
+          ],
+        ),
+        body: orderAsync.when(
+          data: (order) {
+            if (order == null) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      size: 64,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Order not found',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.grey.shade700,
                       ),
-                      onSelected: (value) => _handleInvoiceAction(value, order),
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'view',
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.visibility_outlined,
-                                size: 20,
-                                color: Color(0xFF0F1724),
-                              ),
-                              SizedBox(width: 12),
-                              Text('View Invoice'),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'share',
-                          child: Row(
-                            children: [
-                              FaIcon(
-                                FontAwesomeIcons.whatsapp,
-                                size: 18,
-                                color: Colors.green,
-                              ),
-                              SizedBox(width: 12),
-                              Text('Share on WhatsApp'),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'download',
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.download_outlined,
-                                size: 20,
-                                color: Color(0xFF0F1724),
-                              ),
-                              SizedBox(width: 12),
-                              Text('Download PDF'),
-                            ],
-                          ),
-                        ),
-                      ],
                     ),
                   ],
-                );
-              }
-              return const SizedBox.shrink();
-            },
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-          ),
-        ],
-      ),
-      body: orderAsync.when(
-        data: (order) {
-          if (order == null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 64,
-                    color: Colors.grey.shade400,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Order not found',
-                    style: TextStyle(fontSize: 18, color: Colors.grey.shade700),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          final category = _getOrderCategory(order);
-          final categoryColor = _getCategoryColor(category);
-          final categoryText = _getCategoryText(category);
-          final dateInfo = _getDateInfo(order);
-          // Show return button if order has pending items to return (not scheduled, completed, cancelled, or flagged)
-          final canMarkReturned =
-              !order.isScheduled &&
-              !order.isCompleted &&
-              !order.isCancelled &&
-              !order.isFlagged &&
-              order.hasPendingReturnItems;
-          final canStartRental = order.isScheduled;
-          final canCancel = order.canCancel();
-          final canEdit = order.canEdit;
-
-          // Calculate bottom padding based on number of buttons
-          // For scheduled orders with Start Rental and Edit, they're in one row (count as 1)
-          int buttonCount = 0;
-          if (canMarkReturned) buttonCount++;
-          if (order.isScheduled && canStartRental && canEdit) {
-            // Start Rental and Edit are in one row, count as 1
-            buttonCount++;
-          } else {
-            if (canStartRental) buttonCount++;
-            if (canEdit) buttonCount++;
-          }
-          if (canCancel) buttonCount++;
-
-          // Calculate bottom padding to ensure pricing breakdown is fully visible
-          // Button height: ~56px each, spacing: 8px between buttons, container padding: 32px (16 top + 16 bottom)
-          // SafeArea bottom padding: ~34px, plus extra buffer: 20px
-          final bottomPadding = buttonCount > 0
-              ? (buttonCount * 56.0) +
-                    ((buttonCount - 1) * 8.0) +
-                    32.0 +
-                    34.0 +
-                    20.0
-              : 16.0;
-
-          // Scroll to items section if requested
-          if (widget.scrollToItems) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _scrollToItemsSection();
-            });
-          }
-
-          return Stack(
-            children: [
-              SingleChildScrollView(
-                controller: _scrollController,
-                padding: EdgeInsets.only(
-                  left: 16,
-                  right: 16,
-                  top: 16,
-                  bottom: bottomPadding,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header Card with Status and Invoice
-                    Card(
-                      elevation: 0,
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(
-                          color: category == _OrderCategory.late
-                              ? Colors.red.shade200
-                              : category == _OrderCategory.flagged
-                              ? Colors.purple.shade200
-                              : Colors.grey.shade200,
-                          width:
-                              (category == _OrderCategory.late ||
-                                  category == _OrderCategory.flagged)
-                              ? 1.5
-                              : 1,
+              );
+            }
+
+            final category = _getOrderCategory(order);
+            final categoryColor = _getCategoryColor(category);
+            final categoryText = _getCategoryText(category);
+            final dateInfo = _getDateInfo(order);
+            // Show return button if order has pending items to return (not scheduled, completed, cancelled, or flagged)
+            final canMarkReturned =
+                !order.isScheduled &&
+                !order.isCompleted &&
+                !order.isCancelled &&
+                !order.isFlagged &&
+                order.hasPendingReturnItems;
+            final canStartRental = order.isScheduled;
+            final canCancel = order.canCancel();
+            final canEdit = order.canEdit;
+
+            // Calculate bottom padding based on number of buttons
+            // For scheduled orders with Start Rental and Edit, they're in one row (count as 1)
+            int buttonCount = 0;
+            if (canMarkReturned) buttonCount++;
+            if (order.isScheduled && canStartRental && canEdit) {
+              // Start Rental and Edit are in one row, count as 1
+              buttonCount++;
+            } else {
+              if (canStartRental) buttonCount++;
+              if (canEdit) buttonCount++;
+            }
+            if (canCancel) buttonCount++;
+
+            // Calculate bottom padding to ensure pricing breakdown is fully visible
+            // Button height: ~56px each, spacing: 8px between buttons, container padding: 32px (16 top + 16 bottom)
+            // SafeArea bottom padding: ~34px, plus extra buffer: 20px
+            final bottomPadding = buttonCount > 0
+                ? (buttonCount * 56.0) +
+                      ((buttonCount - 1) * 8.0) +
+                      32.0 +
+                      34.0 +
+                      20.0
+                : 16.0;
+
+            // Scroll to items section if requested
+            if (widget.scrollToItems) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _scrollToItemsSection();
+              });
+            }
+
+            return Stack(
+              children: [
+                SingleChildScrollView(
+                  controller: _scrollController,
+                  padding: EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    top: 16,
+                    bottom: bottomPadding,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header Card with Status and Invoice
+                      Card(
+                        elevation: 0,
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(
+                            color: category == _OrderCategory.late
+                                ? Colors.red.shade200
+                                : category == _OrderCategory.flagged
+                                ? Colors.purple.shade200
+                                : Colors.grey.shade200,
+                            width:
+                                (category == _OrderCategory.late ||
+                                    category == _OrderCategory.flagged)
+                                ? 1.5
+                                : 1,
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: categoryColor.withValues(
+                                              alpha: 0.12,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            border: Border.all(
+                                              color: categoryColor.withValues(
+                                                alpha: 0.3,
+                                              ),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.circle,
+                                                size: 8,
+                                                color: categoryColor,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                categoryText,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: categoryColor,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          'Invoice #${order.invoiceNumber}',
+                                          style: const TextStyle(
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF0F1724),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        if (order.bookingDate != null) ...[
+                                          Text(
+                                            'Booking Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(_parseDateTimeWithTimezone(order.bookingDate!))}',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                        ],
+                                        Text(
+                                          'Created ${DateFormat('dd MMM yyyy, hh:mm a').format(order.createdAt)}',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Builder(
+                                    builder: (context) {
+                                      // Calculate grand total to match summary
+                                      final userProfile = ref
+                                          .watch(userProfileProvider)
+                                          .value;
+                                      final grandTotal = order
+                                          .calculateGrandTotal(
+                                            userProfile: userProfile,
+                                          );
+
+                                      return Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            'Total Amount',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey.shade600,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '₹${NumberFormat('#,##0.00').format(grandTotal)}',
+                                            style: const TextStyle(
+                                              fontSize: 28,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.green,
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      const SizedBox(height: 16),
+
+                      // Customer Card (moved to top)
+                      Card(
+                        elevation: 0,
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: order.customer != null
+                              ? () => context.push(
+                                  '/customers/${order.customer!.id}',
+                                )
+                              : null,
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Row(
                               children: [
+                                CircleAvatar(
+                                  radius: 28,
+                                  backgroundColor: Colors.purple.shade100,
+                                  child: Icon(
+                                    Icons.person,
+                                    color: Colors.purple.shade600,
+                                    size: 28,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: categoryColor.withValues(
-                                            alpha: 0.12,
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.person_outline,
+                                            size: 16,
+                                            color: Colors.purple.shade600,
                                           ),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                          border: Border.all(
-                                            color: categoryColor.withValues(
-                                              alpha: 0.3,
+                                          const SizedBox(width: 6),
+                                          const Text(
+                                            'Customer',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF0F1724),
                                             ),
                                           ),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.circle,
-                                              size: 8,
-                                              color: categoryColor,
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              categoryText,
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: categoryColor,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                                        ],
                                       ),
-                                      const SizedBox(height: 12),
+                                      const SizedBox(height: 6),
                                       Text(
-                                        'Invoice #${order.invoiceNumber}',
+                                        order.customer?.name ?? 'Unknown',
                                         style: const TextStyle(
-                                          fontSize: 24,
+                                          fontSize: 18,
                                           fontWeight: FontWeight.bold,
                                           color: Color(0xFF0F1724),
                                         ),
                                       ),
-                                      const SizedBox(height: 4),
-                                      if (order.bookingDate != null) ...[
-                                        Text(
-                                          'Booking Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(_parseDateTimeWithTimezone(order.bookingDate!))}',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: Colors.grey.shade600,
-                                          ),
-                                        ),
+                                      if (order.customer?.phone != null) ...[
                                         const SizedBox(height: 4),
-                                      ],
-                                      Text(
-                                        'Created ${DateFormat('dd MMM yyyy, hh:mm a').format(order.createdAt)}',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.grey.shade600,
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.phone_outlined,
+                                              size: 14,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              order.customer?.phone ?? '',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.grey.shade700,
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                      ),
+                                      ],
                                     ],
                                   ),
                                 ),
-                                Builder(
-                                  builder: (context) {
-                                    // Calculate grand total to match summary
-                                    final userProfile = ref.watch(userProfileProvider).value;
-                                    final grandTotal = order.calculateGrandTotal(userProfile: userProfile);
-                                    
-                                    return Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          'Total Amount',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey.shade600,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '₹${NumberFormat('#,##0.00').format(grandTotal)}',
-                                          style: const TextStyle(
-                                            fontSize: 28,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.green,
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
+                                if (order.customer != null)
+                                  Icon(
+                                    Icons.arrow_forward_ios,
+                                    size: 18,
+                                    color: Colors.grey.shade400,
+                                  ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Customer Card (moved to top)
-                    Card(
-                      elevation: 0,
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(color: Colors.grey.shade200),
-                      ),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: order.customer != null
-                            ? () => context.push(
-                                '/customers/${order.customer!.id}',
-                              )
-                            : null,
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 28,
-                                backgroundColor: Colors.purple.shade100,
-                                child: Icon(
-                                  Icons.person,
-                                  color: Colors.purple.shade600,
-                                  size: 28,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.person_outline,
-                                          size: 16,
-                                          color: Colors.purple.shade600,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        const Text(
-                                          'Customer',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: Color(0xFF0F1724),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      order.customer?.name ?? 'Unknown',
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF0F1724),
-                                      ),
-                                    ),
-                                    if (order.customer?.phone != null) ...[
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.phone_outlined,
-                                            size: 14,
-                                            color: Colors.grey.shade600,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            order.customer?.phone ?? '',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey.shade700,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                              if (order.customer != null)
-                                Icon(
-                                  Icons.arrow_forward_ios,
-                                  size: 18,
-                                  color: Colors.grey.shade400,
-                                ),
-                            ],
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                    // Invoice Actions Card
-                    Card(
-                      elevation: 0,
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(color: Colors.grey.shade200),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.receipt_long_outlined,
-                                  size: 20,
-                                  color: Colors.teal.shade600,
-                                ),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'Invoice Actions',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF0F1724),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: SizedBox(
-                                    height: 48,
-                                    child: OutlinedButton.icon(
-                                      onPressed:
-                                          (_isViewingInvoice ||
-                                              _isSharingInvoice ||
-                                              _isDownloadingInvoice ||
-                                              _isPrintingInvoice)
-                                          ? null
-                                          : () => _handleInvoiceAction(
-                                              'view',
-                                              order,
-                                            ),
-                                      icon: _isViewingInvoice
-                                          ? const SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Icon(
-                                              Icons.visibility_outlined,
-                                              size: 18,
-                                            ),
-                                      label: const Text(
-                                        'View',
-                                        style: TextStyle(fontSize: 13),
-                                      ),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(
-                                          0xFF0F1724,
-                                        ),
-                                        side: BorderSide(
-                                          color: Colors.grey.shade300,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 12,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: SizedBox(
-                                    height: 48,
-                                    child: OutlinedButton.icon(
-                                      onPressed:
-                                          (_isViewingInvoice ||
-                                              _isSharingInvoice ||
-                                              _isDownloadingInvoice ||
-                                              _isPrintingInvoice)
-                                          ? null
-                                          : () => _handleInvoiceAction(
-                                              'share',
-                                              order,
-                                            ),
-                                      icon: _isSharingInvoice
-                                          ? const SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const FaIcon(
-                                              FontAwesomeIcons.whatsapp,
-                                              size: 18,
-                                              color: Colors.green,
-                                            ),
-                                      label: const Text(
-                                        'WhatsApp',
-                                        style: TextStyle(fontSize: 13),
-                                      ),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: Colors.green.shade700,
-                                        side: BorderSide(
-                                          color: Colors.green.shade300,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 12,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: SizedBox(
-                                    height: 48,
-                                    child: OutlinedButton.icon(
-                                      onPressed:
-                                          (_isViewingInvoice ||
-                                              _isSharingInvoice ||
-                                              _isDownloadingInvoice ||
-                                              _isPrintingInvoice)
-                                          ? null
-                                          : () => _handleInvoiceAction(
-                                              'download',
-                                              order,
-                                            ),
-                                      icon: _isDownloadingInvoice
-                                          ? const SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Icon(
-                                              Icons.download_outlined,
-                                              size: 18,
-                                            ),
-                                      label: const Text(
-                                        'Download',
-                                        style: TextStyle(fontSize: 13),
-                                      ),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(
-                                          0xFF0F1724,
-                                        ),
-                                        side: BorderSide(
-                                          color: Colors.grey.shade300,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 12,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: SizedBox(
-                                    height: 48,
-                                    child: OutlinedButton.icon(
-                                      onPressed:
-                                          (_isViewingInvoice ||
-                                              _isSharingInvoice ||
-                                              _isDownloadingInvoice ||
-                                              _isPrintingInvoice)
-                                          ? null
-                                          : () => _handleInvoiceAction(
-                                              'print',
-                                              order,
-                                            ),
-                                      icon: _isPrintingInvoice
-                                          ? const SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Icon(
-                                              Icons.print_outlined,
-                                              size: 18,
-                                            ),
-                                      label: const Text(
-                                        'Print',
-                                        style: TextStyle(fontSize: 13),
-                                      ),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(
-                                          0xFF0F1724,
-                                        ),
-                                        side: BorderSide(
-                                          color: Colors.grey.shade300,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 12,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Rental Period Card
-                    if (!dateInfo.containsKey('error')) ...[
+                      // Invoice Actions Card
                       Card(
                         elevation: 0,
                         color: Colors.white,
@@ -1628,117 +1407,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               Row(
                                 children: [
                                   Icon(
-                                    Icons.calendar_today,
+                                    Icons.receipt_long_outlined,
                                     size: 20,
-                                    color: const Color(0xFF1F2A7A),
+                                    color: Colors.teal.shade600,
                                   ),
                                   const SizedBox(width: 8),
                                   const Text(
-                                    'Rental Period',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF0F1724),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 20),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _DateInfoWidget(
-                                      label: 'From',
-                                      date: dateInfo['startDate'] as DateTime,
-                                    ),
-                                  ),
-                                  Container(
-                                    width: 1,
-                                    height: 60,
-                                    margin: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                    ),
-                                    color: Colors.grey.shade300,
-                                  ),
-                                  Expanded(
-                                    child: _DateInfoWidget(
-                                      label: 'To',
-                                      date: dateInfo['endDate'] as DateTime,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(
-                                    0xFF1F2A7A,
-                                  ).withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.access_time,
-                                      size: 18,
-                                      color: const Color(0xFF1F2A7A),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Duration: ${dateInfo['days']} day${dateInfo['days'] != 1 ? 's' : ''} ${dateInfo['hours']} hour${dateInfo['hours'] != 1 ? 's' : ''}',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: const Color(0xFF1F2A7A),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // Return Status Section (only show if order has items, is not scheduled, and is not cancelled)
-                    if (order.items != null &&
-                        order.items!.isNotEmpty &&
-                        !order.isScheduled &&
-                        !order.isCancelled) ...[
-                      Card(
-                        elevation: 0,
-                        color: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: Colors.grey.shade200),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Header with icon
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: Colors.indigo.shade100,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Icon(
-                                      Icons.assignment_return_outlined,
-                                      size: 18,
-                                      color: Colors.indigo.shade700,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  const Text(
-                                    'Return Status',
+                                    'Invoice Actions',
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
@@ -1748,744 +1423,230 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                 ],
                               ),
                               const SizedBox(height: 16),
-                              Divider(color: Colors.grey.shade200, height: 1),
-                              const SizedBox(height: 16),
-
-                              // Calculate return statistics
-                              Builder(
-                                builder: (context) {
-                                  final items = order.items!;
-                                  final totalItems = items.length;
-                                  final totalQuantity = items.fold<int>(
-                                    0,
-                                    (sum, item) => sum + item.quantity,
-                                  );
-
-                                  // Website logic (matching exact behavior):
-                                  // - RETURNED quantity: Sum of returnedQuantity from ALL items
-                                  //   For items with returnStatus = 'returned', if returnedQuantity is null, use item.quantity
-                                  //   For items without returnStatus = 'returned', use returnedQuantity (for partial returns)
-                                  // - Full/Partial: Count items with returnStatus = 'returned', then check if full or partial
-                                  // - PENDING: Items that are not marked as returned (returnStatus != 'returned')
-
-                                  // Calculate total returned quantity from ALL items
-                                  final returnedQuantity = items.fold<int>(0, (
-                                    sum,
-                                    item,
-                                  ) {
-                                    int returnedQty;
-                                    if (item.isReturned) {
-                                      // Item is marked as returned: use returnedQuantity if available, otherwise item.quantity
-                                      returnedQty =
-                                          item.returnedQuantity ??
-                                          item.quantity;
-                                    } else {
-                                      // Item is not marked as returned: use returnedQuantity (could be partial return)
-                                      returnedQty = item.returnedQuantity ?? 0;
-                                    }
-                                    return sum + returnedQty;
-                                  });
-
-                                  // Get items that are marked as returned (returnStatus = 'returned') for full/partial count
-                                  final returnedItems = items
-                                      .where((item) => item.isReturned)
-                                      .toList();
-
-                                  // Count items with full returns (returned quantity >= item quantity) among returned items
-                                  final fullReturns = returnedItems.where((
-                                    item,
-                                  ) {
-                                    // If returnedQuantity is null and status is returned, it's fully returned
-                                    final returnedQty =
-                                        item.returnedQuantity ?? item.quantity;
-                                    return returnedQty >= item.quantity;
-                                  }).length;
-
-                                  // Count items with partial returns (returned quantity > 0 but < item quantity) among returned items
-                                  final partialReturns = returnedItems.where((
-                                    item,
-                                  ) {
-                                    // Partial if returnedQuantity exists, is > 0, and is less than quantity
-                                    final returnedQty = item.returnedQuantity;
-                                    if (returnedQty == null)
-                                      return false; // null means full return
-                                    return returnedQty > 0 &&
-                                        returnedQty < item.quantity;
-                                  }).length;
-
-                                  // Calculate pending items - Website logic:
-                                  // PENDING count = items where returnStatus != 'returned' (not marked as returned)
-                                  // PENDING quantity = sum of remaining quantity for ALL items where returnedQuantity < quantity
-                                  final pendingItems = items
-                                      .where((item) => !item.isReturned)
-                                      .toList();
-                                  final pendingCount = pendingItems.length;
-
-                                  // Calculate total pending quantity from ALL items (not just pending items)
-                                  // This includes items that are marked as returned but have partial returns
-                                  final pendingQuantity = items.fold<int>(0, (
-                                    sum,
-                                    item,
-                                  ) {
-                                    final returnedQty =
-                                        item.returnedQuantity ?? 0;
-                                    // If item is marked as returned and returnedQuantity is null, assume fully returned
-                                    if (item.isReturned &&
-                                        item.returnedQuantity == null) {
-                                      return sum; // Fully returned, no pending quantity
-                                    }
-                                    // Calculate remaining quantity
-                                    final remaining =
-                                        item.quantity - returnedQty;
-                                    // Only add if there's remaining quantity
-                                    return sum +
-                                        (remaining > 0 ? remaining : 0);
-                                  });
-
-                                  // Get total damage cost from order (damage_fee_total)
-                                  final totalDamage =
-                                      order.damageFeeTotal ?? 0.0;
-
-                                  // Debug: Check damage fee total value
-                                  AppLogger.debug(
-                                    'Order Damage Fee Total: ${order.damageFeeTotal}',
-                                  );
-                                  AppLogger.debug('Total Damage: $totalDamage');
-
-                                  // Determine overall status
-                                  String overallStatus;
-                                  Color statusBgColor;
-                                  Color statusValueColor;
-                                  String statusDetail = '';
-                                  Color statusDetailColor =
-                                      Colors.grey.shade600;
-
-                                  // Determine status based on website logic
-                                  // Check if all items are fully returned (returnedQuantity >= item quantity for all)
-                                  final allItemsReturned = items.every((item) {
-                                    // If item is marked as returned and returnedQuantity is null, it's fully returned
-                                    // Otherwise check if returnedQuantity >= quantity
-                                    final returnedQty =
-                                        item.isReturned &&
-                                            item.returnedQuantity == null
-                                        ? item.quantity
-                                        : (item.returnedQuantity ?? 0);
-                                    return returnedQty >= item.quantity;
-                                  });
-
-                                  // Check if some items have returns but not all are fully returned
-                                  final hasSomeReturns = returnedQuantity > 0;
-                                  final hasPendingQuantity =
-                                      pendingQuantity >
-                                      0; // Check pending quantity, not just count
-
-                                  // Website logic: Show "Partial" if there's pending quantity, even if all items are marked as returned
-                                  if (allItemsReturned &&
-                                      !hasPendingQuantity &&
-                                      returnedQuantity > 0) {
-                                    // All items fully returned with no pending quantity
-                                    overallStatus = 'Returned';
-                                    statusBgColor = Colors.green.shade50;
-                                    statusValueColor = Colors.green.shade700;
-                                  } else if (hasSomeReturns &&
-                                      hasPendingQuantity) {
-                                    // Partial: Some items returned but there's still pending quantity
-                                    overallStatus = 'Partial';
-                                    statusBgColor = const Color(
-                                      0xFF1F2A7A,
-                                    ).withValues(alpha: 0.1);
-                                    statusValueColor = const Color(0xFF1F2A7A);
-                                  } else if (hasSomeReturns &&
-                                      !hasPendingQuantity) {
-                                    // All items fully returned (no pending quantity)
-                                    overallStatus = 'Returned';
-                                    statusBgColor = Colors.green.shade50;
-                                    statusValueColor = Colors.green.shade700;
-                                  } else {
-                                    // No returns yet
-                                    overallStatus = 'Pending';
-                                    // Use indigo/purple for STATUS to differentiate from orange PENDING box
-                                    statusBgColor = Colors.indigo.shade50;
-                                    statusValueColor = Colors.indigo.shade700;
-                                  }
-
-                                  // Add damage information to status detail if there's damage
-                                  // Always show damage if damage_fee_total exists and is greater than 0
-                                  if (order.damageFeeTotal != null &&
-                                      order.damageFeeTotal! > 0) {
-                                    statusDetail =
-                                        'Damage: ₹${order.damageFeeTotal!.toStringAsFixed(2)}';
-                                    statusDetailColor = Colors.red.shade700;
-                                    AppLogger.success(
-                                      'Setting damage detail: $statusDetail',
-                                    );
-                                  } else {
-                                    AppLogger.warning(
-                                      'Damage not shown - damageFeeTotal: ${order.damageFeeTotal}, totalDamage: $totalDamage',
-                                    );
-                                  }
-
-                                  // 2x2 Grid Layout for symmetric design
-                                  return Column(
-                                    children: [
-                                      // First Row: TOTAL ITEMS and RETURNED
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: _ReturnStatusBox(
-                                              label: 'TOTAL ITEMS',
-                                              value: '$totalItems',
-                                              detail: '($totalQuantity qty)',
-                                              backgroundColor: Colors.white,
-                                              valueColor: Colors.black,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: _ReturnStatusBox(
-                                              label: 'RETURNED',
-                                              value: '$returnedQuantity',
-                                              detail:
-                                                  '$fullReturns full, $partialReturns partial',
-                                              backgroundColor:
-                                                  Colors.green.shade50,
-                                              valueColor: Colors.green.shade700,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 12),
-                                      // Second Row: PENDING and STATUS
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: _ReturnStatusBox(
-                                              label: 'PENDING',
-                                              value: '$pendingQuantity',
-                                              detail: '$pendingCount items',
-                                              backgroundColor:
-                                                  Colors.orange.shade50,
-                                              valueColor:
-                                                  Colors.orange.shade700,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: _ReturnStatusBox(
-                                              label: 'STATUS',
-                                              value: overallStatus,
-                                              detail: statusDetail,
-                                              backgroundColor: statusBgColor,
-                                              valueColor: statusValueColor,
-                                              detailColor: statusDetailColor,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // Items Card (hide for cancelled orders)
-                    if (order.items != null &&
-                        order.items!.isNotEmpty &&
-                        !order.isCancelled) ...[
-                      Card(
-                        elevation: 0,
-                        color: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: Colors.grey.shade200),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
                               Row(
-                                key: _itemsSectionKey,
                                 children: [
-                                  Icon(
-                                    Icons.inventory_2_outlined,
-                                    size: 20,
-                                    color: Colors.indigo.shade600,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Flexible(
-                                    child: Text(
-                                      'Items & Return Details',
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF0F1724),
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  // Mark All as Returned button (only for non-scheduled, non-cancelled orders)
-                                  if (!order.isScheduled &&
-                                      !order.isCancelled &&
-                                      canMarkReturned)
-                                    Flexible(
-                                      child: OutlinedButton(
-                                        onPressed: () {
-                                          setState(() {
-                                            for (final item in order.items!) {
-                                              if (item.id != null) {
-                                                _itemCheckboxes[item.id!] =
-                                                    true;
-                                                _returnedQuantities[item.id!] =
-                                                    item.quantity;
-                                              }
-                                            }
-                                          });
-                                        },
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 48,
+                                      child: OutlinedButton.icon(
+                                        onPressed:
+                                            (_isViewingInvoice ||
+                                                _isSharingInvoice ||
+                                                _isDownloadingInvoice ||
+                                                _isPrintingInvoice)
+                                            ? null
+                                            : () => _handleInvoiceAction(
+                                                'view',
+                                                order,
+                                              ),
+                                        icon: _isViewingInvoice
+                                            ? const SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                            : const Icon(
+                                                Icons.visibility_outlined,
+                                                size: 18,
+                                              ),
+                                        label: const Text(
+                                          'View',
+                                          style: TextStyle(fontSize: 13),
+                                        ),
                                         style: OutlinedButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 8,
+                                          foregroundColor: const Color(
+                                            0xFF0F1724,
                                           ),
                                           side: BorderSide(
                                             color: Colors.grey.shade300,
                                           ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 12,
+                                          ),
                                           shape: RoundedRectangleBorder(
                                             borderRadius: BorderRadius.circular(
-                                              8,
+                                              10,
                                             ),
                                           ),
-                                        ),
-                                        child: const Text(
-                                          'Mark All as Returned',
-                                          style: TextStyle(fontSize: 12),
-                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 48,
+                                      child: OutlinedButton.icon(
+                                        onPressed:
+                                            (_isViewingInvoice ||
+                                                _isSharingInvoice ||
+                                                _isDownloadingInvoice ||
+                                                _isPrintingInvoice)
+                                            ? null
+                                            : () => _handleInvoiceAction(
+                                                'share',
+                                                order,
+                                              ),
+                                        icon: _isSharingInvoice
+                                            ? const SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                            : const FaIcon(
+                                                FontAwesomeIcons.whatsapp,
+                                                size: 18,
+                                                color: Colors.green,
+                                              ),
+                                        label: const Text(
+                                          'WhatsApp',
+                                          style: TextStyle(fontSize: 13),
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor:
+                                              Colors.green.shade700,
+                                          side: BorderSide(
+                                            color: Colors.green.shade300,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 12,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
-                              const SizedBox(height: 16),
-                              ...order.items!.asMap().entries.map((entry) {
-                                final index = entry.key;
-                                final item = entry.value;
-                                // Auto-check if item is already returned
-                                final isItemReturned =
-                                    item.isReturned ||
-                                    (item.returnedQuantity != null &&
-                                        item.returnedQuantity! > 0);
-                                final shouldBeChecked =
-                                    _itemCheckboxes[item.id] ?? isItemReturned;
-
-                                // Initialize returned quantity if item is returned but not in state
-                                if (isItemReturned &&
-                                    item.id != null &&
-                                    !_itemCheckboxes.containsKey(item.id)) {
-                                  _returnedQuantities[item.id!] =
-                                      item.returnedQuantity ?? item.quantity;
-                                  _itemCheckboxes[item.id!] = true;
-                                }
-
-                                return _OrderItemCard(
-                                  item: item,
-                                  index: index + 1,
-                                  isLast: index == order.items!.length - 1,
-                                  orderId: order.id,
-                                  isChecked: shouldBeChecked,
-                                  returnedQuantity:
-                                      _returnedQuantities[item.id] ??
-                                      item.returnedQuantity,
-                                  damageCost:
-                                      _damageCosts[item.id] ?? item.damageCost,
-                                  damageDescription:
-                                      _damageDescriptions[item.id] ??
-                                      item.damageDescription,
-                                  onCheckboxChanged: (checked) {
-                                    setState(() {
-                                      if (item.id != null) {
-                                        _itemCheckboxes[item.id!] = checked;
-                                        if (checked) {
-                                          _returnedQuantities[item.id!] =
-                                              item.returnedQuantity ?? 0;
-                                        } else {
-                                          _returnedQuantities.remove(item.id!);
-                                          _damageCosts.remove(item.id!);
-                                          _damageDescriptions.remove(item.id!);
-                                        }
-                                      }
-                                    });
-                                  },
-                                  onReturnedQuantityChanged: (quantity) {
-                                    setState(() {
-                                      if (item.id != null) {
-                                        _returnedQuantities[item.id!] =
-                                            quantity;
-                                      }
-                                    });
-                                  },
-                                  onDamageCostChanged: (cost) {
-                                    setState(() {
-                                      if (item.id != null) {
-                                        if (cost != null && cost > 0) {
-                                          _damageCosts[item.id!] = cost;
-                                        } else {
-                                          _damageCosts.remove(item.id!);
-                                        }
-                                      }
-                                    });
-                                  },
-                                  onDamageDescriptionChanged: (description) {
-                                    setState(() {
-                                      if (item.id != null) {
-                                        if (description != null &&
-                                            description.isNotEmpty) {
-                                          _damageDescriptions[item.id!] =
-                                              description;
-                                        } else {
-                                          _damageDescriptions.remove(item.id!);
-                                        }
-                                      }
-                                    });
-                                  },
-                                  onUpdated: () {
-                                    // Refresh order data
-                                    ref.invalidate(orderProvider(order.id));
-                                  },
-                                );
-                              }),
-                              // Late Fee and Discount Fields + Save Changes Button (only show when at least one checkbox is checked)
-                              Builder(
-                                builder: (context) {
-                                  // Check if any checkbox is checked
-                                  final hasCheckedItems = _itemCheckboxes.values
-                                      .any((checked) => checked);
-
-                                  if (!order.isScheduled &&
-                                      !order.isCancelled &&
-                                      canMarkReturned &&
-                                      hasCheckedItems) {
-                                    return Column(
-                                      children: [
-                                        const SizedBox(height: 20),
-                                        Divider(
-                                          color: Colors.grey.shade200,
-                                          height: 1,
-                                        ),
-                                        const SizedBox(height: 16),
-                                        // Late Fee Input Field
-                                        Card(
-                                          elevation: 0,
-                                          color: Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(16),
-                                            side: BorderSide(color: Colors.grey.shade200),
-                                          ),
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(16),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Row(
-                                                  children: [
-                                                    Text(
-                                                      'Late Fee (₹)',
-                                                      style: TextStyle(
-                                                        fontSize: 14,
-                                                        fontWeight: FontWeight.w600,
-                                                        color: Colors.grey.shade700,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Text(
-                                                      'Optional',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.grey.shade500,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                if (_isOrderLate(order)) ...[
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    'This order was returned after the due date. Enter a late fee if applicable.',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: Colors.red.shade600,
-                                                      fontWeight: FontWeight.w500,
-                                                    ),
-                                                  ),
-                                                ],
-                                                const SizedBox(height: 8),
-                                                TextField(
-                                                  controller: _lateFeeController,
-                                                  keyboardType:
-                                                      const TextInputType.numberWithOptions(
-                                                        decimal: true,
-                                                      ),
-                                                  decoration: InputDecoration(
-                                                    hintText: '0.00',
-                                                    prefixText: '₹ ',
-                                                    prefixStyle: TextStyle(
-                                                      fontSize: 16,
-                                                      fontWeight: FontWeight.w600,
-                                                      color: Colors.grey.shade700,
-                                                    ),
-                                                    filled: true,
-                                                    fillColor: Colors.white,
-                                                    border: OutlineInputBorder(
-                                                      borderRadius: BorderRadius.circular(12),
-                                                      borderSide: BorderSide(
-                                                        color: Colors.grey.shade300,
-                                                      ),
-                                                    ),
-                                                    enabledBorder: OutlineInputBorder(
-                                                      borderRadius: BorderRadius.circular(12),
-                                                      borderSide: BorderSide(
-                                                        color: Colors.grey.shade300,
-                                                      ),
-                                                    ),
-                                                    focusedBorder: OutlineInputBorder(
-                                                      borderRadius: BorderRadius.circular(12),
-                                                      borderSide: BorderSide(
-                                                        color: Colors.red.shade600,
-                                                        width: 2,
-                                                      ),
-                                                    ),
-                                                    contentPadding: const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 14,
-                                                    ),
-                                                  ),
-                                                  style: TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: Colors.grey.shade900,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        // Discount Input Field
-                                        Card(
-                                          elevation: 0,
-                                          color: Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(16),
-                                            side: BorderSide(color: Colors.grey.shade200),
-                                          ),
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(16),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Row(
-                                                  children: [
-                                                    Text(
-                                                      'Discount (₹)',
-                                                      style: TextStyle(
-                                                        fontSize: 14,
-                                                        fontWeight: FontWeight.w600,
-                                                        color: Colors.grey.shade700,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Text(
-                                                      'Optional',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.grey.shade500,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 8),
-                                                TextField(
-                                                  controller: _discountController,
-                                                  keyboardType:
-                                                      const TextInputType.numberWithOptions(
-                                                        decimal: true,
-                                                      ),
-                                                  decoration: InputDecoration(
-                                                    hintText: '0.00',
-                                                    prefixText: '₹ ',
-                                                    prefixStyle: TextStyle(
-                                                      fontSize: 16,
-                                                      fontWeight: FontWeight.w600,
-                                                      color: Colors.grey.shade700,
-                                                    ),
-                                                    filled: true,
-                                                    fillColor: Colors.white,
-                                                    border: OutlineInputBorder(
-                                                      borderRadius: BorderRadius.circular(12),
-                                                      borderSide: BorderSide(
-                                                        color: Colors.grey.shade300,
-                                                      ),
-                                                    ),
-                                                    enabledBorder: OutlineInputBorder(
-                                                      borderRadius: BorderRadius.circular(12),
-                                                      borderSide: BorderSide(
-                                                        color: Colors.grey.shade300,
-                                                      ),
-                                                    ),
-                                                    focusedBorder: OutlineInputBorder(
-                                                      borderRadius: BorderRadius.circular(12),
-                                                      borderSide: BorderSide(
-                                                        color: Colors.green.shade600,
-                                                        width: 2,
-                                                      ),
-                                                    ),
-                                                    contentPadding: const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 14,
-                                                    ),
-                                                  ),
-                                                  style: TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: Colors.grey.shade900,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  'Enter discount amount to apply to this order when returning items.',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.grey.shade500,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        // Save Changes Button
-                                        SizedBox(
-                                          width: double.infinity,
-                                          child: ElevatedButton.icon(
-                                            onPressed: _isUpdating
-                                                ? null
-                                                : _handleSaveChanges,
-                                            icon: _isUpdating
-                                                ? const SizedBox(
-                                                    width: 20,
-                                                    height: 20,
-                                                    child: CircularProgressIndicator(
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 48,
+                                      child: OutlinedButton.icon(
+                                        onPressed:
+                                            (_isViewingInvoice ||
+                                                _isSharingInvoice ||
+                                                _isDownloadingInvoice ||
+                                                _isPrintingInvoice)
+                                            ? null
+                                            : () => _handleInvoiceAction(
+                                                'download',
+                                                order,
+                                              ),
+                                        icon: _isDownloadingInvoice
+                                            ? const SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child:
+                                                    CircularProgressIndicator(
                                                       strokeWidth: 2,
-                                                      valueColor:
-                                                          AlwaysStoppedAnimation<
-                                                            Color
-                                                          >(Colors.white),
                                                     ),
-                                                  )
-                                                : const Icon(
-                                                    Icons.save_outlined,
-                                                    size: 20,
-                                                  ),
-                                            label: Text(
-                                              _isUpdating
-                                                  ? 'Saving Changes...'
-                                                  : 'Save Changes',
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
+                                              )
+                                            : const Icon(
+                                                Icons.download_outlined,
+                                                size: 18,
                                               ),
-                                            ),
-                                            style: ElevatedButton.styleFrom(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    vertical: 16,
-                                                  ),
-                                              backgroundColor:
-                                                  Colors.green.shade600,
-                                              foregroundColor: Colors.white,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                              elevation: 0,
+                                        label: const Text(
+                                          'Download',
+                                          style: TextStyle(fontSize: 13),
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: const Color(
+                                            0xFF0F1724,
+                                          ),
+                                          side: BorderSide(
+                                            color: Colors.grey.shade300,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 12,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
                                             ),
                                           ),
                                         ),
-                                      ],
-                                    );
-                                  }
-                                  return const SizedBox.shrink();
-                                },
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 48,
+                                      child: OutlinedButton.icon(
+                                        onPressed:
+                                            (_isViewingInvoice ||
+                                                _isSharingInvoice ||
+                                                _isDownloadingInvoice ||
+                                                _isPrintingInvoice)
+                                            ? null
+                                            : () => _handleInvoiceAction(
+                                                'print',
+                                                order,
+                                              ),
+                                        icon: _isPrintingInvoice
+                                            ? const SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                            : const Icon(
+                                                Icons.print_outlined,
+                                                size: 18,
+                                              ),
+                                        label: const Text(
+                                          'Print',
+                                          style: TextStyle(fontSize: 13),
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: const Color(
+                                            0xFF0F1724,
+                                          ),
+                                          side: BorderSide(
+                                            color: Colors.grey.shade300,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 12,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
                         ),
                       ),
                       const SizedBox(height: 16),
-                    ],
 
-                    // Order Timeline Card (placed after Return Status)
-                    Card(
-                      elevation: 0,
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(color: Colors.grey.shade200),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.timeline_outlined,
-                                  size: 20,
-                                  color: Colors.indigo.shade600,
-                                ),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'Order Timeline',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF0F1724),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-                            _OrderTimelineWidget(order: order),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-
-                    // Summary Card (matching website design exactly)
-                    Builder(
-                      builder: (context) {
-                        // Get user profile for GST rate
-                        final userProfile = ref.watch(userProfileProvider).value;
-                        final gstRate = userProfile?.gstRate ?? 5.0;
-                        
-                        // Calculate display total using Order's method for consistency
-                        final displayTotalAmount = order.calculateGrandTotal(userProfile: userProfile);
-                        
-                        // Get individual amounts for display
-                        final baseTotal = order.subtotal ?? 0.0;
-                        final gstAmount = order.gstAmount ?? 0.0;
-                        final damageFees = order.damageFeeTotal ?? 0.0;
-                        final lateFee = order.lateFee ?? 0.0;
-                        final discountAmount = order.discountAmount ?? 0.0;
-                        
-                        return Card(
+                      // Rental Period Card
+                      if (!dateInfo.containsKey('error')) ...[
+                        Card(
                           elevation: 0,
                           color: Colors.white,
                           shape: RoundedRectangleBorder(
@@ -2500,13 +1661,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                 Row(
                                   children: [
                                     Icon(
-                                      Icons.description_outlined,
+                                      Icons.calendar_today,
                                       size: 20,
-                                      color: const Color(0xFF273492),
+                                      color: const Color(0xFF1F2A7A),
                                     ),
                                     const SizedBox(width: 8),
                                     const Text(
-                                      'Summary',
+                                      'Rental Period',
                                       style: TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
@@ -2516,36 +1677,979 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 20),
-                                // Subtotal (always shown)
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(
-                                      'Subtotal',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey.shade600,
-                                        fontWeight: FontWeight.w500,
+                                    Expanded(
+                                      child: _DateInfoWidget(
+                                        label: 'From',
+                                        date: dateInfo['startDate'] as DateTime,
                                       ),
                                     ),
-                                    Text(
-                                      '₹${NumberFormat('#,##0.00').format(baseTotal)}',
-                                      style: const TextStyle(
-                                        fontSize: 14,
+                                    Container(
+                                      width: 1,
+                                      height: 60,
+                                      margin: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                      ),
+                                      color: Colors.grey.shade300,
+                                    ),
+                                    Expanded(
+                                      child: _DateInfoWidget(
+                                        label: 'To',
+                                        date: dateInfo['endDate'] as DateTime,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFF1F2A7A,
+                                    ).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.access_time,
+                                        size: 18,
+                                        color: const Color(0xFF1F2A7A),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Duration: ${dateInfo['days']} day${dateInfo['days'] != 1 ? 's' : ''} ${dateInfo['hours']} hour${dateInfo['hours'] != 1 ? 's' : ''}',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFF1F2A7A),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Return Status Section (only show if order has items, is not scheduled, and is not cancelled)
+                      if (order.items != null &&
+                          order.items!.isNotEmpty &&
+                          !order.isScheduled &&
+                          !order.isCancelled) ...[
+                        Card(
+                          elevation: 0,
+                          color: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: BorderSide(color: Colors.grey.shade200),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Header with icon
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        color: Colors.indigo.shade100,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(
+                                        Icons.assignment_return_outlined,
+                                        size: 18,
+                                        color: Colors.indigo.shade700,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text(
+                                      'Return Status',
+                                      style: TextStyle(
+                                        fontSize: 18,
                                         fontWeight: FontWeight.bold,
                                         color: Color(0xFF0F1724),
                                       ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 12),
-                                // GST (only if > 0, with dynamic rate)
-                                if (gstAmount > 0) ...[
+                                const SizedBox(height: 16),
+                                Divider(color: Colors.grey.shade200, height: 1),
+                                const SizedBox(height: 16),
+
+                                // Calculate return statistics
+                                Builder(
+                                  builder: (context) {
+                                    final items = order.items!;
+                                    final totalItems = items.length;
+                                    final totalQuantity = items.fold<int>(
+                                      0,
+                                      (sum, item) => sum + item.quantity,
+                                    );
+
+                                    // Website logic (matching exact behavior):
+                                    // - RETURNED quantity: Sum of returnedQuantity from ALL items
+                                    //   For items with returnStatus = 'returned', if returnedQuantity is null, use item.quantity
+                                    //   For items without returnStatus = 'returned', use returnedQuantity (for partial returns)
+                                    // - Full/Partial: Count items with returnStatus = 'returned', then check if full or partial
+                                    // - PENDING: Items that are not marked as returned (returnStatus != 'returned')
+
+                                    // Calculate total returned quantity from ALL items
+                                    final returnedQuantity = items.fold<int>(0, (
+                                      sum,
+                                      item,
+                                    ) {
+                                      int returnedQty;
+                                      if (item.isReturned) {
+                                        // Item is marked as returned: use returnedQuantity if available, otherwise item.quantity
+                                        returnedQty =
+                                            item.returnedQuantity ??
+                                            item.quantity;
+                                      } else {
+                                        // Item is not marked as returned: use returnedQuantity (could be partial return)
+                                        returnedQty =
+                                            item.returnedQuantity ?? 0;
+                                      }
+                                      return sum + returnedQty;
+                                    });
+
+                                    // Get items that are marked as returned (returnStatus = 'returned') for full/partial count
+                                    final returnedItems = items
+                                        .where((item) => item.isReturned)
+                                        .toList();
+
+                                    // Count items with full returns (returned quantity >= item quantity) among returned items
+                                    final fullReturns = returnedItems.where((
+                                      item,
+                                    ) {
+                                      // If returnedQuantity is null and status is returned, it's fully returned
+                                      final returnedQty =
+                                          item.returnedQuantity ??
+                                          item.quantity;
+                                      return returnedQty >= item.quantity;
+                                    }).length;
+
+                                    // Count items with partial returns (returned quantity > 0 but < item quantity) among returned items
+                                    final partialReturns = returnedItems.where((
+                                      item,
+                                    ) {
+                                      // Partial if returnedQuantity exists, is > 0, and is less than quantity
+                                      final returnedQty = item.returnedQuantity;
+                                      if (returnedQty == null)
+                                        return false; // null means full return
+                                      return returnedQty > 0 &&
+                                          returnedQty < item.quantity;
+                                    }).length;
+
+                                    // Calculate pending items - Website logic:
+                                    // PENDING count = items where returnStatus != 'returned' (not marked as returned)
+                                    // PENDING quantity = sum of remaining quantity for ALL items where returnedQuantity < quantity
+                                    final pendingItems = items
+                                        .where((item) => !item.isReturned)
+                                        .toList();
+                                    final pendingCount = pendingItems.length;
+
+                                    // Calculate total pending quantity from ALL items (not just pending items)
+                                    // This includes items that are marked as returned but have partial returns
+                                    final pendingQuantity = items.fold<int>(0, (
+                                      sum,
+                                      item,
+                                    ) {
+                                      final returnedQty =
+                                          item.returnedQuantity ?? 0;
+                                      // If item is marked as returned and returnedQuantity is null, assume fully returned
+                                      if (item.isReturned &&
+                                          item.returnedQuantity == null) {
+                                        return sum; // Fully returned, no pending quantity
+                                      }
+                                      // Calculate remaining quantity
+                                      final remaining =
+                                          item.quantity - returnedQty;
+                                      // Only add if there's remaining quantity
+                                      return sum +
+                                          (remaining > 0 ? remaining : 0);
+                                    });
+
+                                    // Get total damage cost from order (damage_fee_total)
+                                    final totalDamage =
+                                        order.damageFeeTotal ?? 0.0;
+
+                                    // Debug: Check damage fee total value
+                                    AppLogger.debug(
+                                      'Order Damage Fee Total: ${order.damageFeeTotal}',
+                                    );
+                                    AppLogger.debug(
+                                      'Total Damage: $totalDamage',
+                                    );
+
+                                    // Determine overall status
+                                    String overallStatus;
+                                    Color statusBgColor;
+                                    Color statusValueColor;
+                                    String statusDetail = '';
+                                    Color statusDetailColor =
+                                        Colors.grey.shade600;
+
+                                    // Determine status based on website logic
+                                    // Check if all items are fully returned (returnedQuantity >= item quantity for all)
+                                    final allItemsReturned = items.every((
+                                      item,
+                                    ) {
+                                      // If item is marked as returned and returnedQuantity is null, it's fully returned
+                                      // Otherwise check if returnedQuantity >= quantity
+                                      final returnedQty =
+                                          item.isReturned &&
+                                              item.returnedQuantity == null
+                                          ? item.quantity
+                                          : (item.returnedQuantity ?? 0);
+                                      return returnedQty >= item.quantity;
+                                    });
+
+                                    // Check if some items have returns but not all are fully returned
+                                    final hasSomeReturns = returnedQuantity > 0;
+                                    final hasPendingQuantity =
+                                        pendingQuantity >
+                                        0; // Check pending quantity, not just count
+
+                                    // Website logic: Show "Partial" if there's pending quantity, even if all items are marked as returned
+                                    if (allItemsReturned &&
+                                        !hasPendingQuantity &&
+                                        returnedQuantity > 0) {
+                                      // All items fully returned with no pending quantity
+                                      overallStatus = 'Returned';
+                                      statusBgColor = Colors.green.shade50;
+                                      statusValueColor = Colors.green.shade700;
+                                    } else if (hasSomeReturns &&
+                                        hasPendingQuantity) {
+                                      // Partial: Some items returned but there's still pending quantity
+                                      overallStatus = 'Partial';
+                                      statusBgColor = const Color(
+                                        0xFF1F2A7A,
+                                      ).withValues(alpha: 0.1);
+                                      statusValueColor = const Color(
+                                        0xFF1F2A7A,
+                                      );
+                                    } else if (hasSomeReturns &&
+                                        !hasPendingQuantity) {
+                                      // All items fully returned (no pending quantity)
+                                      overallStatus = 'Returned';
+                                      statusBgColor = Colors.green.shade50;
+                                      statusValueColor = Colors.green.shade700;
+                                    } else {
+                                      // No returns yet
+                                      overallStatus = 'Pending';
+                                      // Use indigo/purple for STATUS to differentiate from orange PENDING box
+                                      statusBgColor = Colors.indigo.shade50;
+                                      statusValueColor = Colors.indigo.shade700;
+                                    }
+
+                                    // Add damage information to status detail if there's damage
+                                    // Always show damage if damage_fee_total exists and is greater than 0
+                                    if (order.damageFeeTotal != null &&
+                                        order.damageFeeTotal! > 0) {
+                                      statusDetail =
+                                          'Damage: ₹${order.damageFeeTotal!.toStringAsFixed(2)}';
+                                      statusDetailColor = Colors.red.shade700;
+                                      AppLogger.success(
+                                        'Setting damage detail: $statusDetail',
+                                      );
+                                    } else {
+                                      AppLogger.warning(
+                                        'Damage not shown - damageFeeTotal: ${order.damageFeeTotal}, totalDamage: $totalDamage',
+                                      );
+                                    }
+
+                                    // 2x2 Grid Layout for symmetric design
+                                    return Column(
+                                      children: [
+                                        // First Row: TOTAL ITEMS and RETURNED
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: _ReturnStatusBox(
+                                                label: 'TOTAL ITEMS',
+                                                value: '$totalItems',
+                                                detail: '($totalQuantity qty)',
+                                                backgroundColor: Colors.white,
+                                                valueColor: Colors.black,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: _ReturnStatusBox(
+                                                label: 'RETURNED',
+                                                value: '$returnedQuantity',
+                                                detail:
+                                                    '$fullReturns full, $partialReturns partial',
+                                                backgroundColor:
+                                                    Colors.green.shade50,
+                                                valueColor:
+                                                    Colors.green.shade700,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        // Second Row: PENDING and STATUS
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: _ReturnStatusBox(
+                                                label: 'PENDING',
+                                                value: '$pendingQuantity',
+                                                detail: '$pendingCount items',
+                                                backgroundColor:
+                                                    Colors.orange.shade50,
+                                                valueColor:
+                                                    Colors.orange.shade700,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: _ReturnStatusBox(
+                                                label: 'STATUS',
+                                                value: overallStatus,
+                                                detail: statusDetail,
+                                                backgroundColor: statusBgColor,
+                                                valueColor: statusValueColor,
+                                                detailColor: statusDetailColor,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Items Card (hide for cancelled orders)
+                      if (order.items != null &&
+                          order.items!.isNotEmpty &&
+                          !order.isCancelled) ...[
+                        Card(
+                          elevation: 0,
+                          color: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: BorderSide(color: Colors.grey.shade200),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  key: _itemsSectionKey,
+                                  children: [
+                                    Icon(
+                                      Icons.inventory_2_outlined,
+                                      size: 20,
+                                      color: Colors.indigo.shade600,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        'Items & Return Details',
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF0F1724),
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    // Mark All as Returned button (only for non-scheduled, non-cancelled orders)
+                                    if (!order.isScheduled &&
+                                        !order.isCancelled &&
+                                        canMarkReturned)
+                                      Flexible(
+                                        child: OutlinedButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              for (final item in order.items!) {
+                                                if (item.id != null) {
+                                                  _itemCheckboxes[item.id!] =
+                                                      true;
+                                                  _returnedQuantities[item
+                                                          .id!] =
+                                                      item.quantity;
+                                                }
+                                              }
+                                            });
+                                          },
+                                          style: OutlinedButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 8,
+                                            ),
+                                            side: BorderSide(
+                                              color: Colors.grey.shade300,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'Mark All as Returned',
+                                            style: TextStyle(fontSize: 12),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                ...order.items!.asMap().entries.map((entry) {
+                                  final index = entry.key;
+                                  final item = entry.value;
+                                  // Auto-check if item is already returned
+                                  final isItemReturned =
+                                      item.isReturned ||
+                                      (item.returnedQuantity != null &&
+                                          item.returnedQuantity! > 0);
+                                  final shouldBeChecked =
+                                      _itemCheckboxes[item.id] ??
+                                      isItemReturned;
+
+                                  // Initialize returned quantity if item is returned but not in state
+                                  if (isItemReturned &&
+                                      item.id != null &&
+                                      !_itemCheckboxes.containsKey(item.id)) {
+                                    _returnedQuantities[item.id!] =
+                                        item.returnedQuantity ?? item.quantity;
+                                    _itemCheckboxes[item.id!] = true;
+                                  }
+
+                                  return _OrderItemCard(
+                                    item: item,
+                                    index: index + 1,
+                                    isLast: index == order.items!.length - 1,
+                                    orderId: order.id,
+                                    isChecked: shouldBeChecked,
+                                    returnedQuantity:
+                                        _returnedQuantities[item.id] ??
+                                        item.returnedQuantity,
+                                    damageCost:
+                                        _damageCosts[item.id] ??
+                                        item.damageCost,
+                                    damageDescription:
+                                        _damageDescriptions[item.id] ??
+                                        item.damageDescription,
+                                    onCheckboxChanged: (checked) {
+                                      setState(() {
+                                        if (item.id != null) {
+                                          _itemCheckboxes[item.id!] = checked;
+                                          if (checked) {
+                                            _returnedQuantities[item.id!] =
+                                                item.returnedQuantity ?? 0;
+                                          } else {
+                                            _returnedQuantities.remove(
+                                              item.id!,
+                                            );
+                                            _damageCosts.remove(item.id!);
+                                            _damageDescriptions.remove(
+                                              item.id!,
+                                            );
+                                          }
+                                        }
+                                      });
+                                    },
+                                    onReturnedQuantityChanged: (quantity) {
+                                      setState(() {
+                                        if (item.id != null) {
+                                          _returnedQuantities[item.id!] =
+                                              quantity;
+                                        }
+                                      });
+                                    },
+                                    onDamageCostChanged: (cost) {
+                                      setState(() {
+                                        if (item.id != null) {
+                                          if (cost != null && cost > 0) {
+                                            _damageCosts[item.id!] = cost;
+                                          } else {
+                                            _damageCosts.remove(item.id!);
+                                          }
+                                        }
+                                      });
+                                    },
+                                    onDamageDescriptionChanged: (description) {
+                                      setState(() {
+                                        if (item.id != null) {
+                                          if (description != null &&
+                                              description.isNotEmpty) {
+                                            _damageDescriptions[item.id!] =
+                                                description;
+                                          } else {
+                                            _damageDescriptions.remove(
+                                              item.id!,
+                                            );
+                                          }
+                                        }
+                                      });
+                                    },
+                                    onUpdated: () {
+                                      // Refresh order data
+                                      ref.invalidate(orderProvider(order.id));
+                                    },
+                                  );
+                                }),
+                                // Late Fee and Discount Fields + Save Changes Button (only show when at least one checkbox is checked)
+                                Builder(
+                                  builder: (context) {
+                                    // Check if any checkbox is checked
+                                    final hasCheckedItems = _itemCheckboxes
+                                        .values
+                                        .any((checked) => checked);
+
+                                    if (!order.isScheduled &&
+                                        !order.isCancelled &&
+                                        canMarkReturned &&
+                                        hasCheckedItems) {
+                                      return Column(
+                                        children: [
+                                          const SizedBox(height: 20),
+                                          Divider(
+                                            color: Colors.grey.shade200,
+                                            height: 1,
+                                          ),
+                                          const SizedBox(height: 16),
+                                          // Late Fee Input Field
+                                          Card(
+                                            elevation: 0,
+                                            color: Colors.white,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              side: BorderSide(
+                                                color: Colors.grey.shade200,
+                                              ),
+                                            ),
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(16),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      Text(
+                                                        'Late Fee (₹)',
+                                                        style: TextStyle(
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: Colors
+                                                              .grey
+                                                              .shade700,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      Text(
+                                                        'Optional',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: Colors
+                                                              .grey
+                                                              .shade500,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  if (_isOrderLate(order)) ...[
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      'This order was returned after the due date. Enter a late fee if applicable.',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color:
+                                                            Colors.red.shade600,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                  const SizedBox(height: 8),
+                                                  TextField(
+                                                    controller:
+                                                        _lateFeeController,
+                                                    keyboardType:
+                                                        const TextInputType.numberWithOptions(
+                                                          decimal: true,
+                                                        ),
+                                                    decoration: InputDecoration(
+                                                      hintText: '0.00',
+                                                      prefixText: '₹ ',
+                                                      prefixStyle: TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: Colors
+                                                            .grey
+                                                            .shade700,
+                                                      ),
+                                                      filled: true,
+                                                      fillColor: Colors.white,
+                                                      border: OutlineInputBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                        borderSide: BorderSide(
+                                                          color: Colors
+                                                              .grey
+                                                              .shade300,
+                                                        ),
+                                                      ),
+                                                      enabledBorder:
+                                                          OutlineInputBorder(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  12,
+                                                                ),
+                                                            borderSide:
+                                                                BorderSide(
+                                                                  color: Colors
+                                                                      .grey
+                                                                      .shade300,
+                                                                ),
+                                                          ),
+                                                      focusedBorder:
+                                                          OutlineInputBorder(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  12,
+                                                                ),
+                                                            borderSide:
+                                                                BorderSide(
+                                                                  color: Colors
+                                                                      .red
+                                                                      .shade600,
+                                                                  width: 2,
+                                                                ),
+                                                          ),
+                                                      contentPadding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 16,
+                                                            vertical: 14,
+                                                          ),
+                                                    ),
+                                                    style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color:
+                                                          Colors.grey.shade900,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 16),
+                                          // Discount Input Field
+                                          Card(
+                                            elevation: 0,
+                                            color: Colors.white,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              side: BorderSide(
+                                                color: Colors.grey.shade200,
+                                              ),
+                                            ),
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(16),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      Text(
+                                                        'Discount (₹)',
+                                                        style: TextStyle(
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: Colors
+                                                              .grey
+                                                              .shade700,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      Text(
+                                                        'Optional',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: Colors
+                                                              .grey
+                                                              .shade500,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  TextField(
+                                                    controller:
+                                                        _discountController,
+                                                    keyboardType:
+                                                        const TextInputType.numberWithOptions(
+                                                          decimal: true,
+                                                        ),
+                                                    decoration: InputDecoration(
+                                                      hintText: '0.00',
+                                                      prefixText: '₹ ',
+                                                      prefixStyle: TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: Colors
+                                                            .grey
+                                                            .shade700,
+                                                      ),
+                                                      filled: true,
+                                                      fillColor: Colors.white,
+                                                      border: OutlineInputBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                        borderSide: BorderSide(
+                                                          color: Colors
+                                                              .grey
+                                                              .shade300,
+                                                        ),
+                                                      ),
+                                                      enabledBorder:
+                                                          OutlineInputBorder(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  12,
+                                                                ),
+                                                            borderSide:
+                                                                BorderSide(
+                                                                  color: Colors
+                                                                      .grey
+                                                                      .shade300,
+                                                                ),
+                                                          ),
+                                                      focusedBorder:
+                                                          OutlineInputBorder(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  12,
+                                                                ),
+                                                            borderSide:
+                                                                BorderSide(
+                                                                  color: Colors
+                                                                      .green
+                                                                      .shade600,
+                                                                  width: 2,
+                                                                ),
+                                                          ),
+                                                      contentPadding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 16,
+                                                            vertical: 14,
+                                                          ),
+                                                    ),
+                                                    style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color:
+                                                          Colors.grey.shade900,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    'Enter discount amount to apply to this order when returning items.',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color:
+                                                          Colors.grey.shade500,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 16),
+                                          // Save Changes Button
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: ElevatedButton.icon(
+                                              onPressed: _isUpdating
+                                                  ? null
+                                                  : _handleSaveChanges,
+                                              icon: _isUpdating
+                                                  ? const SizedBox(
+                                                      width: 20,
+                                                      height: 20,
+                                                      child: CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        valueColor:
+                                                            AlwaysStoppedAnimation<
+                                                              Color
+                                                            >(Colors.white),
+                                                      ),
+                                                    )
+                                                  : const Icon(
+                                                      Icons.save_outlined,
+                                                      size: 20,
+                                                    ),
+                                              label: Text(
+                                                _isUpdating
+                                                    ? 'Saving Changes...'
+                                                    : 'Save Changes',
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              style: ElevatedButton.styleFrom(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 16,
+                                                    ),
+                                                backgroundColor:
+                                                    Colors.green.shade600,
+                                                foregroundColor: Colors.white,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                elevation: 0,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }
+                                    return const SizedBox.shrink();
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Order Timeline Card (placed after Return Status)
+                      Card(
+                        elevation: 0,
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.timeline_outlined,
+                                    size: 20,
+                                    color: Colors.indigo.shade600,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Order Timeline',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0F1724),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              _OrderTimelineWidget(order: order),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Summary Card (matching website design exactly)
+                      Builder(
+                        builder: (context) {
+                          // Get user profile for GST rate
+                          final userProfile = ref
+                              .watch(userProfileProvider)
+                              .value;
+                          final gstRate = userProfile?.gstRate ?? 5.0;
+
+                          // Calculate display total using Order's method for consistency
+                          final displayTotalAmount = order.calculateGrandTotal(
+                            userProfile: userProfile,
+                          );
+
+                          // Get individual amounts for display
+                          final baseTotal = order.subtotal ?? 0.0;
+                          final gstAmount = order.gstAmount ?? 0.0;
+                          final damageFees = order.damageFeeTotal ?? 0.0;
+                          final lateFee = order.lateFee ?? 0.0;
+                          final discountAmount = order.discountAmount ?? 0.0;
+
+                          return Card(
+                            elevation: 0,
+                            color: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(color: Colors.grey.shade200),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Icon(
+                                        Icons.description_outlined,
+                                        size: 20,
+                                        color: const Color(0xFF273492),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        'Summary',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF0F1724),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 20),
+                                  // Subtotal (always shown)
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
-                                        'GST (${gstRate.toStringAsFixed(0)}%)',
+                                        'Subtotal',
                                         style: TextStyle(
                                           fontSize: 14,
                                           color: Colors.grey.shade600,
@@ -2553,7 +2657,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                         ),
                                       ),
                                       Text(
-                                        '₹${NumberFormat('#,##0.00').format(gstAmount)}',
+                                        '₹${NumberFormat('#,##0.00').format(baseTotal)}',
                                         style: const TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.bold,
@@ -2563,169 +2667,285 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 12),
-                                ],
-                                // Damage Fees (only if > 0)
-                                if (damageFees > 0) ...[
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        'Damage Fees',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey.shade600,
-                                          fontWeight: FontWeight.w500,
+                                  // GST (only if > 0, with dynamic rate)
+                                  if (gstAmount > 0) ...[
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'GST (${gstRate.toStringAsFixed(0)}%)',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey.shade600,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        Text(
+                                          '₹${NumberFormat('#,##0.00').format(gstAmount)}',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF0F1724),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+                                  // Damage Fees (only if > 0)
+                                  if (damageFees > 0) ...[
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Damage Fees',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey.shade600,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        Text(
+                                          '₹${NumberFormat('#,##0.00').format(damageFees)}',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.red.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+                                  // Late Fees (only if > 0)
+                                  if (lateFee > 0) ...[
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Late Fees',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey.shade600,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        Text(
+                                          '₹${NumberFormat('#,##0.00').format(lateFee)}',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.red.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+                                  // Discount (only if > 0)
+                                  if (discountAmount > 0) ...[
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Discount',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey.shade600,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        Text(
+                                          '-₹${NumberFormat('#,##0.00').format(discountAmount)}',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.green.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+                                  // Grand Total (matching website styling)
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                      horizontal: 12,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border(
+                                        top: BorderSide(
+                                          color: Colors.grey.shade400,
+                                          width: 2,
                                         ),
                                       ),
-                                      Text(
-                                        '₹${NumberFormat('#,##0.00').format(damageFees)}',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.red.shade600,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text(
+                                          'Grand Total',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF0F1724),
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                        Text(
+                                          '₹${NumberFormat('#,##0.00').format(displayTotalAmount)}',
+                                          style: TextStyle(
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.red.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  const SizedBox(height: 12),
                                 ],
-                                // Late Fees (only if > 0)
-                                if (lateFee > 0) ...[
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        'Late Fees',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey.shade600,
-                                          fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+
+                      // Security Deposit Refund Section (only show if security deposit exists)
+                      if (order.securityDeposit != null &&
+                          order.securityDeposit! > 0) ...[
+                        const SizedBox(height: 16),
+                        _SecurityDepositRefundSection(
+                          order: order,
+                          localDamageCosts:
+                              _damageCosts, // Pass local damage costs for real-time calculation
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                // Action Buttons
+                if (canMarkReturned || canStartRental || canCancel || canEdit)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, -2),
+                          ),
+                        ],
+                      ),
+                      child: SafeArea(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // For scheduled orders: Show Start Rental and Edit Order in a row
+                            if (order.isScheduled && canStartRental && canEdit)
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: _isUpdating
+                                          ? null
+                                          : () => _handleStartRental(order),
+                                      icon: _isUpdating
+                                          ? const SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<
+                                                      Color
+                                                    >(Colors.white),
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.play_arrow,
+                                              size: 20,
+                                            ),
+                                      label: Text(
+                                        _isUpdating
+                                            ? 'Processing...'
+                                            : 'Start Rental',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      Text(
-                                        '₹${NumberFormat('#,##0.00').format(lateFee)}',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.red.shade600,
+                                      style: ElevatedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 16,
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                ],
-                                // Discount (only if > 0)
-                                if (discountAmount > 0) ...[
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        'Discount',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey.shade600,
-                                          fontWeight: FontWeight.w500,
+                                        backgroundColor: Colors.orange.shade600,
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
-                                      ),
-                                      Text(
-                                        '-₹${NumberFormat('#,##0.00').format(discountAmount)}',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.green.shade600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                ],
-                                // Grand Total (matching website styling)
-                                Container(
-                                  margin: const EdgeInsets.only(top: 12),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                    horizontal: 12,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.shade50,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border(
-                                      top: BorderSide(
-                                        color: Colors.grey.shade400,
-                                        width: 2,
                                       ),
                                     ),
                                   ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text(
-                                        'Grand Total',
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: _isUpdating
+                                          ? null
+                                          : () => context.push(
+                                              '/orders/${order.id}/edit',
+                                            ),
+                                      icon: const Icon(
+                                        Icons.edit_outlined,
+                                        size: 20,
+                                      ),
+                                      label: const Text(
+                                        'Edit Order',
                                         style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF0F1724),
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      Text(
-                                        '₹${NumberFormat('#,##0.00').format(displayTotalAmount)}',
-                                        style: TextStyle(
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.red.shade600,
+                                      style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 16,
+                                        ),
+                                        foregroundColor: const Color(
+                                          0xFF0F1724,
+                                        ),
+                                        side: BorderSide(
+                                          color: Colors.grey.shade300,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                       ),
-                                    ],
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    // Security Deposit Refund Section (only show if security deposit exists)
-                    if (order.securityDeposit != null &&
-                        order.securityDeposit! > 0) ...[
-                      const SizedBox(height: 16),
-                      _SecurityDepositRefundSection(
-                        order: order,
-                        localDamageCosts:
-                            _damageCosts, // Pass local damage costs for real-time calculation
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              // Action Buttons
-              if (canMarkReturned || canStartRental || canCancel || canEdit)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, -2),
-                        ),
-                      ],
-                    ),
-                    child: SafeArea(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // For scheduled orders: Show Start Rental and Edit Order in a row
-                          if (order.isScheduled && canStartRental && canEdit)
-                            Row(
-                              children: [
-                                Expanded(
+                                ],
+                              )
+                            else ...[
+                              // For non-scheduled orders or when not both buttons are available, show full-width buttons
+                              if (canStartRental)
+                                SizedBox(
+                                  width: double.infinity,
                                   child: ElevatedButton.icon(
                                     onPressed: _isUpdating
                                         ? null
@@ -2742,7 +2962,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                                   ),
                                             ),
                                           )
-                                        : const Icon(Icons.play_arrow, size: 20),
+                                        : const Icon(
+                                            Icons.play_arrow,
+                                            size: 20,
+                                          ),
                                     label: Text(
                                       _isUpdating
                                           ? 'Processing...'
@@ -2764,15 +2987,21 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
+                              if (canEdit) ...[
+                                if (canMarkReturned || canStartRental)
+                                  const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
                                   child: OutlinedButton.icon(
                                     onPressed: _isUpdating
                                         ? null
                                         : () => context.push(
                                             '/orders/${order.id}/edit',
                                           ),
-                                    icon: const Icon(Icons.edit_outlined, size: 20),
+                                    icon: const Icon(
+                                      Icons.edit_outlined,
+                                      size: 20,
+                                    ),
                                     label: const Text(
                                       'Edit Order',
                                       style: TextStyle(
@@ -2785,7 +3014,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                         vertical: 16,
                                       ),
                                       foregroundColor: const Color(0xFF0F1724),
-                                      side: BorderSide(color: Colors.grey.shade300),
+                                      side: BorderSide(
+                                        color: Colors.grey.shade300,
+                                      ),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(12),
                                       ),
@@ -2793,16 +3024,23 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   ),
                                 ),
                               ],
-                            )
-                          else ...[
-                            // For non-scheduled orders or when not both buttons are available, show full-width buttons
-                            if (canStartRental)
+                            ],
+                            // Cancel button - show below
+                            if (canCancel) ...[
+                              if (order.isScheduled &&
+                                  canStartRental &&
+                                  canEdit)
+                                const SizedBox(height: 12)
+                              else if (canMarkReturned ||
+                                  canStartRental ||
+                                  canEdit)
+                                const SizedBox(height: 8),
                               SizedBox(
                                 width: double.infinity,
-                                child: ElevatedButton.icon(
+                                child: OutlinedButton.icon(
                                   onPressed: _isUpdating
                                       ? null
-                                      : () => _handleStartRental(order),
+                                      : () => _handleCancelOrder(order),
                                   icon: _isUpdating
                                       ? const SizedBox(
                                           width: 20,
@@ -2811,57 +3049,33 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                             strokeWidth: 2,
                                             valueColor:
                                                 AlwaysStoppedAnimation<Color>(
-                                                  Colors.white,
+                                                  Colors.red,
                                                 ),
                                           ),
                                         )
-                                      : const Icon(Icons.play_arrow, size: 20),
+                                      : const Icon(
+                                          Icons.cancel_outlined,
+                                          size: 20,
+                                        ),
                                   label: Text(
                                     _isUpdating
                                         ? 'Processing...'
-                                        : 'Start Rental',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 16,
-                                    ),
-                                    backgroundColor: Colors.orange.shade600,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            if (canEdit) ...[
-                              if (canMarkReturned || canStartRental)
-                                const SizedBox(height: 8),
-                              SizedBox(
-                                width: double.infinity,
-                                child: OutlinedButton.icon(
-                                  onPressed: _isUpdating
-                                      ? null
-                                      : () => context.push(
-                                          '/orders/${order.id}/edit',
-                                        ),
-                                  icon: const Icon(Icons.edit_outlined, size: 20),
-                                  label: const Text(
-                                    'Edit Order',
+                                        : 'Cancel Order',
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
+                                      color: Colors.red.shade600,
                                     ),
                                   ),
                                   style: OutlinedButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                       vertical: 16,
                                     ),
-                                    foregroundColor: const Color(0xFF0F1724),
-                                    side: BorderSide(color: Colors.grey.shade300),
+                                    foregroundColor: Colors.red.shade600,
+                                    side: BorderSide(
+                                      color: Colors.red.shade600,
+                                      width: 1.5,
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
@@ -2870,112 +3084,61 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               ),
                             ],
                           ],
-                          // Cancel button - show below
-                          if (canCancel) ...[
-                            if (order.isScheduled && canStartRental && canEdit)
-                              const SizedBox(height: 12)
-                            else if (canMarkReturned || canStartRental || canEdit)
-                              const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: _isUpdating
-                                    ? null
-                                    : () => _handleCancelOrder(order),
-                                icon: _isUpdating
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                Colors.red,
-                                              ),
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.cancel_outlined,
-                                        size: 20,
-                                      ),
-                                label: Text(
-                                  _isUpdating
-                                      ? 'Processing...'
-                                      : 'Cancel Order',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.red.shade600,
-                                  ),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-                                  foregroundColor: Colors.red.shade600,
-                                  side: BorderSide(
-                                    color: Colors.red.shade600,
-                                    width: 1.5,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
-          );
-        },
-        loading: () => const Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1F2A7A)),
-          ),
-        ),
-        error: (error, stack) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 64, color: Colors.red.shade400),
-                const SizedBox(height: 16),
-                Text(
-                  'Failed to load order',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.red.shade700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  error.toString(),
-                  style: TextStyle(fontSize: 13, color: Colors.red.shade400),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    ref.invalidate(orderProvider(widget.orderId));
-                  },
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Retry'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade600,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
               ],
+            );
+          },
+          loading: () => const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1F2A7A)),
+            ),
+          ),
+          error: (error, stack) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Colors.red.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Failed to load order',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.red.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    error.toString(),
+                    style: TextStyle(fontSize: 13, color: Colors.red.shade400),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      ref.invalidate(orderProvider(widget.orderId));
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade600,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -3125,8 +3288,8 @@ class _OrderItemCardState extends State<_OrderItemCard> {
   String _getInitialDamageDescription() {
     final currentDamageDescription =
         widget.isChecked && widget.damageDescription != null
-            ? widget.damageDescription
-            : widget.item.damageDescription;
+        ? widget.damageDescription
+        : widget.item.damageDescription;
     return currentDamageDescription ?? '';
   }
 
@@ -4073,10 +4236,10 @@ class _SecurityDepositRefundSectionState
                           // but if it's showing wrong, ensure it's converted correctly
                           final refundDate = order.securityDepositRefundDate!;
                           // If the DateTime is in UTC (timezoneOffset is 0), convert to local
-                          final localDate = refundDate.isUtc 
-                              ? refundDate.toLocal() 
+                          final localDate = refundDate.isUtc
+                              ? refundDate.toLocal()
                               : refundDate;
-                          
+
                           return Text(
                             DateFormat(
                               'dd MMM yyyy, hh:mm a',
@@ -5226,17 +5389,23 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
   DateTime _parseDateTimeWithTimezone(String dateString) {
     try {
       final trimmed = dateString.trim();
-      final hasTimezone = trimmed.endsWith('Z') || 
-                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
-      
+      final hasTimezone =
+          trimmed.endsWith('Z') ||
+          RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+
       if (hasTimezone) {
         return DateTime.parse(trimmed).toLocal();
       } else {
         final parsed = DateTime.parse(trimmed);
         final utcDate = DateTime.utc(
-          parsed.year, parsed.month, parsed.day,
-          parsed.hour, parsed.minute, parsed.second, 
-          parsed.millisecond, parsed.microsecond
+          parsed.year,
+          parsed.month,
+          parsed.day,
+          parsed.hour,
+          parsed.minute,
+          parsed.second,
+          parsed.millisecond,
+          parsed.microsecond,
         );
         return utcDate.toLocal();
       }
@@ -5244,6 +5413,7 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
       return DateTime.now();
     }
   }
+
   List<Map<String, dynamic>>? _timelineEvents;
   bool _isLoading = true;
   String? _error;
@@ -5595,6 +5765,8 @@ class _OrderTimelineWidgetState extends State<_OrderTimelineWidget> {
     }
 
     return Card(
+      elevation: 0,
+      color: Colors.white,
       margin: const EdgeInsets.all(16),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
