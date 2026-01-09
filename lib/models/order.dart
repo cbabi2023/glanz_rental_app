@@ -42,7 +42,7 @@ enum OrderStatus {
 }
 
 /// Order Model
-/// 
+///
 /// Represents a rental order with customer, items, and billing information
 class Order {
   final String id;
@@ -50,18 +50,18 @@ class Order {
   final String staffId;
   final String customerId;
   final String invoiceNumber;
-  
+
   // Booking date - when order was booked/created
   final String? bookingDate;
-  
+
   // Legacy date fields (for backward compatibility)
   final String startDate;
   final String endDate;
-  
+
   // New datetime fields with time
   final String? startDatetime;
   final String? endDatetime;
-  
+
   final OrderStatus status;
   final double totalAmount;
   final double? subtotal; // Subtotal before GST
@@ -70,37 +70,42 @@ class Order {
   final double? discountAmount; // Discount amount applied during return process
   final double? damageFeeTotal; // Total damage fee for the order
   final double? securityDepositAmount; // Security deposit amount
-  final double? depositBalance; // Backend-computed deposit balance (if provided)
-  final bool? securityDepositCollected; // Security deposit collected flag (boolean - indicates if collected)
-  final bool? securityDepositRefunded; // Security deposit refunded flag (boolean)
-  final double? securityDepositRefundedAmount; // Security deposit refunded amount
+  final double?
+  depositBalance; // Backend-computed deposit balance (if provided)
+  final bool?
+  securityDepositCollected; // Security deposit collected flag (boolean - indicates if collected)
+  final bool?
+  securityDepositRefunded; // Security deposit refunded flag (boolean)
+  final double?
+  securityDepositRefundedAmount; // Security deposit refunded amount
   final DateTime? securityDepositRefundDate; // Security deposit refund date
-  final double? additionalAmountCollected; // Additional amount collected beyond security deposit (for outstanding amounts)
+  final double?
+  additionalAmountCollected; // Additional amount collected beyond security deposit (for outstanding amounts)
   final DateTime createdAt;
-  
+
   // Computed property for backward compatibility
   // Returns the security deposit amount (not the boolean flags)
   double? get securityDeposit => securityDepositAmount;
-  
+
   /// Calculate the grand total amount (display total)
   /// Formula: baseWithGst + damageFees + lateFee - discountAmount
   /// This ensures consistent display across the app
   double calculateGrandTotal({UserProfile? userProfile}) {
     final baseTotal = subtotal ?? 0.0;
     final gstAmt = gstAmount ?? 0.0;
-    
+
     // Determine if GST is included in baseTotal
     // Use userProfile if provided, otherwise use staff profile, otherwise default to false
     final gstIncluded = userProfile?.gstIncluded ?? staff?.gstIncluded ?? false;
     final baseWithGst = gstIncluded ? baseTotal : baseTotal + gstAmt;
-    
+
     final damageFees = damageFeeTotal ?? 0.0;
     final lateFeeAmt = lateFee ?? 0.0;
     final discountAmt = discountAmount ?? 0.0;
-    
+
     return baseWithGst + damageFees + lateFeeAmt - discountAmt;
   }
-  
+
   // Relations
   final Customer? customer;
   final UserProfile? staff;
@@ -154,11 +159,12 @@ class Order {
       if (value is DateTime) return value.toLocal(); // Convert to local time
       try {
         final dateString = value.toString().trim();
-        
+
         // Check if string has timezone info (ends with Z or has timezone offset like +05:30, -05:00)
-        final hasTimezone = dateString.endsWith('Z') || 
-                           RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(dateString);
-        
+        final hasTimezone =
+            dateString.endsWith('Z') ||
+            RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(dateString);
+
         if (hasTimezone) {
           // Has timezone info - DateTime.parse will handle conversion to local time
           return DateTime.parse(dateString).toLocal();
@@ -167,9 +173,14 @@ class Order {
           // Parse the components and create as UTC, then convert to local
           final parsed = DateTime.parse(dateString);
           final utcDate = DateTime.utc(
-            parsed.year, parsed.month, parsed.day,
-            parsed.hour, parsed.minute, parsed.second, 
-            parsed.millisecond, parsed.microsecond
+            parsed.year,
+            parsed.month,
+            parsed.day,
+            parsed.hour,
+            parsed.minute,
+            parsed.second,
+            parsed.millisecond,
+            parsed.microsecond,
           );
           return utcDate.toLocal(); // Convert UTC to local time
         }
@@ -177,7 +188,7 @@ class Order {
         return DateTime.now();
       }
     }
-    
+
     // Helper function to parse datetime string and preserve timezone info
     // This ensures datetimes from database are correctly handled
     // If the string doesn't have timezone info, we assume it's UTC (common in databases)
@@ -186,25 +197,31 @@ class Order {
       if (value is DateTime) return value.toIso8601String();
       try {
         final dateString = value.toString().trim();
-        
+
         // Check if string has timezone info (ends with Z or has timezone offset like +05:30, -05:00)
-        final hasTimezone = dateString.endsWith('Z') || 
-                           RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(dateString);
-        
+        final hasTimezone =
+            dateString.endsWith('Z') ||
+            RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(dateString);
+
         if (!hasTimezone) {
           // No timezone info - assume it's UTC from database
           // Parse the components and create as UTC, then convert to local for consistency
           final parsed = DateTime.parse(dateString);
           // Create as UTC datetime
           final utcDate = DateTime.utc(
-            parsed.year, parsed.month, parsed.day,
-            parsed.hour, parsed.minute, parsed.second, 
-            parsed.millisecond, parsed.microsecond
+            parsed.year,
+            parsed.month,
+            parsed.day,
+            parsed.hour,
+            parsed.minute,
+            parsed.second,
+            parsed.millisecond,
+            parsed.microsecond,
           );
           // Return in ISO format - this will be converted to local when parsed later
           return utcDate.toIso8601String();
         }
-        
+
         // Has timezone info, return as-is (DateTime.parse will handle conversion correctly)
         return dateString;
       } catch (e) {
@@ -228,7 +245,9 @@ class Order {
     Customer? customer;
     if (json['customer'] != null) {
       if (json['customer'] is List && (json['customer'] as List).isNotEmpty) {
-        customer = Customer.fromJson((json['customer'] as List).first as Map<String, dynamic>);
+        customer = Customer.fromJson(
+          (json['customer'] as List).first as Map<String, dynamic>,
+        );
       } else if (json['customer'] is Map) {
         customer = Customer.fromJson(json['customer'] as Map<String, dynamic>);
       }
@@ -238,7 +257,9 @@ class Order {
     UserProfile? staff;
     if (json['staff'] != null) {
       if (json['staff'] is List && (json['staff'] as List).isNotEmpty) {
-        staff = UserProfile.fromJson((json['staff'] as List).first as Map<String, dynamic>);
+        staff = UserProfile.fromJson(
+          (json['staff'] as List).first as Map<String, dynamic>,
+        );
       } else if (json['staff'] is Map) {
         staff = UserProfile.fromJson(json['staff'] as Map<String, dynamic>);
       }
@@ -248,7 +269,9 @@ class Order {
     Branch? branch;
     if (json['branch'] != null) {
       if (json['branch'] is List && (json['branch'] as List).isNotEmpty) {
-        branch = Branch.fromJson((json['branch'] as List).first as Map<String, dynamic>);
+        branch = Branch.fromJson(
+          (json['branch'] as List).first as Map<String, dynamic>,
+        );
       } else if (json['branch'] is Map) {
         branch = Branch.fromJson(json['branch'] as Map<String, dynamic>);
       }
@@ -263,7 +286,7 @@ class Order {
           .where((item) => item != null)
           .map((item) => OrderItem.fromJson(item as Map<String, dynamic>))
           .toList();
-      
+
       // Remove duplicates using a Map
       // CRITICAL: This prevents duplicates from entering the app from database
       final uniqueItemsMap = <String, OrderItem>{};
@@ -274,7 +297,8 @@ class Order {
         } else {
           // For items without ID, create comprehensive composite key
           // Include all identifying fields to ensure uniqueness
-          key = 'key_${item.photoUrl}_${item.productName ?? ''}_${item.quantity}_${item.pricePerDay}_${item.days}_${item.lineTotal}';
+          key =
+              'key_${item.photoUrl}_${item.productName ?? ''}_${item.quantity}_${item.pricePerDay}_${item.days}_${item.lineTotal}';
         }
         if (!uniqueItemsMap.containsKey(key)) {
           uniqueItemsMap[key] = item;
@@ -305,17 +329,25 @@ class Order {
       depositBalance: safeToDouble(
         json['deposit_balance'] ?? json['security_deposit_balance'],
       ),
-      securityDepositCollected: json['security_deposit_collected'] is bool 
+      securityDepositCollected: json['security_deposit_collected'] is bool
           ? json['security_deposit_collected'] as bool?
-          : (json['security_deposit_collected'] == true || json['security_deposit_collected'] == 'true' || json['security_deposit_collected'] == 1),
-      securityDepositRefunded: json['security_deposit_refunded'] is bool 
+          : (json['security_deposit_collected'] == true ||
+                json['security_deposit_collected'] == 'true' ||
+                json['security_deposit_collected'] == 1),
+      securityDepositRefunded: json['security_deposit_refunded'] is bool
           ? json['security_deposit_refunded'] as bool?
-          : (json['security_deposit_refunded'] == true || json['security_deposit_refunded'] == 'true' || json['security_deposit_refunded'] == 1),
-      securityDepositRefundedAmount: safeToDouble(json['security_deposit_refunded_amount']),
-      securityDepositRefundDate: json['security_deposit_refund_date'] != null 
+          : (json['security_deposit_refunded'] == true ||
+                json['security_deposit_refunded'] == 'true' ||
+                json['security_deposit_refunded'] == 1),
+      securityDepositRefundedAmount: safeToDouble(
+        json['security_deposit_refunded_amount'],
+      ),
+      securityDepositRefundDate: json['security_deposit_refund_date'] != null
           ? safeDateTime(json['security_deposit_refund_date'])
           : null,
-      additionalAmountCollected: safeToDouble(json['additional_amount_collected']),
+      additionalAmountCollected: safeToDouble(
+        json['additional_amount_collected'],
+      ),
       createdAt: safeDateTime(json['created_at']),
       customer: customer,
       staff: staff,
@@ -347,14 +379,14 @@ class Order {
       'security_deposit_collected': securityDepositCollected,
       'security_deposit_refunded': securityDepositRefunded, // Boolean flag
       'security_deposit_refunded_amount': securityDepositRefundedAmount,
-      'security_deposit_refund_date': securityDepositRefundDate?.toIso8601String(),
+      'security_deposit_refund_date': securityDepositRefundDate
+          ?.toIso8601String(),
       'additional_amount_collected': additionalAmountCollected,
       'created_at': createdAt.toIso8601String(),
       if (customer != null) 'customer': customer!.toJson(),
       if (staff != null) 'staff': staff!.toJson(),
       if (branch != null) 'branch': branch!.toJson(),
-      if (items != null)
-        'items': items!.map((item) => item.toJson()).toList(),
+      if (items != null) 'items': items!.map((item) => item.toJson()).toList(),
     };
   }
 
@@ -362,17 +394,23 @@ class Order {
   static DateTime _parseDateTimeWithTimezone(String dateString) {
     try {
       final trimmed = dateString.trim();
-      final hasTimezone = trimmed.endsWith('Z') || 
-                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
-      
+      final hasTimezone =
+          trimmed.endsWith('Z') ||
+          RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+
       if (hasTimezone) {
         return DateTime.parse(trimmed).toLocal();
       } else {
         final parsed = DateTime.parse(trimmed);
         final utcDate = DateTime.utc(
-          parsed.year, parsed.month, parsed.day,
-          parsed.hour, parsed.minute, parsed.second, 
-          parsed.millisecond, parsed.microsecond
+          parsed.year,
+          parsed.month,
+          parsed.day,
+          parsed.hour,
+          parsed.minute,
+          parsed.second,
+          parsed.millisecond,
+          parsed.microsecond,
         );
         return utcDate.toLocal();
       }
@@ -390,11 +428,12 @@ class Order {
   bool get isCancelled => status == OrderStatus.cancelled;
   bool get isPartiallyReturned => status == OrderStatus.partiallyReturned;
   bool get isFlagged => status == OrderStatus.flagged;
-  
+
   // Check if order is in any completed state (completed or completed_with_issues)
   bool get isAnyCompleted => isCompleted || isCompletedWithIssues;
 
-  bool get canEdit => isScheduled || isActive || isPendingReturn;
+  /// All orders can be edited regardless of status
+  bool get canEdit => true;
   bool get canMarkReturned {
     // Can return if active, pending return, or partially returned
     if (isActive || isPendingReturn || isPartiallyReturned) {
@@ -402,7 +441,7 @@ class Order {
     }
     return false;
   }
-  
+
   /// Check if there are items that still need to be returned
   bool get hasPendingReturnItems {
     if (items == null || items!.isEmpty) {
@@ -410,9 +449,9 @@ class Order {
     }
     return items!.any((item) => item.isPending);
   }
-  
+
   bool get canStartRental => isScheduled;
-  
+
   /// Check if order can be cancelled based on status and time rules
   /// - Scheduled orders: can be cancelled anytime
   /// - Active orders: can be cancelled only within 10 minutes of becoming active
@@ -422,33 +461,33 @@ class Order {
     if (isCancelled || isAnyCompleted) {
       return false;
     }
-    
+
     // Scheduled orders can be cancelled anytime
     if (isScheduled) {
       return true;
     }
-    
+
     // Active orders: check 10-minute window
     if (isActive) {
       // Use start_datetime as the timestamp when rental became active
-      final activeSince = startDatetime != null 
-        ? Order._parseDateTimeWithTimezone(startDatetime!)
-        : createdAt;
-        
+      final activeSince = startDatetime != null
+          ? Order._parseDateTimeWithTimezone(startDatetime!)
+          : createdAt;
+
       final now = DateTime.now();
       final minutesSinceActive = now.difference(activeSince).inMinutes;
-      
+
       // Can cancel if less than 10 minutes since becoming active
       return minutesSinceActive <= 10;
     }
-    
+
     // Other statuses cannot be cancelled
     return false;
   }
 }
 
 /// Order Draft Model
-/// 
+///
 /// Used for creating new orders (before saving to database)
 class OrderDraft {
   String? customerId;
@@ -479,4 +518,3 @@ class OrderDraft {
     grandTotal = 0.0;
   }
 }
-
