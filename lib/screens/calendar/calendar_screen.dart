@@ -30,10 +30,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     // Fetch scheduled orders
     final scheduledOrders = ref.watch(
       ordersProvider(
-        OrdersParams(
-          branchId: branchId,
-          status: OrderStatus.scheduled,
-        ),
+        OrdersParams(branchId: branchId, status: OrderStatus.scheduled),
       ),
     );
 
@@ -44,10 +41,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         backgroundColor: Colors.white,
         leadingWidth: 60,
         leading: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12.0,
-            vertical: 8.0,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
           child: Image.asset(
             'lib/assets/png/glanz.png',
             fit: BoxFit.contain,
@@ -69,25 +63,32 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         onRefresh: () async {
           ref.invalidate(
             ordersProvider(
-              OrdersParams(
-                branchId: branchId,
-                status: OrderStatus.scheduled,
-              ),
+              OrdersParams(branchId: branchId, status: OrderStatus.scheduled),
             ),
           );
         },
         child: scheduledOrders.when(
           data: (orders) {
-            // Group orders by date (using start_date for scheduled orders)
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
             final Map<DateTime, List<Order>> ordersByDate = {};
-            
+
             for (final order in orders) {
               try {
                 // Use start_datetime if available, otherwise start_date
                 final dateStr = order.startDatetime ?? order.startDate;
                 final parsed = DateTime.parse(dateStr);
-                final orderDate = DateTime(parsed.year, parsed.month, parsed.day);
-                
+                final orderDate = DateTime(
+                  parsed.year,
+                  parsed.month,
+                  parsed.day,
+                );
+
+                // Filter: only show today and future dates
+                if (orderDate.isBefore(today)) {
+                  continue;
+                }
+
                 if (!ordersByDate.containsKey(orderDate)) {
                   ordersByDate[orderDate] = [];
                 }
@@ -194,7 +195,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       calendarBuilders: CalendarBuilders(
                         markerBuilder: (context, date, events) {
                           if (events.isEmpty) return null;
-                          
+
                           final count = events.length;
                           return Positioned(
                             bottom: 1,
@@ -243,7 +244,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1F2A7A).withValues(alpha: 0.1),
+                              color: const Color(
+                                0xFF1F2A7A,
+                              ).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
@@ -336,10 +339,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   const SizedBox(height: 8),
                   Text(
                     error.toString(),
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade500,
-                    ),
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
@@ -376,17 +376,23 @@ class _OrderCard extends StatelessWidget {
   DateTime _parseDateTimeWithTimezone(String dateString) {
     try {
       final trimmed = dateString.trim();
-      final hasTimezone = trimmed.endsWith('Z') || 
-                         RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
-      
+      final hasTimezone =
+          trimmed.endsWith('Z') ||
+          RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(trimmed);
+
       if (hasTimezone) {
         return DateTime.parse(trimmed).toLocal();
       } else {
         final parsed = DateTime.parse(trimmed);
         final utcDate = DateTime.utc(
-          parsed.year, parsed.month, parsed.day,
-          parsed.hour, parsed.minute, parsed.second, 
-          parsed.millisecond, parsed.microsecond
+          parsed.year,
+          parsed.month,
+          parsed.day,
+          parsed.hour,
+          parsed.minute,
+          parsed.second,
+          parsed.millisecond,
+          parsed.microsecond,
         );
         return utcDate.toLocal();
       }
@@ -519,4 +525,3 @@ class _OrderCard extends StatelessWidget {
     );
   }
 }
-
